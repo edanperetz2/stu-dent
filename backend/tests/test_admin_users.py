@@ -1,0 +1,71 @@
+import uuid
+
+from tests.helpers import auth_header, login, register, register_and_login
+
+
+def _get_user_id(client, admin_token, email):
+    users = client.get("/admin/users", headers=auth_header(admin_token)).json()
+    return next(u["id"] for u in users if u["email"] == email)
+
+
+def test_admin_can_view_user_detail(client):
+    admin_token = register_and_login(client, "admusr-admin1@example.com", role="admin")
+    register(client, "admusr-target1@example.com", role="student")
+    user_id = _get_user_id(client, admin_token, "admusr-target1@example.com")
+
+    response = client.get(f"/admin/users/{user_id}", headers=auth_header(admin_token))
+    assert response.status_code == 200
+    assert response.json()["email"] == "admusr-target1@example.com"
+
+
+def test_non_admin_cannot_view_user_detail(client):
+    student_token = register_and_login(client, "admusr-student1@example.com", role="student")
+    response = client.get(f"/admin/users/{uuid.uuid4()}", headers=auth_header(student_token))
+    assert response.status_code == 403
+
+
+def test_admin_can_delete_another_user(client):
+    admin_token = register_and_login(client, "admusr-admin2@example.com", role="admin")
+    register(client, "admusr-target2@example.com", role="student")
+    user_id = _get_user_id(client, admin_token, "admusr-target2@example.com")
+
+    delete_response = client.delete(f"/admin/users/{user_id}", headers=auth_header(admin_token))
+    assert delete_response.status_code == 204
+
+    detail_response = client.get(f"/admin/users/{user_id}", headers=auth_header(admin_token))
+    assert detail_response.status_code == 404
+
+    list_response = client.get("/admin/users", headers=auth_header(admin_token))
+    assert all(u["email"] != "admusr-target2@example.com" for u in list_response.json())
+
+
+def test_deleted_user_token_stops_working(client):
+    admin_token = register_and_login(client, "admusr-admin3@example.com", role="admin")
+    target_token = register_and_login(client, "admusr-target3@example.com", role="student")
+    user_id = _get_user_id(client, admin_token, "admusr-target3@example.com")
+
+    client.delete(f"/admin/users/{user_id}", headers=auth_header(admin_token))
+
+    response = client.get("/users/me", headers=auth_header(target_token))
+    assert response.status_code == 401
+
+    login_response = login(client, "admusr-target3@example.com")
+    assert login_response.status_code == 401
+
+
+def test_admin_cannot_delete_own_account(client):
+    admin_token = register_and_login(client, "admusr-admin4@example.com", role="admin")
+    admin_id = _get_user_id(client, admin_token, "admusr-admin4@example.com")
+
+    response = client.delete(f"/admin/users/{admin_id}", headers=auth_header(admin_token))
+    assert response.status_code == 400
+
+
+def test_non_admin_cannot_delete_user(client):
+    student_token = register_and_login(client, "admusr-student2@example.com", role="student")
+    admin_token = register_and_login(client, "admusr-admin5@example.com", role="admin")
+    register(client, "admusr-target4@example.com", role="student")
+    user_id = _get_user_id(client, admin_token, "admusr-target4@example.com")
+
+    response = client.delete(f"/admin/users/{user_id}", headers=auth_header(student_token))
+    assert response.status_code == 403

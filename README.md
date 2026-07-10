@@ -69,6 +69,8 @@ docker compose exec frontend npm run lint
 
 - `POST /auth/register` accepts a `role` field with no admin gating — anyone
   can self-register as `student`, `attending`, or `admin`. This is an accepted
-  simplification for a course project and is not production-safe.
+  simplification for a course project and is not production-safe. A real
+  identity-verification + admin-approval gate for student/attending signups
+  is planned but not yet designed — see `CLAUDE.md`'s Backlog section.
 - Patient login credentials are provisioned directly by the owning student
   (no self-service signup or email invite flow yet).

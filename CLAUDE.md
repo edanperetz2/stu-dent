@@ -57,7 +57,9 @@ docs/proposal.md            full requirements (source of truth)
   no Redis and no in-process counter in the stack. Any new sensitive action
   should write an `audit_log` row via `services/audit.py`, not ad hoc logging.
 - **Soft delete for patient records** (`deleted_at`), never a hard delete —
-  preserves audit history.
+  preserves audit history. `users` follows the same pattern: admin-initiated
+  deletion sets `deleted_at` + `is_active=False` rather than removing the row,
+  since users can own patients and audit_log rows that must not be orphaned.
 
 ## Commands (run from repo root; PowerShell-compatible)
 
@@ -90,7 +92,9 @@ docker compose exec frontend npm run lint
 - `POST /auth/register` accepts a `role` field with no admin gating —
   self-service signup for any of student/attending/admin. Accepted
   simplification for a course project; called out as a limitation in the
-  README, not something to "fix" unprompted.
+  README, not something to "fix" unprompted. A real verification +
+  admin-approval gate is planned — see Backlog below — but isn't designed
+  yet, so don't half-implement it.
 - Patients get real login credentials in Phase 1, provisioned by the owning
   student (no self-service signup, no email invite flow — MailHog stays
   infra-only until Phase 3's reminder/notification work).
@@ -98,6 +102,29 @@ docker compose exec frontend npm run lint
   workflow is entirely Phase 2 scope (it's an appointment state machine, not
   an auth concern). Phase 1 only adds the `attending` role and one
   role-gated placeholder endpoint.
+- Admin user management is done: `GET /admin/users` (list, excludes
+  soft-deleted), `GET /admin/users/{id}` (detail), `PATCH /admin/users/{id}`
+  (role/active status), `DELETE /admin/users/{id}` (soft delete — an admin
+  cannot delete their own account). All mutations write `audit_log` rows.
+
+## Backlog (real requirements, not yet scheduled to a phase)
+
+- **Student/attending signup verification + admin approval.** Today,
+  registering as student/attending/admin activates the account immediately
+  (see the open-registration limitation above). The intended real flow:
+  registering as student or attending puts the account in a pending state,
+  requires an identity-verification step (mechanism not yet decided — e.g.
+  document upload, university email domain check), and needs approval from
+  one admin before the account can log in. This needs a schema change
+  (e.g. an approval status on `users`) and isn't a good fit for any of
+  phases 2-6 as currently scoped — likely its own small phase, or folded
+  into whichever phase first needs to gate real signups. Tests should keep
+  creating users directly via `POST /auth/register` (bypassing this flow
+  entirely), since verification doesn't block direct registration.
+- **Admin roster is currently just the project owner.** Additional admins
+  (e.g. teammates) are added by an existing admin promoting an account via
+  `PATCH /admin/users/{id}` with `role: admin` — already supported, no new
+  code needed when that happens.
 
 ## Phase roadmap
 
