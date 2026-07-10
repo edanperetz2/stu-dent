@@ -1,13 +1,17 @@
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# B008: FastAPI's Depends()-as-default-argument is the idiomatic DI pattern, not a bug.
+ignore = ["B008"]
 
 [tool.black]
 line-length = 100
 target-version = ["py312"]
+extend-exclude = "alembic/versions"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -8,7 +8,7 @@ from app.database import Base
 from app.models.mixins import TimestampMixin
 
 
-class RoleEnum(str, enum.Enum):
+class RoleEnum(enum.StrEnum):
     student = "student"
     attending = "attending"
     admin = "admin"
