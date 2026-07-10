@@ -34,6 +34,11 @@ TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=Fals
 
 @pytest.fixture(scope="session", autouse=True)
 def _test_schema():
+    with engine.begin() as conn:
+        # Base.metadata.create_all() never creates extensions; the
+        # appointments table's exclusion constraints need this for GiST
+        # indexes over plain-equality (UUID) columns.
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)

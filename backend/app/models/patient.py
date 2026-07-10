@@ -1,11 +1,18 @@
+import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Uuid
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 from app.models.mixins import TimestampMixin
+
+
+class PreferredTimeOfDay(enum.StrEnum):
+    morning = "morning"
+    afternoon = "afternoon"
+    evening = "evening"
 
 
 class Patient(TimestampMixin, Base):
@@ -25,3 +32,8 @@ class Patient(TimestampMixin, Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    preferred_time_of_day: Mapped[PreferredTimeOfDay | None] = mapped_column(
+        Enum(PreferredTimeOfDay, name="preferred_time_of_day_enum", native_enum=True),
+        nullable=True,
+    )
