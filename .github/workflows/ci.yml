@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend lint deps
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff check
+        working-directory: backend
+        run: ruff check .
+
+      - name: Black check
+        working-directory: backend
+        run: black --check .
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: ESLint
+        working-directory: frontend
+        run: npm run lint
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: stu_dent
+          POSTGRES_PASSWORD: stu_dent
+          POSTGRES_DB: stu_dent_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stu_dent -d stu_dent_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://stu_dent:stu_dent@localhost:5432/stu_dent_test
+      JWT_SECRET_KEY: ci-test-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run Alembic migrations
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: Run pytest
+        working-directory: backend
+        run: pytest -v

@@ -1,0 +1,30 @@
+# Local IDE / tooling
+.idea/
+.claude/
+.vscode/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Docker
+**/*.log
+
+# OS
+.DS_Store
+Thumbs.db
