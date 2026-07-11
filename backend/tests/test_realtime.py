@@ -4,13 +4,12 @@ import psycopg
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.core.security import PrincipalType, create_access_token
+from app.core.security import create_access_token
 from app.database import get_db
 from app.main import app
 from app.models.audit_log import AuditLog
 from app.models.direct_message import DirectMessage
 from app.models.notification import Notification, NotificationType
-from app.models.patient import Patient
 from app.models.user import RoleEnum, User
 from app.realtime.events import CHANNEL
 from app.services.notifications import notify
@@ -57,7 +56,7 @@ def test_notify_emits_pg_notify_for_listeners():
                 notify_session,
                 notification_type=NotificationType.appointment_reminder,
                 message="realtime check",
-                recipient_user_id=user_id,
+                recipient_id=user_id,
             )
             notify_session.commit()
         finally:
@@ -66,7 +65,6 @@ def test_notify_emits_pg_notify_for_listeners():
         received = next(listen_conn.notifies(timeout=5, stop_after=1), None)
         assert received is not None, "expected a NOTIFY on the realtime channel"
         payload = json.loads(received.payload)
-        assert payload["kind"] == "user"
         assert payload["recipient_id"] == str(user_id)
         assert payload["event"] == "notification"
         assert payload["message"] == "realtime check"
@@ -75,7 +73,7 @@ def test_notify_emits_pg_notify_for_listeners():
         cleanup_session = Session(bind=engine)
         try:
             cleanup_session.query(Notification).filter(
-                Notification.recipient_user_id == user_id
+                Notification.recipient_id == user_id
             ).delete()
             cleanup_session.query(User).filter(User.id == user_id).delete()
             cleanup_session.commit()
@@ -114,8 +112,10 @@ def test_websocket_receives_direct_message_live():
                 )
                 setup_session.add(student)
                 setup_session.flush()
-                patient = Patient(
+                patient = User(
                     owner_student_id=student.id,
+                    owner_confirmed_at=student.created_at,
+                    role=RoleEnum.patient,
                     full_name="Realtime WS Patient",
                     email="realtime-ws-patient@example.com",
                     hashed_password="x",
@@ -128,10 +128,8 @@ def test_websocket_receives_direct_message_live():
 
             # hashed_password is a placeholder, not a real argon2 hash, so
             # tokens are minted directly rather than via /auth/login.
-            patient_token = create_access_token(
-                subject=patient_id, principal_type=PrincipalType.patient
-            )
-            student_jwt = create_access_token(subject=student_id, principal_type=PrincipalType.user)
+            patient_token = create_access_token(subject=patient_id, role=RoleEnum.patient.value)
+            student_jwt = create_access_token(subject=student_id, role=RoleEnum.student.value)
 
             with real_client.websocket_connect(f"/ws?token={patient_token}") as websocket:
                 response = real_client.post(
@@ -144,24 +142,21 @@ def test_websocket_receives_direct_message_live():
                 event = websocket.receive_json()
                 assert event["event"] == "direct_message"
                 assert event["body"] == "live hello"
-                assert event["kind"] == "patient"
                 assert event["recipient_id"] == str(patient_id)
     finally:
         app.dependency_overrides.pop(get_db, None)
         cleanup_session = Session(bind=engine)
         try:
             if patient_id is not None:
-                cleanup_session.query(AuditLog).filter(
-                    AuditLog.actor_patient_id == patient_id
-                ).delete()
+                cleanup_session.query(AuditLog).filter(AuditLog.actor_id == patient_id).delete()
                 cleanup_session.query(DirectMessage).filter(
                     DirectMessage.patient_id == patient_id
                 ).delete()
-                cleanup_session.query(Patient).filter(Patient.id == patient_id).delete()
             if student_id is not None:
-                cleanup_session.query(AuditLog).filter(
-                    AuditLog.actor_user_id == student_id
-                ).delete()
+                cleanup_session.query(AuditLog).filter(AuditLog.actor_id == student_id).delete()
+            if patient_id is not None:
+                cleanup_session.query(User).filter(User.id == patient_id).delete()
+            if student_id is not None:
                 cleanup_session.query(User).filter(User.id == student_id).delete()
             cleanup_session.commit()
         finally:

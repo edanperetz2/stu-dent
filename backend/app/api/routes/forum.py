@@ -112,7 +112,7 @@ def create_post(
     record_audit_log(
         db,
         action="forum_post_create",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="forum_post",
         target_id=post.id,
     )
@@ -163,7 +163,7 @@ def update_post(
     record_audit_log(
         db,
         action="forum_post_update",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="forum_post",
         target_id=post.id,
     )
@@ -191,7 +191,7 @@ def delete_post(
     record_audit_log(
         db,
         action="forum_post_delete",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="forum_post",
         target_id=post.id,
         extra_data={"moderation": is_admin and not is_author},
@@ -219,7 +219,7 @@ def create_comment(
     record_audit_log(
         db,
         action="forum_comment_create",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="forum_comment",
         target_id=comment.id,
     )
@@ -263,7 +263,7 @@ def delete_comment(
     record_audit_log(
         db,
         action="forum_comment_delete",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="forum_comment",
         target_id=comment.id,
         extra_data={"moderation": is_admin and not is_author},

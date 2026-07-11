@@ -10,18 +10,7 @@ def _notify_user(db_session, user_id, message="Test notification"):
         db_session,
         notification_type=NotificationType.appointment_reminder,
         message=message,
-        recipient_user_id=user_id,
-    )
-    db_session.commit()
-    return entry
-
-
-def _notify_patient(db_session, patient_id, message="Test notification"):
-    entry = notify(
-        db_session,
-        notification_type=NotificationType.appointment_reminder,
-        message=message,
-        recipient_patient_id=patient_id,
+        recipient_id=user_id,
     )
     db_session.commit()
     return entry
@@ -45,7 +34,7 @@ def test_patient_sees_own_notifications(client, db_session):
     patient_id, patient_token = create_and_login_patient(
         client, student_token, "notif-p2@example.com"
     )
-    _notify_patient(db_session, uuid.UUID(patient_id))
+    _notify_user(db_session, uuid.UUID(patient_id))
 
     response = client.get("/notifications", headers=auth_header(patient_token))
     assert response.status_code == 200

@@ -1,6 +1,4 @@
-export type Role = 'student' | 'attending' | 'admin'
-
-export type PrincipalType = 'user' | 'patient'
+export type Role = 'student' | 'attending' | 'admin' | 'patient'
 
 export type AppointmentStatus =
   | 'proposed'
@@ -17,6 +15,7 @@ export type NotificationType =
   | 'appointment_reminder'
   | 'appointment_expired'
   | 'waitlist_slot_available'
+  | 'patient_registration_request'
 
 export type PreferredTimeOfDay = 'morning' | 'afternoon' | 'evening'
 
@@ -26,16 +25,16 @@ export interface User {
   full_name: string
   role: Role
   is_active: boolean
+  // Meaningful only when role === 'patient'; null for student/attending/admin.
+  owner_student_id: string | null
+  owner_confirmed_at: string | null
+  contact_phone: string | null
+  preferred_time_of_day: PreferredTimeOfDay | null
 }
 
-export interface Patient {
+export interface StudentPublic {
   id: string
-  owner_student_id: string
   full_name: string
-  contact_phone: string | null
-  email: string | null
-  is_active: boolean
-  preferred_time_of_day: PreferredTimeOfDay | null
 }
 
 export interface Room {
@@ -118,8 +117,7 @@ export interface ForumComment {
 export interface DirectMessage {
   id: string
   patient_id: string
-  sender_user_id: string | null
-  sender_patient_id: string | null
+  sender_id: string
   body: string
   read_at: string | null
   created_at: string
@@ -127,8 +125,7 @@ export interface DirectMessage {
 
 export interface AuditLogEntry {
   id: number
-  actor_user_id: string | null
-  actor_patient_id: string | null
+  actor_id: string | null
   attempted_identifier: string | null
   action: string
   target_type: string | null
@@ -145,7 +142,6 @@ export interface TokenResponse {
 
 export interface RealtimeEvent {
   event: 'notification' | 'direct_message'
-  kind: PrincipalType
   recipient_id: string
   [key: string]: unknown
 }

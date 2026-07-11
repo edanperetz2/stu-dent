@@ -104,7 +104,7 @@ def test_patient_sees_own_preferred_time_of_day(client):
         headers=auth_header(student_token),
     )
 
-    response = client.get("/patients/me", headers=auth_header(patient_token))
+    response = client.get("/users/me", headers=auth_header(patient_token))
     assert response.status_code == 200
     assert response.json()["preferred_time_of_day"] == "morning"
 

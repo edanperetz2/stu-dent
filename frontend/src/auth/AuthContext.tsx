@@ -1,19 +1,18 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import {
-  getCurrentPatient,
-  getCurrentUser,
-  login as apiLogin,
-  patientLogin as apiPatientLogin,
-  registerUser as apiRegisterUser,
-} from '../api/auth'
+import { getCurrentUser, login as apiLogin, registerUser as apiRegisterUser } from '../api/auth'
 import type { Role } from '../api/types'
 
-export type Principal =
-  | { kind: 'user'; token: string; id: string; role: Role; fullName: string; email: string }
-  | { kind: 'patient'; token: string; id: string; fullName: string; email: string | null }
+export interface Principal {
+  token: string
+  id: string
+  role: Role
+  fullName: string
+  email: string
+  ownerStudentId: string | null
+  ownerConfirmedAt: string | null
+}
 
 interface StoredAuth {
-  kind: 'user' | 'patient'
   token: string
 }
 
@@ -22,16 +21,33 @@ const STORAGE_KEY = 'stu_dent_auth'
 interface AuthContextValue {
   principal: Principal | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
-  registerUser: (email: string, password: string, fullName: string, role: Role) => Promise<void>
-  patientLogin: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, role?: Role) => Promise<void>
+  registerUser: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: Role,
+    ownerStudentId?: string,
+  ) => Promise<void>
   logout: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-function persist(kind: 'user' | 'patient', token: string): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ kind, token } satisfies StoredAuth))
+function persist(token: string): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ token } satisfies StoredAuth))
+}
+
+function toPrincipal(token: string, user: Awaited<ReturnType<typeof getCurrentUser>>): Principal {
+  return {
+    token,
+    id: user.id,
+    role: user.role,
+    fullName: user.full_name,
+    email: user.email,
+    ownerStudentId: user.owner_student_id,
+    ownerConfirmedAt: user.owner_confirmed_at,
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -45,29 +61,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const { kind, token } = JSON.parse(stored) as StoredAuth
+    const { token } = JSON.parse(stored) as StoredAuth
     ;(async () => {
       try {
-        if (kind === 'user') {
-          const user = await getCurrentUser(token)
-          setPrincipal({
-            kind: 'user',
-            token,
-            id: user.id,
-            role: user.role,
-            fullName: user.full_name,
-            email: user.email,
-          })
-        } else {
-          const patient = await getCurrentPatient(token)
-          setPrincipal({
-            kind: 'patient',
-            token,
-            id: patient.id,
-            fullName: patient.full_name,
-            email: patient.email,
-          })
-        }
+        const user = await getCurrentUser(token)
+        setPrincipal(toPrincipal(token, user))
       } catch {
         localStorage.removeItem(STORAGE_KEY)
       } finally {
@@ -76,18 +74,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })()
   }, [])
 
-  async function login(email: string, password: string): Promise<void> {
-    const { access_token: token } = await apiLogin(email, password)
+  async function login(email: string, password: string, role?: Role): Promise<void> {
+    const { access_token: token } = await apiLogin(email, password, role)
     const user = await getCurrentUser(token)
-    persist('user', token)
-    setPrincipal({
-      kind: 'user',
-      token,
-      id: user.id,
-      role: user.role,
-      fullName: user.full_name,
-      email: user.email,
-    })
+    persist(token)
+    setPrincipal(toPrincipal(token, user))
   }
 
   async function registerUser(
@@ -95,22 +86,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     fullName: string,
     role: Role,
+    ownerStudentId?: string,
   ): Promise<void> {
-    await apiRegisterUser(email, password, fullName, role)
-    await login(email, password)
-  }
-
-  async function patientLogin(email: string, password: string): Promise<void> {
-    const { access_token: token } = await apiPatientLogin(email, password)
-    const patient = await getCurrentPatient(token)
-    persist('patient', token)
-    setPrincipal({
-      kind: 'patient',
-      token,
-      id: patient.id,
-      fullName: patient.full_name,
-      email: patient.email,
-    })
+    await apiRegisterUser(email, password, fullName, role, ownerStudentId)
+    // A self-registered patient is left pending until their student
+    // confirms them -- don't auto-login-and-redirect into the app for
+    // that role; RegisterPage shows a "pending confirmation" message and
+    // sends them to the normal login page instead.
+    if (role !== 'patient') {
+      await login(email, password)
+    }
   }
 
   function logout(): void {
@@ -123,7 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     login,
     registerUser,
-    patientLogin,
     logout,
   }
 

@@ -57,7 +57,7 @@ def update_user(
     record_audit_log(
         db,
         action="admin_user_update",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="user",
         target_id=user.id,
     )
@@ -84,7 +84,7 @@ def delete_user(
     record_audit_log(
         db,
         action="admin_user_delete",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="user",
         target_id=user.id,
     )

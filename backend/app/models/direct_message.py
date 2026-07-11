@@ -3,7 +3,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
-    CheckConstraint,
     DateTime,
     ForeignKey,
     Identity,
@@ -19,26 +18,17 @@ from app.database import Base
 
 class DirectMessage(Base):
     __tablename__ = "direct_messages"
-    __table_args__ = (
-        CheckConstraint(
-            "(sender_user_id IS NOT NULL) != (sender_patient_id IS NOT NULL)",
-            name="ck_direct_messages_exactly_one_sender",
-        ),
-        UniqueConstraint("sequence", name="uq_direct_messages_sequence"),
-    )
+    __table_args__ = (UniqueConstraint("sequence", name="uq_direct_messages_sequence"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # A patient has exactly one owning student, so the patient_id alone is
     # the thread key -- no separate "conversation" entity is needed.
     patient_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True
+        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
-    sender_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
-    )
-    sender_patient_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("patients.id"), nullable=True, index=True
+    sender_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
 
     body: Mapped[str] = mapped_column(Text, nullable=False)

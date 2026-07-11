@@ -3,7 +3,6 @@ import {
   Button,
   Divider,
   Group,
-  PasswordInput,
   Select,
   Stack,
   Text,
@@ -17,9 +16,9 @@ import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/httpClient'
 import {
+  confirmPatient,
   deletePatient,
   getPatient,
-  setPatientCredentials,
   updatePatient,
   type PatientUpdateInput,
 } from '../../api/patients'
@@ -75,19 +74,16 @@ export function PatientDetailPage() {
     },
   })
 
-  const credentialsForm = useForm({ initialValues: { email: '', password: '' } })
-
-  const credentialsMutation = useMutation({
-    mutationFn: (values: { email: string; password: string }) =>
-      setPatientCredentials(token, patientId!, values.email, values.password),
+  const confirmMutation = useMutation({
+    mutationFn: () => confirmPatient(token, patientId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patients', patientId] })
-      notifications.show({ message: 'Login credentials set', color: 'green' })
-      credentialsForm.reset()
+      queryClient.invalidateQueries({ queryKey: ['patients'] })
+      notifications.show({ message: 'Patient confirmed', color: 'green' })
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to set credentials',
+        message: err instanceof ApiError ? err.message : 'Failed to confirm patient',
         color: 'red',
       })
     },
@@ -139,22 +135,28 @@ export function PatientDetailPage() {
         </Stack>
       </form>
 
-      <Divider label="Login credentials" />
+      <Divider label="Account" />
       <Group>
-        <Text size="sm">Status:</Text>
-        <Badge color={patient.email ? 'green' : 'gray'}>
-          {patient.email ? `Provisioned (${patient.email})` : 'Not provisioned'}
-        </Badge>
+        <Text size="sm">Email:</Text>
+        <Text size="sm">{patient.email}</Text>
       </Group>
-      <form onSubmit={credentialsForm.onSubmit((values) => credentialsMutation.mutate(values))}>
-        <Stack>
-          <TextInput label="Email" {...credentialsForm.getInputProps('email')} />
-          <PasswordInput label="Password" {...credentialsForm.getInputProps('password')} />
-          <Button type="submit" loading={credentialsMutation.isPending} variant="light">
-            {patient.email ? 'Update credentials' : 'Provision login'}
+      <Group justify="space-between">
+        <Group>
+          <Text size="sm">Confirmation:</Text>
+          <Badge color={patient.owner_confirmed_at ? 'green' : 'yellow'}>
+            {patient.owner_confirmed_at ? 'Confirmed' : 'Pending confirmation'}
+          </Badge>
+        </Group>
+        {!patient.owner_confirmed_at && (
+          <Button
+            variant="light"
+            loading={confirmMutation.isPending}
+            onClick={() => confirmMutation.mutate()}
+          >
+            Confirm
           </Button>
-        </Stack>
-      </form>
+        )}
+      </Group>
     </Stack>
   )
 }

@@ -17,14 +17,18 @@ describe('AuthProvider', () => {
     localStorage.clear()
   })
 
-  it('rehydrates a persisted user session on load', async () => {
-    localStorage.setItem('stu_dent_auth', JSON.stringify({ kind: 'user', token: 'tok123' }))
+  it('rehydrates a persisted session on load', async () => {
+    localStorage.setItem('stu_dent_auth', JSON.stringify({ token: 'tok123' }))
     vi.mocked(authApi.getCurrentUser).mockResolvedValue({
       id: 'u1',
       email: 'a@b.com',
       full_name: 'Ada',
       role: 'student',
       is_active: true,
+      owner_student_id: null,
+      owner_confirmed_at: null,
+      contact_phone: null,
+      preferred_time_of_day: null,
     })
 
     render(
@@ -38,14 +42,16 @@ describe('AuthProvider', () => {
   })
 
   it('rehydrates a persisted patient session on load', async () => {
-    localStorage.setItem('stu_dent_auth', JSON.stringify({ kind: 'patient', token: 'ptok789' }))
-    vi.mocked(authApi.getCurrentPatient).mockResolvedValue({
+    localStorage.setItem('stu_dent_auth', JSON.stringify({ token: 'ptok789' }))
+    vi.mocked(authApi.getCurrentUser).mockResolvedValue({
       id: 'p1',
-      owner_student_id: 's1',
-      full_name: 'Pat Patient',
-      contact_phone: null,
       email: 'pat@example.com',
+      full_name: 'Pat Patient',
+      role: 'patient',
       is_active: true,
+      owner_student_id: 's1',
+      owner_confirmed_at: '2026-01-01T00:00:00Z',
+      contact_phone: null,
       preferred_time_of_day: null,
     })
 
@@ -59,7 +65,7 @@ describe('AuthProvider', () => {
   })
 
   it('clears a stale/invalid token instead of staying logged in', async () => {
-    localStorage.setItem('stu_dent_auth', JSON.stringify({ kind: 'user', token: 'expired' }))
+    localStorage.setItem('stu_dent_auth', JSON.stringify({ token: 'expired' }))
     vi.mocked(authApi.getCurrentUser).mockRejectedValue(new Error('401'))
 
     render(

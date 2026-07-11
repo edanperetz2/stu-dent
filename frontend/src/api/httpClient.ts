@@ -46,7 +46,21 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     let detail = response.statusText
     try {
       const data = await response.json()
-      if (typeof data.detail === 'string') detail = data.detail
+      if (typeof data.detail === 'string') {
+        detail = data.detail
+      } else if (Array.isArray(data.detail)) {
+        // FastAPI/Pydantic 422 validation errors return `detail` as a list
+        // of {loc, msg} objects, not a string -- without this branch every
+        // validation error silently fell back to a generic status text
+        // like "Unprocessable Entity" instead of the actual message.
+        detail = data.detail
+          .map((item: { msg?: string; loc?: (string | number)[] }) => {
+            const field = item.loc?.[item.loc.length - 1]
+            return field && item.msg ? `${field}: ${item.msg}` : item.msg
+          })
+          .filter(Boolean)
+          .join('; ')
+      }
     } catch {
       // response body wasn't JSON; keep statusText
     }

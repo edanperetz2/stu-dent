@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Modal, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { Badge, Button, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
@@ -20,9 +20,11 @@ export function PatientsListPage() {
   })
 
   const form = useForm<PatientCreateInput>({
-    initialValues: { full_name: '', contact_phone: '' },
+    initialValues: { full_name: '', email: '', password: '', contact_phone: '' },
     validate: {
       full_name: (value) => (value.trim().length > 0 ? null : 'Full name is required'),
+      email: (value) => (value.includes('@') ? null : 'Enter a valid email'),
+      password: (value) => (value.length >= 8 ? null : 'Password must be at least 8 characters'),
     },
   })
 
@@ -57,7 +59,7 @@ export function PatientsListPage() {
             <Table.Tr>
               <Table.Th>Name</Table.Th>
               <Table.Th>Phone</Table.Th>
-              <Table.Th>Login</Table.Th>
+              <Table.Th>Confirmation</Table.Th>
               <Table.Th>Status</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -71,10 +73,10 @@ export function PatientsListPage() {
                 <Table.Td>{patient.full_name}</Table.Td>
                 <Table.Td>{patient.contact_phone ?? '-'}</Table.Td>
                 <Table.Td>
-                  {patient.email ? (
-                    <Badge color="green">Provisioned</Badge>
+                  {patient.owner_confirmed_at ? (
+                    <Badge color="green">Confirmed</Badge>
                   ) : (
-                    <Badge color="gray">None</Badge>
+                    <Badge color="yellow">Pending confirmation</Badge>
                   )}
                 </Table.Td>
                 <Table.Td>
@@ -92,6 +94,8 @@ export function PatientsListPage() {
         <form onSubmit={form.onSubmit((values) => createMutation.mutate(values))}>
           <Stack>
             <TextInput label="Full name" {...form.getInputProps('full_name')} />
+            <TextInput label="Email" placeholder="patient@example.com" {...form.getInputProps('email')} />
+            <PasswordInput label="Password" {...form.getInputProps('password')} />
             <TextInput label="Contact phone" {...form.getInputProps('contact_phone')} />
             <Button type="submit" loading={createMutation.isPending}>
               Create

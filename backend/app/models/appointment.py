@@ -93,7 +93,7 @@ class Appointment(TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
     patient_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True
+        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
     attending_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True

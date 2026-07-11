@@ -34,7 +34,7 @@ def create_equipment(
     record_audit_log(
         db,
         action="equipment_create",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="equipment",
         target_id=equipment.id,
     )
@@ -70,7 +70,7 @@ def update_equipment(
     record_audit_log(
         db,
         action="equipment_update",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="equipment",
         target_id=equipment.id,
     )

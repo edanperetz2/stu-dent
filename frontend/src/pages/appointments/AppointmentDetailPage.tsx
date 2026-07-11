@@ -23,6 +23,7 @@ import { listActiveRooms } from '../../api/rooms'
 import type { Appointment, AppointmentStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { isoToMantineDateTime, mantineDateTimeToIso } from '../../utils/dates'
 import { getAvailableActions, type AppointmentActionName } from './appointmentActions'
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
@@ -50,8 +51,10 @@ const ACTION_FUNCTIONS: Record<
 const TERMINAL_STATUSES: AppointmentStatus[] = ['cancelled', 'completed', 'no_show']
 
 interface EditFormValues {
-  start_time: Date | null
-  end_time: Date | null
+  // Mantine's DateTimePicker onChange always emits a "YYYY-MM-DD HH:mm:ss"
+  // string, never a Date -- see src/utils/dates.ts.
+  start_time: string | null
+  end_time: string | null
   attending_id: string | null
   room_id: string | null
   equipment_id: string | null
@@ -71,7 +74,7 @@ export function AppointmentDetailPage() {
     enabled: !!appointmentId,
   })
 
-  const isStudent = principal?.kind === 'user' && principal.role === 'student'
+  const isStudent = principal?.role === 'student'
 
   const { data: attendings } = useQuery({
     queryKey: ['attendings'],
@@ -142,8 +145,8 @@ export function AppointmentDetailPage() {
 
   function openEditModal() {
     editForm.setValues({
-      start_time: new Date(appointment!.start_time),
-      end_time: new Date(appointment!.end_time),
+      start_time: isoToMantineDateTime(appointment!.start_time),
+      end_time: isoToMantineDateTime(appointment!.end_time),
       attending_id: appointment!.attending_id,
       room_id: appointment!.room_id,
       equipment_id: appointment!.equipment_id,
@@ -185,8 +188,8 @@ export function AppointmentDetailPage() {
         <form
           onSubmit={editForm.onSubmit((values) =>
             editMutation.mutate({
-              start_time: values.start_time?.toISOString(),
-              end_time: values.end_time?.toISOString(),
+              start_time: values.start_time ? mantineDateTimeToIso(values.start_time) : undefined,
+              end_time: values.end_time ? mantineDateTimeToIso(values.end_time) : undefined,
               attending_id: values.attending_id,
               room_id: values.room_id,
               equipment_id: values.equipment_id,

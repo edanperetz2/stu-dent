@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     admin,
@@ -16,9 +17,11 @@ from app.api.routes import (
     notifications,
     patients,
     rooms,
+    students,
     waitlist,
     websocket,
 )
+from app.config import settings
 from app.realtime.listener import listen_forever
 
 
@@ -37,11 +40,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Stu-Dent API", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.frontend_origin],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(auth.router)
 app.include_router(patients.router)
 app.include_router(attending.router)
 app.include_router(admin.router)
 app.include_router(rooms.router)
+app.include_router(students.router)
 app.include_router(equipment.router)
 app.include_router(appointments.router)
 app.include_router(availability.router)

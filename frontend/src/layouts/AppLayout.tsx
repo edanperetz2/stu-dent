@@ -20,6 +20,7 @@ const STUDENT_LINKS: NavItem[] = [
 
 const ATTENDING_LINKS: NavItem[] = [
   { label: 'Dashboard', to: '/' },
+  { label: 'Appointments', to: '/appointments' },
   { label: 'Notifications', to: '/notifications' },
 ]
 
@@ -32,7 +33,7 @@ const ADMIN_LINKS: NavItem[] = [
 ]
 
 const PATIENT_LINKS: NavItem[] = [
-  { label: 'My Appointments', to: '/' },
+  { label: 'My Appointments', to: '/appointments' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
   { label: 'Preferences', to: '/preferences' },
@@ -40,7 +41,7 @@ const PATIENT_LINKS: NavItem[] = [
 
 function linksForPrincipal(principal: Principal | null): NavItem[] {
   if (!principal) return []
-  if (principal.kind === 'patient') return PATIENT_LINKS
+  if (principal.role === 'patient') return PATIENT_LINKS
   if (principal.role === 'student') return STUDENT_LINKS
   if (principal.role === 'attending') return ATTENDING_LINKS
   return ADMIN_LINKS

@@ -4,7 +4,6 @@ import { AuthLayout } from '../layouts/AuthLayout'
 import { AppointmentDetailPage } from '../pages/appointments/AppointmentDetailPage'
 import { AppointmentsListPage } from '../pages/appointments/AppointmentsListPage'
 import { LoginPage } from '../pages/auth/LoginPage'
-import { PatientLoginPage } from '../pages/auth/PatientLoginPage'
 import { RegisterPage } from '../pages/auth/RegisterPage'
 import { AvailabilityPage } from '../pages/availability/AvailabilityPage'
 import { PatientDetailPage } from '../pages/patients/PatientDetailPage'
@@ -19,7 +18,6 @@ export function AppRouter() {
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/patient-login" element={<PatientLoginPage />} />
         </Route>
 
         <Route element={<RequireAuth />}>

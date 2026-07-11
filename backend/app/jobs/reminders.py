@@ -40,14 +40,14 @@ def send_appointment_reminders(db: Session) -> int:
             db,
             notification_type=NotificationType.appointment_reminder,
             message=message,
-            recipient_user_id=appointment.student_id,
+            recipient_id=appointment.student_id,
             related_appointment_id=appointment.id,
         )
         notify(
             db,
             notification_type=NotificationType.appointment_reminder,
             message=message,
-            recipient_patient_id=appointment.patient_id,
+            recipient_id=appointment.patient_id,
             related_appointment_id=appointment.id,
         )
         if appointment.attending_id is not None:
@@ -55,7 +55,7 @@ def send_appointment_reminders(db: Session) -> int:
                 db,
                 notification_type=NotificationType.appointment_reminder,
                 message=message,
-                recipient_user_id=appointment.attending_id,
+                recipient_id=appointment.attending_id,
                 related_appointment_id=appointment.id,
             )
 

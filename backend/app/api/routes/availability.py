@@ -51,7 +51,7 @@ def replace_my_availability(
     record_audit_log(
         db,
         action="availability_replace",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="student_availability",
         target_id=current_user.id,
         extra_data={"window_count": len(windows)},

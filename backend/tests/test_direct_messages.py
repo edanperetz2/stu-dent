@@ -3,6 +3,7 @@ from tests.helpers import auth_header, create_and_login_patient, create_patient,
 
 def test_student_sends_message(client):
     student_token = register_and_login(client, "dm-s1@example.com", role="student")
+    student_id = client.get("/users/me", headers=auth_header(student_token)).json()["id"]
     patient_id = create_patient(client, student_token)
 
     response = client.post(
@@ -13,8 +14,7 @@ def test_student_sends_message(client):
     assert response.status_code == 201
     body = response.json()
     assert body["body"] == "Hello patient"
-    assert body["sender_user_id"] is not None
-    assert body["sender_patient_id"] is None
+    assert body["sender_id"] == student_id
     assert body["read_at"] is None
 
 
@@ -29,8 +29,7 @@ def test_patient_sends_message(client):
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["sender_patient_id"] is not None
-    assert body["sender_user_id"] is None
+    assert body["sender_id"] == patient_id
 
 
 def test_thread_ordering_oldest_first(client):

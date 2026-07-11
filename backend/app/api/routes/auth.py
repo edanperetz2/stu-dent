@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.core.rate_limit import enforce_login_rate_limit
-from app.core.security import PrincipalType, create_access_token, hash_password, verify_password
+from app.core.security import create_access_token, hash_password, verify_password
 from app.database import get_db
-from app.models.user import User
+from app.models.notification import NotificationType
+from app.models.user import RoleEnum, User
 from app.schemas.auth import LoginIn, RegisterIn, TokenOut
 from app.schemas.user import UserOut
 from app.services.audit import record_audit_log
+from app.services.notifications import notify
 
 router = APIRouter(tags=["auth"])
 
@@ -25,11 +27,32 @@ def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db
     if existing is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
+    owner_student_id = None
+    owner_confirmed_at = None
+    if payload.role == RoleEnum.patient:
+        student = db.scalar(
+            select(User).where(
+                User.id == payload.owner_student_id,
+                User.role == RoleEnum.student,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+        )
+        if student is None:
+            raise HTTPException(
+                status_code=422, detail="owner_student_id must reference an active student"
+            )
+        owner_student_id = student.id
+        # Left unconfirmed until the student explicitly confirms this
+        # self-registration -- see services/patients.py::require_confirmed_patient.
+
     user = User(
         email=email,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
         role=payload.role,
+        owner_student_id=owner_student_id,
+        owner_confirmed_at=owner_confirmed_at,
     )
     db.add(user)
     db.flush()
@@ -37,11 +60,23 @@ def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db
     record_audit_log(
         db,
         action="user_register",
-        actor_user_id=user.id,
+        actor_id=user.id,
         target_type="user",
         target_id=user.id,
         ip_address=_client_ip(request),
     )
+
+    if payload.role == RoleEnum.patient:
+        notify(
+            db,
+            notification_type=NotificationType.patient_registration_request,
+            message=(
+                f"{user.full_name} has requested to join your patient list. "
+                "Confirm them to proceed."
+            ),
+            recipient_id=owner_student_id,
+        )
+
     db.commit()
     db.refresh(user)
     return user
@@ -55,35 +90,35 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)) -> 
     enforce_login_rate_limit(db, identifier=email, failure_action="user_login_failure")
 
     user = db.scalar(select(User).where(User.email == email))
+    role_matches = payload.role is None or (user is not None and user.role == payload.role)
     if (
         user is None
         or not user.is_active
         or not verify_password(payload.password, user.hashed_password)
+        or not role_matches
     ):
         record_audit_log(
             db,
             action="user_login_failure",
-            actor_user_id=user.id if user else None,
+            actor_id=user.id if user else None,
             attempted_identifier=email,
             ip_address=ip,
         )
         db.commit()
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email, password, or role"
         )
 
     record_audit_log(
         db,
         action="user_login_success",
-        actor_user_id=user.id,
+        actor_id=user.id,
         attempted_identifier=email,
         ip_address=ip,
     )
     db.commit()
 
-    token = create_access_token(
-        subject=user.id, principal_type=PrincipalType.user, role=user.role.value
-    )
+    token = create_access_token(subject=user.id, role=user.role.value)
     return TokenOut(access_token=token)
 
 

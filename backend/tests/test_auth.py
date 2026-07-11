@@ -43,7 +43,34 @@ def test_register_accepts_each_role(client):
         assert response.json()["role"] == role
 
 
-def test_login_success_returns_jwt_with_role_and_principal_type(client):
+def test_register_patient_without_owner_student_id_rejected(client):
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "patient-no-owner@example.com",
+            "password": "password123",
+            "full_name": "No Owner",
+            "role": "patient",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_register_non_patient_with_owner_student_id_rejected(client):
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "student-with-owner@example.com",
+            "password": "password123",
+            "full_name": "Has Owner",
+            "role": "student",
+            "owner_student_id": "00000000-0000-0000-0000-000000000000",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_login_success_returns_jwt_with_role(client):
     _register(client)
     response = _login(client)
     assert response.status_code == 200
@@ -51,7 +78,6 @@ def test_login_success_returns_jwt_with_role_and_principal_type(client):
     token = response.json()["access_token"]
     payload = pyjwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     assert payload["role"] == "student"
-    assert payload["principal_type"] == "user"
 
 
 def test_login_wrong_password_rejected(client):

@@ -5,7 +5,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.appointment import Appointment, AppointmentStatus
-from app.models.patient import Patient
 from app.models.user import RoleEnum, User
 from tests.conftest import engine
 from tests.helpers import (
@@ -194,8 +193,22 @@ def test_concurrent_overlapping_bookings_only_one_commits():
         )
         setup_session.add(student)
         setup_session.flush()
-        patient_a = Patient(owner_student_id=student.id, full_name="Concurrency Patient A")
-        patient_b = Patient(owner_student_id=student.id, full_name="Concurrency Patient B")
+        patient_a = User(
+            email="concurrency-patient-a@example.com",
+            hashed_password="x",
+            role=RoleEnum.patient,
+            full_name="Concurrency Patient A",
+            owner_student_id=student.id,
+            owner_confirmed_at=datetime.now(UTC),
+        )
+        patient_b = User(
+            email="concurrency-patient-b@example.com",
+            hashed_password="x",
+            role=RoleEnum.patient,
+            full_name="Concurrency Patient B",
+            owner_student_id=student.id,
+            owner_confirmed_at=datetime.now(UTC),
+        )
         setup_session.add_all([patient_a, patient_b])
         setup_session.commit()
         student_id, patient_a_id, patient_b_id = student.id, patient_a.id, patient_b.id
@@ -242,7 +255,7 @@ def test_concurrent_overlapping_bookings_only_one_commits():
         cleanup_session = Session(bind=engine)
         try:
             cleanup_session.query(Appointment).filter(Appointment.student_id == student_id).delete()
-            cleanup_session.query(Patient).filter(Patient.owner_student_id == student_id).delete()
+            cleanup_session.query(User).filter(User.owner_student_id == student_id).delete()
             cleanup_session.query(User).filter(User.id == student_id).delete()
             cleanup_session.commit()
         finally:

@@ -4,14 +4,13 @@ from collections import defaultdict
 
 from fastapi import WebSocket
 
-from app.core.security import PrincipalType
-
 
 class ConnectionManager:
-    """In-process registry of live WebSocket connections, keyed by recipient.
+    """In-process registry of live WebSocket connections, keyed by recipient
+    user id.
 
-    One principal can have multiple connections open at once (multiple tabs
-    or devices); `send_to` fans out to all of them. Purely in-memory -- this
+    One user can have multiple connections open at once (multiple tabs or
+    devices); `send_to` fans out to all of them. Purely in-memory -- this
     app runs a single `api` process, so that's sufficient for connections
     made through this process. The Postgres LISTEN/NOTIFY bridge
     (`realtime/listener.py`) is what lets events originating in the separate
@@ -19,30 +18,25 @@ class ConnectionManager:
     """
 
     def __init__(self) -> None:
-        self._connections: dict[tuple[str, str], set[WebSocket]] = defaultdict(set)
+        self._connections: dict[str, set[WebSocket]] = defaultdict(set)
         self._lock = asyncio.Lock()
 
-    async def connect(
-        self, kind: PrincipalType, recipient_id: uuid.UUID, websocket: WebSocket
-    ) -> None:
+    async def connect(self, recipient_id: uuid.UUID, websocket: WebSocket) -> None:
         await websocket.accept()
-        key = (kind.value, str(recipient_id))
+        key = str(recipient_id)
         async with self._lock:
             self._connections[key].add(websocket)
 
-    async def disconnect(
-        self, kind: PrincipalType, recipient_id: uuid.UUID, websocket: WebSocket
-    ) -> None:
-        key = (kind.value, str(recipient_id))
+    async def disconnect(self, recipient_id: uuid.UUID, websocket: WebSocket) -> None:
+        key = str(recipient_id)
         async with self._lock:
             self._connections[key].discard(websocket)
             if not self._connections[key]:
                 del self._connections[key]
 
-    async def send_to(self, kind: str, recipient_id: str, payload: dict) -> None:
-        key = (kind, recipient_id)
+    async def send_to(self, recipient_id: str, payload: dict) -> None:
         async with self._lock:
-            sockets = list(self._connections.get(key, ()))
+            sockets = list(self._connections.get(recipient_id, ()))
         for socket in sockets:
             try:
                 await socket.send_json(payload)

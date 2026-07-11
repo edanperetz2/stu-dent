@@ -4,7 +4,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
-    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -23,17 +22,12 @@ class NotificationType(enum.StrEnum):
     appointment_reminder = "appointment_reminder"
     appointment_expired = "appointment_expired"
     waitlist_slot_available = "waitlist_slot_available"
+    patient_registration_request = "patient_registration_request"
 
 
 class Notification(TimestampMixin, Base):
     __tablename__ = "notifications"
-    __table_args__ = (
-        CheckConstraint(
-            "(recipient_user_id IS NOT NULL) != (recipient_patient_id IS NOT NULL)",
-            name="ck_notifications_exactly_one_recipient",
-        ),
-        UniqueConstraint("sequence", name="uq_notifications_sequence"),
-    )
+    __table_args__ = (UniqueConstraint("sequence", name="uq_notifications_sequence"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
@@ -45,11 +39,8 @@ class Notification(TimestampMixin, Base):
     # the UUID `id`.
     sequence: Mapped[int] = mapped_column(BigInteger, Identity(), nullable=False)
 
-    recipient_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
-    )
-    recipient_patient_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("patients.id"), nullable=True, index=True
+    recipient_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
 
     notification_type: Mapped[NotificationType] = mapped_column(

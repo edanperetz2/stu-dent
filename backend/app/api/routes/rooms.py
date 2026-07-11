@@ -38,7 +38,7 @@ def create_room(
     record_audit_log(
         db,
         action="room_create",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="room",
         target_id=room.id,
     )
@@ -72,7 +72,7 @@ def update_room(
     record_audit_log(
         db,
         action="room_update",
-        actor_user_id=current_user.id,
+        actor_id=current_user.id,
         target_type="room",
         target_id=room.id,
     )

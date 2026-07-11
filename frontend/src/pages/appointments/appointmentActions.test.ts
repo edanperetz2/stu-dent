@@ -26,37 +26,42 @@ function makeAppointment(overrides: Partial<Appointment> = {}): Appointment {
 }
 
 const owningStudent: Principal = {
-  kind: 'user',
   token: 't',
   id: STUDENT_ID,
   role: 'student',
   fullName: 'Student',
   email: 's@example.com',
+  ownerStudentId: null,
+  ownerConfirmedAt: null,
 }
 const otherStudent: Principal = { ...owningStudent, id: 'other-student' }
 const assignedAttending: Principal = {
-  kind: 'user',
   token: 't',
   id: ATTENDING_ID,
   role: 'attending',
   fullName: 'Attending',
   email: 'a@example.com',
+  ownerStudentId: null,
+  ownerConfirmedAt: null,
 }
 const otherAttending: Principal = { ...assignedAttending, id: 'other-attending' }
 const admin: Principal = {
-  kind: 'user',
   token: 't',
   id: 'admin-1',
   role: 'admin',
   fullName: 'Admin',
   email: 'admin@example.com',
+  ownerStudentId: null,
+  ownerConfirmedAt: null,
 }
 const selfPatient: Principal = {
-  kind: 'patient',
   token: 't',
   id: PATIENT_ID,
+  role: 'patient',
   fullName: 'Patient',
   email: 'p@example.com',
+  ownerStudentId: STUDENT_ID,
+  ownerConfirmedAt: '2026-01-01T00:00:00Z',
 }
 const otherPatient: Principal = { ...selfPatient, id: 'other-patient' }
 

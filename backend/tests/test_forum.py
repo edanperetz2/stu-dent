@@ -30,10 +30,7 @@ def test_non_student_cannot_create_post(client):
 
     assert _create_post(client, attending_token).status_code == 403
     assert _create_post(client, admin_token).status_code == 403
-    # A patient token isn't a User principal_type at all, so require_role
-    # rejects it at credential-validation time (401), not role-check (403) --
-    # same distinction test_patient_auth.py already established in Phase 1.
-    assert _create_post(client, patient_token).status_code == 401
+    assert _create_post(client, patient_token).status_code == 403
 
 
 def test_list_posts_visible_to_students_and_admin_only(client):

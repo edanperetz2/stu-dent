@@ -5,13 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.deps import Principal, get_current_principal
-from app.core.security import PrincipalType
+from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.appointment import Appointment, AppointmentStatus
-from app.models.user import RoleEnum
+from app.models.user import RoleEnum, User
 from app.schemas.appointment import AppointmentCreate, AppointmentOut, AppointmentUpdate
 from app.services.audit import record_audit_log
+from app.services.patients import require_confirmed_patient
 from app.services.scheduling import (
     TERMINAL_STATUSES,
     flush_or_409,
@@ -23,67 +23,62 @@ from app.services.waitlist import check_and_notify_waitlist
 router = APIRouter(tags=["appointments"])
 
 
-def _is_visible(appointment: Appointment, principal: Principal) -> bool:
-    if principal.kind == PrincipalType.patient:
-        return appointment.patient_id == principal.patient.id
-
-    user = principal.user
-    if user.role == RoleEnum.admin:
+def _is_visible(appointment: Appointment, current_user: User) -> bool:
+    if current_user.role == RoleEnum.admin:
         return True
-    if user.role == RoleEnum.student:
-        return appointment.student_id == user.id
-    if user.role == RoleEnum.attending:
-        return appointment.attending_id == user.id
+    if current_user.role == RoleEnum.student:
+        return appointment.student_id == current_user.id
+    if current_user.role == RoleEnum.attending:
+        return appointment.attending_id == current_user.id
+    if current_user.role == RoleEnum.patient:
+        return appointment.patient_id == current_user.id
     return False
 
 
 def _get_visible_appointment(
-    db: Session, appointment_id: uuid.UUID, principal: Principal
+    db: Session, appointment_id: uuid.UUID, current_user: User
 ) -> Appointment:
     appointment = db.get(Appointment, appointment_id)
-    if appointment is None or not _is_visible(appointment, principal):
+    if appointment is None or not _is_visible(appointment, current_user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
     return appointment
 
 
-def _require_owning_student(appointment: Appointment, principal: Principal) -> None:
-    if (
-        principal.kind != PrincipalType.user
-        or principal.user.role != RoleEnum.student
-        or appointment.student_id != principal.user.id
-    ):
+def _require_owning_student(appointment: Appointment, current_user: User) -> None:
+    if current_user.role != RoleEnum.student or appointment.student_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not the owning student")
 
 
 @router.post("/appointments", response_model=AppointmentOut, status_code=status.HTTP_201_CREATED)
 def create_appointment(
     payload: AppointmentCreate,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
     if payload.end_time <= payload.start_time:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
 
-    if principal.kind == PrincipalType.patient:
+    if current_user.role == RoleEnum.patient:
+        require_confirmed_patient(current_user)
         if payload.attending_id or payload.room_id or payload.equipment_id:
             raise HTTPException(
                 status_code=422,
                 detail="Patients cannot set attending, room, or equipment when requesting",
             )
-        student_id = principal.patient.owner_student_id
-        patient_id = principal.patient.id
+        student_id = current_user.owner_student_id
+        patient_id = current_user.id
         student_confirmed_at = None
-    else:
-        if principal.user.role != RoleEnum.student:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only students or patients can request appointments",
-            )
+    elif current_user.role == RoleEnum.student:
         if payload.patient_id is None:
             raise HTTPException(status_code=422, detail="patient_id is required")
-        student_id = principal.user.id
+        student_id = current_user.id
         patient_id = payload.patient_id
         student_confirmed_at = datetime.now(UTC)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only students or patients can request appointments",
+        )
 
     validate_participants(
         db,
@@ -112,8 +107,7 @@ def create_appointment(
     record_audit_log(
         db,
         action="appointment_create",
-        actor_user_id=principal.actor_user_id,
-        actor_patient_id=principal.actor_patient_id,
+        actor_id=current_user.id,
         target_type="appointment",
         target_id=appointment.id,
     )
@@ -124,37 +118,37 @@ def create_appointment(
 
 @router.get("/appointments", response_model=list[AppointmentOut])
 def list_appointments(
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Appointment]:
     stmt = select(Appointment)
-    if principal.kind == PrincipalType.patient:
-        stmt = stmt.where(Appointment.patient_id == principal.patient.id)
-    elif principal.user.role == RoleEnum.student:
-        stmt = stmt.where(Appointment.student_id == principal.user.id)
-    elif principal.user.role == RoleEnum.attending:
-        stmt = stmt.where(Appointment.attending_id == principal.user.id)
+    if current_user.role == RoleEnum.patient:
+        stmt = stmt.where(Appointment.patient_id == current_user.id)
+    elif current_user.role == RoleEnum.student:
+        stmt = stmt.where(Appointment.student_id == current_user.id)
+    elif current_user.role == RoleEnum.attending:
+        stmt = stmt.where(Appointment.attending_id == current_user.id)
     return list(db.scalars(stmt))
 
 
 @router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
 def get_appointment(
     appointment_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
-    return _get_visible_appointment(db, appointment_id, principal)
+    return _get_visible_appointment(db, appointment_id, current_user)
 
 
 @router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
 def update_appointment(
     appointment_id: uuid.UUID,
     payload: AppointmentUpdate,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
-    appointment = _get_visible_appointment(db, appointment_id, principal)
-    _require_owning_student(appointment, principal)
+    appointment = _get_visible_appointment(db, appointment_id, current_user)
+    _require_owning_student(appointment, current_user)
 
     if appointment.status in TERMINAL_STATUSES:
         raise HTTPException(status_code=409, detail="Cannot edit a finalized appointment")
@@ -203,7 +197,7 @@ def update_appointment(
     record_audit_log(
         db,
         action="appointment_update",
-        actor_user_id=principal.actor_user_id,
+        actor_id=current_user.id,
         target_type="appointment",
         target_id=appointment.id,
     )
@@ -215,11 +209,11 @@ def update_appointment(
 @router.post("/appointments/{appointment_id}/accept", response_model=AppointmentOut)
 def accept_appointment(
     appointment_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
-    appointment = _get_visible_appointment(db, appointment_id, principal)
-    _require_owning_student(appointment, principal)
+    appointment = _get_visible_appointment(db, appointment_id, current_user)
+    _require_owning_student(appointment, current_user)
 
     if appointment.status != AppointmentStatus.proposed:
         raise HTTPException(status_code=409, detail="Only a proposed appointment can be accepted")
@@ -231,7 +225,7 @@ def accept_appointment(
     record_audit_log(
         db,
         action="appointment_accept",
-        actor_user_id=principal.actor_user_id,
+        actor_id=current_user.id,
         target_type="appointment",
         target_id=appointment.id,
     )
@@ -243,15 +237,11 @@ def accept_appointment(
 @router.post("/appointments/{appointment_id}/approve", response_model=AppointmentOut)
 def approve_appointment(
     appointment_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
-    appointment = _get_visible_appointment(db, appointment_id, principal)
-    if (
-        principal.kind != PrincipalType.user
-        or principal.user.role != RoleEnum.attending
-        or appointment.attending_id != principal.user.id
-    ):
+    appointment = _get_visible_appointment(db, appointment_id, current_user)
+    if current_user.role != RoleEnum.attending or appointment.attending_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not the assigned attending"
         )
@@ -271,7 +261,7 @@ def approve_appointment(
     record_audit_log(
         db,
         action="appointment_approve",
-        actor_user_id=principal.actor_user_id,
+        actor_id=current_user.id,
         target_type="appointment",
         target_id=appointment.id,
     )
@@ -283,20 +273,16 @@ def approve_appointment(
 @router.post("/appointments/{appointment_id}/reject", response_model=AppointmentOut)
 def reject_appointment(
     appointment_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
-    appointment = _get_visible_appointment(db, appointment_id, principal)
+    appointment = _get_visible_appointment(db, appointment_id, current_user)
 
     is_owning_student = (
-        principal.kind == PrincipalType.user
-        and principal.user.role == RoleEnum.student
-        and appointment.student_id == principal.user.id
+        current_user.role == RoleEnum.student and appointment.student_id == current_user.id
     )
     is_assigned_attending = (
-        principal.kind == PrincipalType.user
-        and principal.user.role == RoleEnum.attending
-        and appointment.attending_id == principal.user.id
+        current_user.role == RoleEnum.attending and appointment.attending_id == current_user.id
     )
     if not (is_owning_student or is_assigned_attending):
         raise HTTPException(
@@ -314,7 +300,7 @@ def reject_appointment(
     record_audit_log(
         db,
         action="appointment_reject",
-        actor_user_id=principal.actor_user_id,
+        actor_id=current_user.id,
         target_type="appointment",
         target_id=appointment.id,
     )
@@ -326,18 +312,16 @@ def reject_appointment(
 @router.post("/appointments/{appointment_id}/cancel", response_model=AppointmentOut)
 def cancel_appointment(
     appointment_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
-    appointment = _get_visible_appointment(db, appointment_id, principal)
+    appointment = _get_visible_appointment(db, appointment_id, current_user)
 
     is_owning_student = (
-        principal.kind == PrincipalType.user
-        and principal.user.role == RoleEnum.student
-        and appointment.student_id == principal.user.id
+        current_user.role == RoleEnum.student and appointment.student_id == current_user.id
     )
     is_self_patient = (
-        principal.kind == PrincipalType.patient and appointment.patient_id == principal.patient.id
+        current_user.role == RoleEnum.patient and appointment.patient_id == current_user.id
     )
     if not (is_owning_student or is_self_patient):
         raise HTTPException(
@@ -355,8 +339,7 @@ def cancel_appointment(
     record_audit_log(
         db,
         action="appointment_cancel",
-        actor_user_id=principal.actor_user_id,
-        actor_patient_id=principal.actor_patient_id,
+        actor_id=current_user.id,
         target_type="appointment",
         target_id=appointment.id,
     )
@@ -368,11 +351,11 @@ def cancel_appointment(
 @router.post("/appointments/{appointment_id}/complete", response_model=AppointmentOut)
 def complete_appointment(
     appointment_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
-    appointment = _get_visible_appointment(db, appointment_id, principal)
-    _require_owning_student(appointment, principal)
+    appointment = _get_visible_appointment(db, appointment_id, current_user)
+    _require_owning_student(appointment, current_user)
 
     if appointment.status != AppointmentStatus.confirmed:
         raise HTTPException(status_code=409, detail="Only a confirmed appointment can be completed")
@@ -383,7 +366,7 @@ def complete_appointment(
     record_audit_log(
         db,
         action="appointment_complete",
-        actor_user_id=principal.actor_user_id,
+        actor_id=current_user.id,
         target_type="appointment",
         target_id=appointment.id,
     )
@@ -395,11 +378,11 @@ def complete_appointment(
 @router.post("/appointments/{appointment_id}/no-show", response_model=AppointmentOut)
 def mark_no_show(
     appointment_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
-    appointment = _get_visible_appointment(db, appointment_id, principal)
-    _require_owning_student(appointment, principal)
+    appointment = _get_visible_appointment(db, appointment_id, current_user)
+    _require_owning_student(appointment, current_user)
 
     if appointment.status != AppointmentStatus.confirmed:
         raise HTTPException(
@@ -412,7 +395,7 @@ def mark_no_show(
     record_audit_log(
         db,
         action="appointment_no_show",
-        actor_user_id=principal.actor_user_id,
+        actor_id=current_user.id,
         target_type="appointment",
         target_id=appointment.id,
     )

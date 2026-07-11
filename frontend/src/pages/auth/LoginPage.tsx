@@ -1,14 +1,24 @@
-import { Anchor, Button, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
+import { Anchor, Button, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/httpClient'
+import type { Role } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 
 interface LoginFormValues {
   email: string
   password: string
+  role: Role | ''
 }
+
+const ROLE_OPTIONS: { value: Role | ''; label: string }[] = [
+  { value: '', label: 'Any' },
+  { value: 'student', label: 'Student' },
+  { value: 'attending', label: 'Attending' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'patient', label: 'Patient' },
+]
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -17,7 +27,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const form = useForm<LoginFormValues>({
-    initialValues: { email: '', password: '' },
+    initialValues: { email: '', password: '', role: '' },
     validate: {
       email: (value) => (value.includes('@') ? null : 'Enter a valid email'),
       password: (value) => (value.length > 0 ? null : 'Password is required'),
@@ -28,7 +38,7 @@ export function LoginPage() {
     setError(null)
     setSubmitting(true)
     try {
-      await login(values.email, values.password)
+      await login(values.email, values.password, values.role || undefined)
       navigate('/')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Login failed')
@@ -42,6 +52,12 @@ export function LoginPage() {
       <Stack>
         <TextInput label="Email" placeholder="you@example.com" {...form.getInputProps('email')} />
         <PasswordInput label="Password" {...form.getInputProps('password')} />
+        <Select
+          label="Role"
+          data={ROLE_OPTIONS}
+          allowDeselect={false}
+          {...form.getInputProps('role')}
+        />
         {error && (
           <Text c="red" size="sm">
             {error}
@@ -52,12 +68,6 @@ export function LoginPage() {
         </Button>
         <Text size="sm" ta="center">
           Don&apos;t have an account? <Anchor component={Link} to="/register">Register</Anchor>
-        </Text>
-        <Text size="sm" ta="center">
-          Are you a patient?{' '}
-          <Anchor component={Link} to="/patient-login">
-            Log in here
-          </Anchor>
         </Text>
       </Stack>
     </form>

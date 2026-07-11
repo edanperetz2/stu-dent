@@ -42,9 +42,14 @@ def test_attendings_require_authentication(client):
     assert client.get("/attendings").status_code == 401
 
 
-def test_patient_token_cannot_list_attendings(client):
+def test_patient_token_can_list_attendings(client):
+    """Patients are ordinary authenticated users now (a role, not a
+    separate principal type), so GET /attendings -- open to any
+    authenticated user -- doesn't reject them. They just can't set an
+    attending when booking (see test_appointments_state_machine.py's
+    test_patient_cannot_set_attending_room_equipment)."""
     student_token = register_and_login(client, "att-s4@example.com", role="student")
     _, patient_token = create_and_login_patient(client, student_token, "att-p4@example.com")
 
     response = client.get("/attendings", headers=auth_header(patient_token))
-    assert response.status_code == 401
+    assert response.status_code == 200

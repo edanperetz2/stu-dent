@@ -21,12 +21,10 @@ export function getAvailableActions(appointment: Appointment, principal: Princip
   const actions: AppointmentAction[] = []
 
   const isOwningStudent =
-    principal.kind === 'user' && principal.role === 'student' && appointment.student_id === principal.id
+    principal.role === 'student' && appointment.student_id === principal.id
   const isAssignedAttending =
-    principal.kind === 'user' &&
-    principal.role === 'attending' &&
-    appointment.attending_id === principal.id
-  const isSelfPatient = principal.kind === 'patient' && appointment.patient_id === principal.id
+    principal.role === 'attending' && appointment.attending_id === principal.id
+  const isSelfPatient = principal.role === 'patient' && appointment.patient_id === principal.id
 
   const isTerminal = TERMINAL_STATUSES.includes(appointment.status)
 

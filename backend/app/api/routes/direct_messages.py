@@ -5,35 +5,31 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.deps import Principal, get_current_principal
-from app.core.security import PrincipalType
+from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.direct_message import DirectMessage
-from app.models.patient import Patient
-from app.models.user import RoleEnum
+from app.models.user import RoleEnum, User
 from app.realtime.events import publish
 from app.schemas.direct_message import DirectMessageCreate, DirectMessageOut
 from app.services.audit import record_audit_log
+from app.services.patients import require_confirmed_patient
 
 router = APIRouter(tags=["direct-messages"])
 
 
-def _get_authorized_patient(db: Session, patient_id: uuid.UUID, principal: Principal) -> Patient:
+def _get_authorized_patient(db: Session, patient_id: uuid.UUID, current_user: User) -> User:
     patient = db.scalar(
-        select(Patient).where(Patient.id == patient_id, Patient.deleted_at.is_(None))
+        select(User).where(
+            User.id == patient_id, User.role == RoleEnum.patient, User.deleted_at.is_(None)
+        )
     )
 
     is_owning_student = (
-        principal.kind == PrincipalType.user
-        and principal.user.role == RoleEnum.student
+        current_user.role == RoleEnum.student
         and patient is not None
-        and patient.owner_student_id == principal.user.id
+        and patient.owner_student_id == current_user.id
     )
-    is_self_patient = (
-        principal.kind == PrincipalType.patient
-        and patient is not None
-        and principal.patient.id == patient.id
-    )
+    is_self_patient = current_user.role == RoleEnum.patient and current_user.id == patient_id
     if patient is None or not (is_owning_student or is_self_patient):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
 
@@ -48,16 +44,17 @@ def _get_authorized_patient(db: Session, patient_id: uuid.UUID, principal: Princ
 def create_message(
     patient_id: uuid.UUID,
     payload: DirectMessageCreate,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DirectMessage:
-    patient = _get_authorized_patient(db, patient_id, principal)
+    patient = _get_authorized_patient(db, patient_id, current_user)
+    if current_user.role == RoleEnum.patient:
+        require_confirmed_patient(current_user)
 
     message = DirectMessage(
         patient_id=patient_id,
         body=payload.body,
-        sender_user_id=principal.actor_user_id,
-        sender_patient_id=principal.actor_patient_id,
+        sender_id=current_user.id,
     )
     db.add(message)
     db.flush()
@@ -65,30 +62,22 @@ def create_message(
     record_audit_log(
         db,
         action="direct_message_create",
-        actor_user_id=principal.actor_user_id,
-        actor_patient_id=principal.actor_patient_id,
+        actor_id=current_user.id,
         target_type="direct_message",
         target_id=message.id,
     )
 
-    if message.sender_user_id is not None:
-        recipient_kind, recipient_id = "patient", patient.id
-    else:
-        recipient_kind, recipient_id = "user", patient.owner_student_id
+    recipient_id = patient.owner_student_id if current_user.role == RoleEnum.patient else patient.id
 
     publish(
         db,
-        kind=recipient_kind,
         recipient_id=recipient_id,
         event={
             "event": "direct_message",
             "id": str(message.id),
             "patient_id": str(message.patient_id),
             "body": message.body,
-            "sender_user_id": str(message.sender_user_id) if message.sender_user_id else None,
-            "sender_patient_id": (
-                str(message.sender_patient_id) if message.sender_patient_id else None
-            ),
+            "sender_id": str(message.sender_id),
         },
     )
 
@@ -100,10 +89,10 @@ def create_message(
 @router.get("/patients/{patient_id}/messages", response_model=list[DirectMessageOut])
 def list_messages(
     patient_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[DirectMessage]:
-    _get_authorized_patient(db, patient_id, principal)
+    _get_authorized_patient(db, patient_id, current_user)
 
     stmt = (
         select(DirectMessage)
@@ -117,10 +106,10 @@ def list_messages(
 def mark_message_read(
     patient_id: uuid.UUID,
     message_id: uuid.UUID,
-    principal: Principal = Depends(get_current_principal),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DirectMessage:
-    _get_authorized_patient(db, patient_id, principal)
+    _get_authorized_patient(db, patient_id, current_user)
 
     message = db.scalar(
         select(DirectMessage).where(
@@ -130,10 +119,7 @@ def mark_message_read(
     if message is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
 
-    is_recipient = (
-        message.sender_user_id is not None and principal.kind == PrincipalType.patient
-    ) or (message.sender_patient_id is not None and principal.kind == PrincipalType.user)
-    if not is_recipient:
+    if message.sender_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the recipient can mark a message read",

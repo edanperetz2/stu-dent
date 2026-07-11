@@ -29,6 +29,7 @@ import { listActiveRooms } from '../../api/rooms'
 import type { AppointmentStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { mantineDateTimeToIso } from '../../utils/dates'
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
   proposed: 'gray',
@@ -45,8 +46,10 @@ interface CreateFormValues {
   attending_id: string | null
   room_id: string | null
   equipment_id: string | null
-  start_time: Date | null
-  end_time: Date | null
+  // Mantine's DateTimePicker onChange always emits a "YYYY-MM-DD HH:mm:ss"
+  // string, never a Date -- see src/utils/dates.ts.
+  start_time: string | null
+  end_time: string | null
   notes: string
 }
 
@@ -57,8 +60,8 @@ export function AppointmentsListPage() {
   const navigate = useNavigate()
   const [opened, { open, close }] = useDisclosure(false)
 
-  const isStudent = principal?.kind === 'user' && principal.role === 'student'
-  const isPatient = principal?.kind === 'patient'
+  const isStudent = principal?.role === 'student'
+  const isPatient = principal?.role === 'patient'
 
   const { data: appointments, isLoading } = useQuery({
     queryKey: ['appointments'],
@@ -124,8 +127,8 @@ export function AppointmentsListPage() {
 
   function handleSubmit(values: CreateFormValues) {
     const payload: AppointmentCreateInput = {
-      start_time: values.start_time!.toISOString(),
-      end_time: values.end_time!.toISOString(),
+      start_time: mantineDateTimeToIso(values.start_time!),
+      end_time: mantineDateTimeToIso(values.end_time!),
       notes: values.notes || undefined,
     }
     if (isStudent) {

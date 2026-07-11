@@ -13,11 +13,8 @@ class AuditLog(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
 
-    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
-    )
-    actor_patient_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("patients.id"), nullable=True, index=True
     )
     # Raw email attempted at login, kept even when it matched no account, so
     # rate limiting can key off an identifier that never resolved to a row.

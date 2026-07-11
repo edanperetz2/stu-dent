@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.equipment import Equipment
-from app.models.patient import Patient
 from app.models.room import Room
 from app.models.user import RoleEnum, User
 
@@ -63,8 +62,13 @@ def validate_participants(
     ):
         raise HTTPException(status_code=422, detail="Invalid student for appointment")
 
-    patient = db.get(Patient, patient_id)
-    if patient is None or patient.deleted_at is not None or patient.owner_student_id != student_id:
+    patient = db.get(User, patient_id)
+    if (
+        patient is None
+        or patient.role != RoleEnum.patient
+        or patient.deleted_at is not None
+        or patient.owner_student_id != student_id
+    ):
         raise HTTPException(status_code=422, detail="Patient does not belong to this student")
 
     if attending_id is not None:

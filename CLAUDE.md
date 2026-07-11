@@ -52,12 +52,22 @@ docs/proposal.md            full requirements (source of truth)
   or skip a migration, even for "trivial" column additions.
 - **Small, focused modules.** A route file per resource area, not one giant
   router; a model per file; no god-objects.
-- **Two distinct principal types, not one role enum.** `users` (student /
-  attending / admin) and `patients` (a person receiving treatment) are
-  separate authenticatable entities with separate tables and separate login
-  endpoints. A patient is never a 4th `role` on `users`. JWTs carry a
-  `principal_type` claim (`user` | `patient`) so `core/deps.py` can dispatch
-  to the right table.
+- **One `users` table, one role enum — patient is a 4th role, not a
+  separate principal type.** This reverses the original Phase 1 design
+  (two separate tables/login endpoints); the change shipped after Phase 5
+  Milestone 3 once real browser testing surfaced how awkward the
+  two-login-page/two-registration-page split was for actual use. `users`
+  gains four columns meaningful only when `role == patient`:
+  `owner_student_id` (self-FK — the treating student), `owner_confirmed_at`
+  (nullable timestamp gate — see below), `contact_phone`,
+  `preferred_time_of_day`. There is one `/auth/register` and one
+  `/auth/login` for every role; `LoginIn.role` is an optional hint the
+  backend actually validates against the account's real role, not just a
+  frontend affordance. `core/deps.py` has a single `get_current_user`
+  dependency — no more `get_current_patient`/`get_current_principal`/
+  `Principal` dispatch. Paired dual-principal columns collapsed to one
+  each: `audit_log.actor_id`, `notifications.recipient_id`,
+  `direct_messages.sender_id`.
 - **Audit log is the rate limiter.** Login rate limiting is implemented by
   querying `audit_log` for recent failure rows for an identifier — there is
   no Redis and no in-process counter in the stack. Any new sensitive action
@@ -101,9 +111,21 @@ docker compose exec frontend npm run lint
   README, not something to "fix" unprompted. A real verification +
   admin-approval gate is planned — see Backlog below — but isn't designed
   yet, so don't half-implement it.
-- Patients get real login credentials in Phase 1, provisioned by the owning
-  student (no self-service signup, no email invite flow — MailHog stays
-  infra-only until Phase 3's reminder/notification work).
+- **Two patient onboarding paths (post-unification), both live**:
+  (1) *student-initiated* — `POST /patients` now takes `full_name`, `email`,
+  `password` up front (a patient is a real `users` row from the moment it
+  exists) and is auto-confirmed immediately (`owner_confirmed_at = now()`),
+  since the student vouched for it; (2) *patient self-registration* — a
+  patient registers via the same unified `/auth/register` with
+  `role: patient` and `owner_student_id` set to a student picked from the
+  public `GET /students` directory, but this leaves `owner_confirmed_at`
+  `NULL` (pending) until the owning student calls
+  `POST /patients/{id}/confirm`. An unconfirmed patient can log in and read
+  their own profile but is blocked (403 via
+  `services/patients.py::require_confirmed_patient`) from creating
+  appointments/waitlist entries/DMs. Registering as a pending patient
+  notifies the chosen student (`NotificationType.patient_registration_request`)
+  through the existing Phase 3/4 notification pipeline.
 - The attending "approves student requests for attending procedures" (§3)
   workflow is entirely Phase 2 scope (it's an appointment state machine, not
   an auth concern). Phase 1 only adds the `attending` role and one

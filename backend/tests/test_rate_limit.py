@@ -2,7 +2,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.models.audit_log import AuditLog
-from tests.helpers import auth_header, register, register_and_login
+from tests.helpers import create_patient, register, register_and_login
 
 
 def test_login_locks_out_after_max_failed_attempts(client):
@@ -42,26 +42,23 @@ def test_rate_limit_is_scoped_per_identifier(client):
 
 def test_patient_login_is_rate_limited_independently(client):
     student_token = register_and_login(client, "ratelimit-student@example.com", role="student")
-    patient_id = client.post(
-        "/patients",
-        json={"full_name": "Rate Limited Patient"},
-        headers=auth_header(student_token),
-    ).json()["id"]
-    client.post(
-        f"/patients/{patient_id}/credentials",
-        json={"email": "ratelimit-patient@example.com", "password": "patientpass123"},
-        headers=auth_header(student_token),
+    create_patient(
+        client,
+        student_token,
+        full_name="Rate Limited Patient",
+        email="ratelimit-patient@example.com",
+        password="patientpass123",
     )
 
     for _ in range(settings.login_rate_limit_max_attempts):
         response = client.post(
-            "/patients/login",
+            "/auth/login",
             json={"email": "ratelimit-patient@example.com", "password": "wrong-password"},
         )
         assert response.status_code == 401
 
     blocked = client.post(
-        "/patients/login",
+        "/auth/login",
         json={"email": "ratelimit-patient@example.com", "password": "wrong-password"},
     )
     assert blocked.status_code == 429

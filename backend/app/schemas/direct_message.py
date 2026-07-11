@@ -13,8 +13,7 @@ class DirectMessageOut(BaseModel):
 
     id: uuid.UUID
     patient_id: uuid.UUID
-    sender_user_id: uuid.UUID | None
-    sender_patient_id: uuid.UUID | None
+    sender_id: uuid.UUID
     body: str
     read_at: datetime | None
     created_at: datetime

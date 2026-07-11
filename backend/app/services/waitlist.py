@@ -64,14 +64,14 @@ def check_and_notify_waitlist(db: Session, appointment: Appointment) -> None:
             db,
             notification_type=NotificationType.waitlist_slot_available,
             message=message,
-            recipient_user_id=entry.student_id,
+            recipient_id=entry.student_id,
             related_appointment_id=appointment.id,
         )
         notify(
             db,
             notification_type=NotificationType.waitlist_slot_available,
             message=message,
-            recipient_patient_id=entry.patient_id,
+            recipient_id=entry.patient_id,
             related_appointment_id=appointment.id,
         )
 

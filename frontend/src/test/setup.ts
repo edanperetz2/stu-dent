@@ -17,10 +17,24 @@ Object.defineProperty(window, 'matchMedia', {
 })
 
 // jsdom doesn't implement ResizeObserver; Mantine's ScrollArea (used by
-// Select and other overlay components) needs it.
+// Select and other overlay components) needs it. Floating UI (Mantine's
+// popover positioning) also waits on a ResizeObserver callback before it
+// flips a freshly-opened dropdown's `display: none` to visible, so the
+// callback must actually fire -- a no-op mock leaves opened Select
+// dropdowns permanently hidden from accessibility queries in tests.
 class ResizeObserverMock {
-  observe() {}
+  callback: ResizeObserverCallback
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback
+  }
+  observe(target: Element) {
+    this.callback([{ target } as ResizeObserverEntry], this)
+  }
   unobserve() {}
   disconnect() {}
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+
+// jsdom doesn't implement scrollIntoView; Mantine's Combobox (used by
+// Select) calls it when keyboard/pointer selection moves the active option.
+window.HTMLElement.prototype.scrollIntoView = vi.fn()

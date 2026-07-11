@@ -22,6 +22,10 @@ describe('LoginPage', () => {
       full_name: 'Ada',
       role: 'student',
       is_active: true,
+      owner_student_id: null,
+      owner_confirmed_at: null,
+      contact_phone: null,
+      preferred_time_of_day: null,
     })
 
     renderWithProviders(<LoginPage />, { route: '/login' })
@@ -31,10 +35,9 @@ describe('LoginPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Log in' }))
 
     await waitFor(() => {
-      expect(authApi.login).toHaveBeenCalledWith('a@b.com', 'password123')
+      expect(authApi.login).toHaveBeenCalledWith('a@b.com', 'password123', undefined)
     })
     expect(JSON.parse(localStorage.getItem('stu_dent_auth')!)).toEqual({
-      kind: 'user',
       token: 'tok123',
     })
   })

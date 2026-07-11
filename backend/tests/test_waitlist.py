@@ -180,9 +180,9 @@ def test_cancellation_triggers_waitlist_match(client):
     _, waiting_patient_token = create_and_login_patient(
         client, other_student_token, "wl-p10b@example.com"
     )
-    waiting_patient_id = client.get(
-        "/patients/me", headers=auth_header(waiting_patient_token)
-    ).json()["id"]
+    waiting_patient_id = client.get("/users/me", headers=auth_header(waiting_patient_token)).json()[
+        "id"
+    ]
 
     entry = _wait(
         client, other_student_token, patient_id=waiting_patient_id, attending_id=attending_id

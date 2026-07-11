@@ -35,7 +35,7 @@ async def _listen_once() -> None:
         async for notification in conn.notifies():
             try:
                 payload = json.loads(notification.payload)
-                await manager.send_to(payload["kind"], payload["recipient_id"], payload)
+                await manager.send_to(payload["recipient_id"], payload)
             except Exception:
                 logger.warning("Failed to relay a realtime event", exc_info=True)
 
