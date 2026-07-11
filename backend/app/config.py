@@ -13,5 +13,12 @@ class Settings(BaseSettings):
     login_rate_limit_max_attempts: int = 5
     login_rate_limit_window_minutes: int = 15
 
+    smtp_host: str = "mailhog"
+    smtp_port: int = 1025
+    email_from: str = "noreply@stu-dent.local"
+
+    reminder_lead_hours: int = 24
+    job_poll_interval_seconds: int = 300
+
 
 settings = Settings()

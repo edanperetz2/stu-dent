@@ -35,6 +35,16 @@ services:
       retries: 10
       start_period: 10s
 
+  worker:
+    build: ./backend
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: python -m app.worker
+
   frontend:
     build: ./frontend
     env_file: .env
