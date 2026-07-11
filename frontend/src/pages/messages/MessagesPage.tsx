@@ -1,6 +1,6 @@
 import { Button, Group, Paper, Select, Stack, Text, Textarea, Title } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { listMessages, markMessageRead, sendMessage } from '../../api/directMessages'
 import { ApiError } from '../../api/httpClient'
 import { notifications } from '@mantine/notifications'
@@ -67,7 +67,10 @@ export function MessagesPage() {
       }),
   })
 
-  const patientOptions = (patients ?? []).map((p) => ({ value: p.id, label: p.full_name }))
+  const patientOptions = useMemo(
+    () => (patients ?? []).map((p) => ({ value: p.id, label: p.full_name })),
+    [patients],
+  )
 
   return (
     <Stack maw={600}>

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { getCurrentUser, login as apiLogin, registerUser as apiRegisterUser } from '../api/auth'
 import type { Role } from '../api/types'
 
@@ -74,42 +82,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })()
   }, [])
 
-  async function login(email: string, password: string, role?: Role): Promise<void> {
+  const login = useCallback(async (email: string, password: string, role?: Role): Promise<void> => {
     const { access_token: token } = await apiLogin(email, password, role)
     const user = await getCurrentUser(token)
     persist(token)
     setPrincipal(toPrincipal(token, user))
-  }
+  }, [])
 
-  async function registerUser(
-    email: string,
-    password: string,
-    fullName: string,
-    role: Role,
-    ownerStudentId?: string,
-  ): Promise<void> {
-    await apiRegisterUser(email, password, fullName, role, ownerStudentId)
-    // A self-registered patient is left pending until their student
-    // confirms them -- don't auto-login-and-redirect into the app for
-    // that role; RegisterPage shows a "pending confirmation" message and
-    // sends them to the normal login page instead.
-    if (role !== 'patient') {
-      await login(email, password)
-    }
-  }
+  const registerUser = useCallback(
+    async (
+      email: string,
+      password: string,
+      fullName: string,
+      role: Role,
+      ownerStudentId?: string,
+    ): Promise<void> => {
+      await apiRegisterUser(email, password, fullName, role, ownerStudentId)
+      // A self-registered patient is left pending until their student
+      // confirms them -- don't auto-login-and-redirect into the app for
+      // that role; RegisterPage shows a "pending confirmation" message and
+      // sends them to the normal login page instead.
+      if (role !== 'patient') {
+        await login(email, password)
+      }
+    },
+    [login],
+  )
 
-  function logout(): void {
+  const logout = useCallback((): void => {
     localStorage.removeItem(STORAGE_KEY)
     setPrincipal(null)
-  }
+  }, [])
 
-  const value: AuthContextValue = {
-    principal,
-    isLoading,
-    login,
-    registerUser,
-    logout,
-  }
+  const value = useMemo<AuthContextValue>(
+    () => ({ principal, isLoading, login, registerUser, logout }),
+    [principal, isLoading, login, registerUser, logout],
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
