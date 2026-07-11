@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.direct_message import DirectMessage
 from app.models.patient import Patient
 from app.models.user import RoleEnum
+from app.realtime.events import publish
 from app.schemas.direct_message import DirectMessageCreate, DirectMessageOut
 from app.services.audit import record_audit_log
 
@@ -50,7 +51,7 @@ def create_message(
     principal: Principal = Depends(get_current_principal),
     db: Session = Depends(get_db),
 ) -> DirectMessage:
-    _get_authorized_patient(db, patient_id, principal)
+    patient = _get_authorized_patient(db, patient_id, principal)
 
     message = DirectMessage(
         patient_id=patient_id,
@@ -69,6 +70,28 @@ def create_message(
         target_type="direct_message",
         target_id=message.id,
     )
+
+    if message.sender_user_id is not None:
+        recipient_kind, recipient_id = "patient", patient.id
+    else:
+        recipient_kind, recipient_id = "user", patient.owner_student_id
+
+    publish(
+        db,
+        kind=recipient_kind,
+        recipient_id=recipient_id,
+        event={
+            "event": "direct_message",
+            "id": str(message.id),
+            "patient_id": str(message.patient_id),
+            "body": message.body,
+            "sender_user_id": str(message.sender_user_id) if message.sender_user_id else None,
+            "sender_patient_id": (
+                str(message.sender_patient_id) if message.sender_patient_id else None
+            ),
+        },
+    )
+
     db.commit()
     db.refresh(message)
     return message

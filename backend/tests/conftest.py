@@ -13,6 +13,15 @@ TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL", settings.database_url.rsplit("/", 1)[0] + "/stu_dent_test"
 )
 
+# app.realtime.listener resolves its DSN via os.getenv("DATABASE_URL", ...)
+# freshly at each app-lifespan startup (not the already-imported `settings`
+# singleton), specifically so this override works: it must be set before
+# any TestClient(app) triggers that startup, so the listener connects to
+# the ephemeral test DB instead of the dev DB. Nothing else reads this env
+# var directly, so this doesn't disturb the sync engine/settings used
+# elsewhere in tests.
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+
 
 def _ensure_database_exists(url: str) -> None:
     base_url, db_name = url.rsplit("/", 1)

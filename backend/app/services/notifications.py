@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.notification import Notification, NotificationType
 from app.models.patient import Patient
 from app.models.user import User
+from app.realtime.events import publish
 from app.services.email import send_email
 
 
@@ -17,8 +18,8 @@ def notify(
     recipient_patient_id: uuid.UUID | None = None,
     related_appointment_id: uuid.UUID | None = None,
 ) -> Notification:
-    """Stage a notification row on `db` without committing, and best-effort
-    email the recipient (never blocks/fails the caller if that send fails).
+    """Stage a notification row on `db` without committing, best-effort
+    email the recipient, and publish a real-time event for it.
 
     Exactly one of recipient_user_id/recipient_patient_id must be set (the
     model's CheckConstraint enforces this at the DB level too). Callers are
@@ -33,6 +34,7 @@ def notify(
         related_appointment_id=related_appointment_id,
     )
     db.add(entry)
+    db.flush()
 
     recipient_email = None
     if recipient_user_id is not None:
@@ -45,5 +47,25 @@ def notify(
     if recipient_email:
         subject = notification_type.value.replace("_", " ").title()
         send_email(to=recipient_email, subject=subject, body=message)
+
+    kind, recipient_id = (
+        ("user", recipient_user_id)
+        if recipient_user_id is not None
+        else ("patient", recipient_patient_id)
+    )
+    publish(
+        db,
+        kind=kind,
+        recipient_id=recipient_id,
+        event={
+            "event": "notification",
+            "id": str(entry.id),
+            "notification_type": notification_type.value,
+            "message": message,
+            "related_appointment_id": (
+                str(related_appointment_id) if related_appointment_id is not None else None
+            ),
+        },
+    )
 
     return entry
