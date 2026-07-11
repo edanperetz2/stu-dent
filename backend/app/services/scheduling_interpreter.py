@@ -62,6 +62,9 @@ def interpret_request(db: Session, *, user: User, text: str) -> InterpretedAppoi
     room_id: uuid.UUID | None = None
     equipment_id: uuid.UUID | None = None
 
+    # Patients never get attending/room/equipment resolved (left None, no
+    # warning) -- mirrors the 422 rule in appointments.py::create_appointment
+    # that patients cannot set those fields when requesting an appointment.
     if user.role == RoleEnum.student:
         patients = list(
             db.execute(

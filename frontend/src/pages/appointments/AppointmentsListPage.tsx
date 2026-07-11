@@ -48,8 +48,7 @@ interface CreateFormValues {
   attending_id: string | null
   room_id: string | null
   equipment_id: string | null
-  // Mantine's DateTimePicker onChange always emits a "YYYY-MM-DD HH:mm:ss"
-  // string, never a Date -- see src/utils/dates.ts.
+  // DateTimePicker value format -- see src/utils/dates.ts
   start_time: string | null
   end_time: string | null
   notes: string

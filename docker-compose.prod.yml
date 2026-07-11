@@ -78,6 +78,15 @@ services:
     image: stu-dent-frontend:prod
     ports:
       - "80:80"
+    healthcheck:
+      # 127.0.0.1, not localhost -- nginx's default "listen 80;" only binds
+      # IPv4, and wget resolving "localhost" to the IPv6 loopback first
+      # produced a real "connection refused" during testing.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   mailhog:

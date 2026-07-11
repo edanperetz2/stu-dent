@@ -18,6 +18,12 @@ __pycache__/
 node_modules/
 frontend/dist/
 
+# Guards against accidentally running `npm install` from the repo root
+# instead of inside frontend/ (happened once, produced a stray empty
+# lockfile) -- anchored to root only, doesn't affect frontend/'s real one.
+/package-lock.json
+/package.json
+
 # Env files
 .env
 .env.*

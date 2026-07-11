@@ -148,5 +148,10 @@ set up push-button redeploys via `.github/workflows/deploy.yml`
   simplification for a course project and is not production-safe. A real
   identity-verification + admin-approval gate for student/attending signups
   is planned but not yet designed — see `CLAUDE.md`'s Backlog section.
-- Patient login credentials are provisioned directly by the owning student
-  (no self-service signup or email invite flow yet).
+- Patients have two onboarding paths: a student can create one directly
+  with credentials (`POST /patients`, auto-confirmed immediately), or a
+  patient can self-register via `/auth/register` picking their student
+  from the public `GET /students` directory — this leaves the connection
+  pending until the chosen student calls `POST /patients/{id}/confirm`.
+  An unconfirmed patient can log in and view their own profile but is
+  blocked from booking appointments or messaging until confirmed.

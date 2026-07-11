@@ -51,8 +51,7 @@ const ACTION_FUNCTIONS: Record<
 const TERMINAL_STATUSES: AppointmentStatus[] = ['cancelled', 'completed', 'no_show']
 
 interface EditFormValues {
-  // Mantine's DateTimePicker onChange always emits a "YYYY-MM-DD HH:mm:ss"
-  // string, never a Date -- see src/utils/dates.ts.
+  // DateTimePicker value format -- see src/utils/dates.ts
   start_time: string | null
   end_time: string | null
   attending_id: string | null
