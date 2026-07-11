@@ -174,12 +174,20 @@ docker compose exec frontend npm run lint
   worker-originated events reach connected clients too) for live
   notifications. The frontend UI for this phase, and for everything built
   so far, is explicitly deferred to Phase 5.
-- **5 — Frontend** (whole app so far): the first real frontend work — the
-  frontend has been an untouched Vite scaffold through phases 0-4. Covers
-  auth (login/register, role-aware routing) plus real screens for
-  patients, appointments, rooms/equipment, availability, notifications,
-  waitlist, forum, and DMs (including live updates over the Phase 4
-  WebSocket). Needs its own `/plan` pass when reached — not designed yet.
+- **5 — Frontend** (whole app so far): **done**. The first real frontend
+  work — the frontend was an untouched Vite scaffold through phases 0-4.
+  Covers auth (unified login/register, role-aware routing), patients,
+  appointments, availability, waitlist, notifications (with a live
+  unread-count badge), forum, DMs, admin rooms/equipment/user management,
+  and patient preferences — all with live updates over the Phase 4
+  WebSocket where relevant. Built across 7 milestones plus a mid-phase
+  detour (after milestone 3) to unify patients into the `users`/role
+  model — see the "one `users` table, one role enum" convention bullet
+  above. Milestone 7 closed the phase with a full automated regression
+  (backend pytest/ruff/black, frontend tsc/oxlint/vitest/build) plus a
+  live cross-role appointment-lifecycle walkthrough (student books with
+  an attending assigned → attending approves → student completes,
+  checked from all three roles' views) via a browser-automation MCP tool.
 - **6 — Local AI** (§1-2, §5): two distinct functions — (a) natural-language
   scheduling interpretation, where a local Ollama model only *interprets*
   requests and all final decisions are validated by deterministic backend
