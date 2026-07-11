@@ -1,6 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { AuthLayout } from '../layouts/AuthLayout'
+import { LoginPage } from '../pages/auth/LoginPage'
+import { PatientLoginPage } from '../pages/auth/PatientLoginPage'
+import { RegisterPage } from '../pages/auth/RegisterPage'
 import { PlaceholderPage } from '../pages/PlaceholderPage'
 import { RequireAuth } from './RequireAuth'
 
@@ -9,9 +12,9 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route element={<AuthLayout />}>
-          <Route path="/login" element={<PlaceholderPage title="Login" />} />
-          <Route path="/register" element={<PlaceholderPage title="Register" />} />
-          <Route path="/patient-login" element={<PlaceholderPage title="Patient login" />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/patient-login" element={<PatientLoginPage />} />
         </Route>
 
         <Route element={<RequireAuth />}>
