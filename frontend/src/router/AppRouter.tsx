@@ -1,9 +1,14 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { AuthLayout } from '../layouts/AuthLayout'
+import { AppointmentDetailPage } from '../pages/appointments/AppointmentDetailPage'
+import { AppointmentsListPage } from '../pages/appointments/AppointmentsListPage'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { PatientLoginPage } from '../pages/auth/PatientLoginPage'
 import { RegisterPage } from '../pages/auth/RegisterPage'
+import { AvailabilityPage } from '../pages/availability/AvailabilityPage'
+import { PatientDetailPage } from '../pages/patients/PatientDetailPage'
+import { PatientsListPage } from '../pages/patients/PatientsListPage'
 import { PlaceholderPage } from '../pages/PlaceholderPage'
 import { RequireAuth } from './RequireAuth'
 
@@ -20,17 +25,11 @@ export function AppRouter() {
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<PlaceholderPage title="Dashboard" />} />
-            <Route path="/patients" element={<PlaceholderPage title="Patients" />} />
-            <Route
-              path="/patients/:patientId"
-              element={<PlaceholderPage title="Patient detail" />}
-            />
-            <Route path="/appointments" element={<PlaceholderPage title="Appointments" />} />
-            <Route
-              path="/appointments/:appointmentId"
-              element={<PlaceholderPage title="Appointment detail" />}
-            />
-            <Route path="/availability" element={<PlaceholderPage title="Availability" />} />
+            <Route path="/patients" element={<PatientsListPage />} />
+            <Route path="/patients/:patientId" element={<PatientDetailPage />} />
+            <Route path="/appointments" element={<AppointmentsListPage />} />
+            <Route path="/appointments/:appointmentId" element={<AppointmentDetailPage />} />
+            <Route path="/availability" element={<AvailabilityPage />} />
             <Route path="/waitlist" element={<PlaceholderPage title="Waitlist" />} />
             <Route path="/forum" element={<PlaceholderPage title="Forum" />} />
             <Route path="/forum/:postId" element={<PlaceholderPage title="Post" />} />
