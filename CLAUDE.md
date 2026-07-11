@@ -290,3 +290,35 @@ docker compose exec frontend npm run lint
   walkthrough script covering every required workflow, using the seeded
   demo accounts) — are both drafted and committed. Recording the actual
   video is the user's to do.
+- **Codebase review + cleanup (cross-phase, not a proposal-scoped phase)**:
+  **done**. A full scan of every phase's code (backend, frontend,
+  infra/CI/docs) via 3 parallel research passes produced 29 concrete,
+  file:line-cited findings — pure improvements (efficiency, explainability,
+  comfort/DX/accessibility), explicitly never changing behavior or scope.
+  Implemented in 4 batches, each tested and CI-verified green before the
+  next started: **(1) infra/CI/docs** (`fe39079`) — Node 20→22, pip/npm/
+  Docker-layer CI caching, a couple of stale README/comment fixes, the
+  `docker-compose.prod.yml` frontend healthcheck (with the IPv4-vs-IPv6
+  `wget`/`localhost` gotcha fixed along the way). **(2) backend efficiency
+  + dedup** (`24f23a7`) — added indexes (`appointment.end_time`, a
+  composite `audit_log` index), collapsed an N+1 existence-check loop in
+  `jobs/reports.py` into one batched query, added
+  `services/scheduling.py::is_visible_to_participant` and
+  `database.py::get_or_404` (PEP 695 generic) to dedupe near-identical
+  per-route helper functions, added `services/users.py::active_user_filters`
+  to dedupe the repeated active/non-deleted role-filter predicate. **(3)
+  frontend efficiency** (`b2c6bdf`) — converted `AppRouter.tsx`'s ~19 page
+  imports to `React.lazy()` + `Suspense` (main bundle 657KB→355KB, killed
+  the "chunk larger than 500kB" build warning), memoized `AuthContext`'s
+  context value and a couple of derived option lists. **(4) frontend
+  comfort/DX + accessibility** (`9697730`) — added `apiErrorMessage()` and
+  `LoadingText`/`EmptyText` (`components/StateText.tsx`) to dedupe the
+  identical error-ternary and loading/empty-state `<Text>` repeated across
+  nearly every page; added keyboard navigation (`tabIndex`/`role`/
+  `onKeyDown`) to the 5 clickable-table-row pages that only responded to
+  mouse clicks (appointments, patients, forum lists + both detail-page
+  variants already had it); added a missing `aria-label` to the
+  availability page's icon-only delete button; deduped the repeated
+  auth-test `beforeEach` reset into `test/resetAuthTestState.ts`. All 4
+  batches' full regressions (backend pytest/ruff/black; frontend tsc/
+  oxlint/vitest/build) passed and all 4 pushes are green on GitHub Actions.
