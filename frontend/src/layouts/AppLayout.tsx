@@ -17,6 +17,7 @@ const STUDENT_LINKS: NavItem[] = [
   { label: 'Availability', to: '/availability' },
   { label: 'Waitlist', to: '/waitlist' },
   { label: 'Forum', to: '/forum' },
+  { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
 ]
 

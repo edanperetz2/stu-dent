@@ -2,6 +2,7 @@
 .idea/
 .claude/
 .vscode/
+.playwright-mcp/
 
 # Python
 .venv/

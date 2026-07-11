@@ -8,6 +8,9 @@ import { AppointmentsListPage } from '../pages/appointments/AppointmentsListPage
 import { LoginPage } from '../pages/auth/LoginPage'
 import { RegisterPage } from '../pages/auth/RegisterPage'
 import { AvailabilityPage } from '../pages/availability/AvailabilityPage'
+import { ForumListPage } from '../pages/forum/ForumListPage'
+import { ForumPostPage } from '../pages/forum/ForumPostPage'
+import { MessagesPage } from '../pages/messages/MessagesPage'
 import { NotificationsPage } from '../pages/notifications/NotificationsPage'
 import { PatientDetailPage } from '../pages/patients/PatientDetailPage'
 import { PatientsListPage } from '../pages/patients/PatientsListPage'
@@ -33,12 +36,15 @@ export function AppRouter() {
             <Route path="/appointments/:appointmentId" element={<AppointmentDetailPage />} />
             <Route path="/availability" element={<AvailabilityPage />} />
             <Route path="/waitlist" element={<WaitlistPage />} />
-            <Route path="/forum" element={<PlaceholderPage title="Forum" />} />
-            <Route path="/forum/:postId" element={<PlaceholderPage title="Post" />} />
             <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/messages" element={<PlaceholderPage title="Messages" />} />
+            <Route path="/messages" element={<MessagesPage />} />
             <Route path="/preferences" element={<PlaceholderPage title="Preferences" />} />
             <Route path="/admin/users" element={<PlaceholderPage title="Users" />} />
+
+            <Route element={<RequireAuth roles={['student', 'admin']} />}>
+              <Route path="/forum" element={<ForumListPage />} />
+              <Route path="/forum/:postId" element={<ForumPostPage />} />
+            </Route>
 
             <Route element={<RequireAuth roles={['admin']} />}>
               <Route path="/admin/rooms" element={<RoomsPage />} />
