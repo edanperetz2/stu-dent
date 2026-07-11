@@ -15,6 +15,7 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   createAppointment,
@@ -26,10 +27,11 @@ import { listActiveEquipment } from '../../api/equipment'
 import { ApiError } from '../../api/httpClient'
 import { listPatients } from '../../api/patients'
 import { listActiveRooms } from '../../api/rooms'
+import { interpretSchedulingRequest } from '../../api/schedulingAssistant'
 import type { AppointmentStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { mantineDateTimeToIso } from '../../utils/dates'
+import { isoToMantineDateTime, mantineDateTimeToIso } from '../../utils/dates'
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
   proposed: 'gray',
@@ -59,6 +61,8 @@ export function AppointmentsListPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [opened, { open, close }] = useDisclosure(false)
+  const [describeText, setDescribeText] = useState('')
+  const [interpretWarnings, setInterpretWarnings] = useState<string[]>([])
 
   const isStudent = principal?.role === 'student'
   const isPatient = principal?.role === 'patient'
@@ -115,6 +119,8 @@ export function AppointmentsListPage() {
       queryClient.invalidateQueries({ queryKey: ['appointments'] })
       notifications.show({ message: 'Appointment requested', color: 'green' })
       form.reset()
+      setDescribeText('')
+      setInterpretWarnings([])
       close()
     },
     onError: (err) => {
@@ -124,6 +130,34 @@ export function AppointmentsListPage() {
       })
     },
   })
+
+  const interpretMutation = useMutation({
+    mutationFn: (text: string) => interpretSchedulingRequest(token, text),
+    onSuccess: (data) => {
+      form.setValues({
+        ...(data.patient_id && { patient_id: data.patient_id }),
+        ...(data.attending_id && { attending_id: data.attending_id }),
+        ...(data.room_id && { room_id: data.room_id }),
+        ...(data.equipment_id && { equipment_id: data.equipment_id }),
+        ...(data.start_time && { start_time: isoToMantineDateTime(data.start_time) }),
+        ...(data.end_time && { end_time: isoToMantineDateTime(data.end_time) }),
+        ...(data.notes && { notes: data.notes }),
+      })
+      setInterpretWarnings(data.warnings)
+    },
+    onError: (err) => {
+      notifications.show({
+        message: err instanceof ApiError ? err.message : 'Failed to interpret request',
+        color: 'red',
+      })
+    },
+  })
+
+  function handleOpenModal() {
+    setDescribeText('')
+    setInterpretWarnings([])
+    open()
+  }
 
   function handleSubmit(values: CreateFormValues) {
     const payload: AppointmentCreateInput = {
@@ -149,7 +183,7 @@ export function AppointmentsListPage() {
     <Stack>
       <Group justify="space-between">
         <Title order={2}>Appointments</Title>
-        {(isStudent || isPatient) && <Button onClick={open}>New Appointment</Button>}
+        {(isStudent || isPatient) && <Button onClick={handleOpenModal}>New Appointment</Button>}
       </Group>
 
       {isLoading ? (
@@ -182,6 +216,31 @@ export function AppointmentsListPage() {
       )}
 
       <Modal opened={opened} onClose={close} title="New Appointment">
+        <Stack mb="md">
+          <Textarea
+            label="Describe it in your own words (optional)"
+            placeholder="e.g. book Jane with Dr. Smith in the X-ray room next Tuesday afternoon"
+            value={describeText}
+            onChange={(event) => setDescribeText(event.currentTarget.value)}
+            autosize
+            minRows={2}
+          />
+          <Button
+            type="button"
+            variant="light"
+            onClick={() => interpretMutation.mutate(describeText)}
+            loading={interpretMutation.isPending}
+            disabled={!describeText.trim()}
+          >
+            Interpret
+          </Button>
+          {interpretWarnings.map((warning) => (
+            <Text key={warning} size="sm" c="dimmed">
+              {warning}
+            </Text>
+          ))}
+        </Stack>
+
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
             {isStudent && (
