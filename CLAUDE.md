@@ -27,9 +27,14 @@ shared resources (rooms/equipment), reminders, and communication.
 - Frontend: React + Vite + TypeScript.
 - Infra: Docker Compose (`api`, `db`, `frontend`, `mailhog`, `worker` — the
   worker shares the `backend` image/build context with `api`, just runs a
-  different command), one startup command, `.env.example`.
+  different command — and `ollama`, added in Phase 6), one startup command,
+  `.env.example`. A hardened `docker-compose.prod.yml` (added in Phase 7)
+  targets a plain VM deploy — see that phase's roadmap entry below.
 - Auth: argon2 password hashing (`argon2-cffi`), JWT access tokens (`PyJWT`,
   HS256, no refresh token).
+- Local AI: Ollama (`llama3.2` by default), called only through
+  `services/ollama_client.py` — see Phase 6's roadmap entry for the trust
+  boundary this enforces.
 
 ## Repo layout
 
@@ -88,6 +93,11 @@ docker compose up --build
 Tests:
 ```powershell
 docker compose exec api pytest -v
+```
+
+Seed demo data (idempotent, safe to re-run):
+```powershell
+docker compose exec api python -m app.seed_demo
 ```
 
 New migration after changing a model:
@@ -273,4 +283,10 @@ docker compose exec frontend npm run lint
   **Resume next**: once the VM exists, SSH in, run
   `deploy/bootstrap-vm.sh`, configure `.env` with the VM's real address,
   bring up `docker-compose.prod.yml` for real, optionally wire up
-  `deploy.yml`'s secrets.
+  `deploy.yml`'s secrets. Proposal §6's other two deliverables that don't
+  depend on the VM — `docs/final_report.md` (architecture, features,
+  testing, deployment status, risks; team contributions left as a
+  placeholder for the authors) and `docs/demo_video_script.md` (a timed
+  walkthrough script covering every required workflow, using the seeded
+  demo accounts) — are both drafted and committed. Recording the actual
+  video is the user's to do.

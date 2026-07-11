@@ -224,10 +224,13 @@ deploy/bootstrap-vm.sh      first-time VM setup script
   course project (called out in the README), not something fixed
   unprompted; a real identity-verification + admin-approval flow is
   documented as a backlog item but wasn't scheduled to any phase.
-- **Postgres has no network isolation in the VM deploy plan** beyond a
-  password (public access + an allow-all-Azure/VM-network firewall
-  rule) — an accepted tradeoff for a graded demo, not production-grade
-  security.
+- **The VM deploy plan hasn't been validated against a real network/
+  firewall setup.** `docker-compose.prod.yml` doesn't expose Postgres or
+  Ollama outside the VM's own Docker network at all (only the frontend,
+  API, and MailHog's ports are published) — a reasonable default, but
+  whatever firewall/security-group rules the actual VM enforces at the
+  network level are outside this project's control and unverified until
+  the real VM exists.
 - **Local AI is best-effort, not guaranteed.** Both AI features degrade
   gracefully (plain warnings / raw-data fallback) if Ollama is
   unreachable or the model isn't pulled — this is a deliberate design
