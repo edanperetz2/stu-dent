@@ -11,26 +11,14 @@ from app.models.waitlist_entry import WaitlistEntry, WaitlistStatus
 from app.schemas.waitlist import WaitlistEntryCreate, WaitlistEntryOut
 from app.services.audit import record_audit_log
 from app.services.patients import require_confirmed_patient
-from app.services.scheduling import validate_participants
+from app.services.scheduling import is_visible_to_participant, validate_participants
 
 router = APIRouter(tags=["waitlist"])
 
 
-def _is_visible(entry: WaitlistEntry, current_user: User) -> bool:
-    if current_user.role == RoleEnum.admin:
-        return True
-    if current_user.role == RoleEnum.student:
-        return entry.student_id == current_user.id
-    if current_user.role == RoleEnum.attending:
-        return entry.attending_id == current_user.id
-    if current_user.role == RoleEnum.patient:
-        return entry.patient_id == current_user.id
-    return False
-
-
 def _get_visible_entry(db: Session, entry_id: uuid.UUID, current_user: User) -> WaitlistEntry:
     entry = db.get(WaitlistEntry, entry_id)
-    if entry is None or not _is_visible(entry, current_user):
+    if entry is None or not is_visible_to_participant(entry, current_user):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Waitlist entry not found"
         )

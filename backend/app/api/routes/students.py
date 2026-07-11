@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import RoleEnum, User
 from app.schemas.student import StudentPublicOut
+from app.services.users import active_user_filters
 
 router = APIRouter(tags=["students"])
 
@@ -16,12 +17,4 @@ def list_students(db: Session = Depends(get_db)) -> list[User]:
     token exists, so this can't sit behind get_current_user like
     GET /attendings does. Mirrors that endpoint's shape otherwise.
     """
-    return list(
-        db.scalars(
-            select(User).where(
-                User.role == RoleEnum.student,
-                User.is_active.is_(True),
-                User.deleted_at.is_(None),
-            )
-        )
-    )
+    return list(db.scalars(select(User).where(*active_user_filters(RoleEnum.student))))

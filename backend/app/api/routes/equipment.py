@@ -1,24 +1,17 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_role
-from app.database import get_db
+from app.database import get_db, get_or_404
 from app.models.equipment import Equipment
 from app.models.user import RoleEnum, User
 from app.schemas.equipment import EquipmentCreate, EquipmentOut, EquipmentUpdate
 from app.services.audit import record_audit_log
 
 router = APIRouter(tags=["equipment"])
-
-
-def _get_equipment(db: Session, equipment_id: uuid.UUID) -> Equipment:
-    equipment = db.get(Equipment, equipment_id)
-    if equipment is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipment not found")
-    return equipment
 
 
 @router.post("/admin/equipment", response_model=EquipmentOut, status_code=status.HTTP_201_CREATED)
@@ -58,7 +51,7 @@ def update_equipment(
     current_user: User = Depends(require_role(RoleEnum.admin)),
     db: Session = Depends(get_db),
 ) -> Equipment:
-    equipment = _get_equipment(db, equipment_id)
+    equipment = get_or_404(db, Equipment, equipment_id, detail="Equipment not found")
 
     if payload.name is not None:
         equipment.name = payload.name

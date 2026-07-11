@@ -1,4 +1,5 @@
 import uuid
+from typing import Protocol
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +15,27 @@ TERMINAL_STATUSES = (
     AppointmentStatus.completed,
     AppointmentStatus.no_show,
 )
+
+
+class _HasParticipants(Protocol):
+    student_id: uuid.UUID
+    patient_id: uuid.UUID
+    attending_id: uuid.UUID | None
+
+
+def is_visible_to_participant(entity: _HasParticipants, current_user: User) -> bool:
+    """Shared visibility rule for both Appointment and WaitlistEntry -- both
+    expose the same student_id/patient_id/attending_id participant shape.
+    """
+    if current_user.role == RoleEnum.admin:
+        return True
+    if current_user.role == RoleEnum.student:
+        return entity.student_id == current_user.id
+    if current_user.role == RoleEnum.attending:
+        return entity.attending_id == current_user.id
+    if current_user.role == RoleEnum.patient:
+        return entity.patient_id == current_user.id
+    return False
 
 
 def recompute_status(appointment: Appointment, *, time_changed: bool = False) -> None:

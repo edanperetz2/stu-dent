@@ -5,20 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_role
-from app.database import get_db
+from app.database import get_db, get_or_404
 from app.models.room import Room
 from app.models.user import RoleEnum, User
 from app.schemas.room import RoomCreate, RoomOut, RoomUpdate
 from app.services.audit import record_audit_log
 
 router = APIRouter(tags=["rooms"])
-
-
-def _get_room(db: Session, room_id: uuid.UUID) -> Room:
-    room = db.get(Room, room_id)
-    if room is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
-    return room
 
 
 @router.post("/admin/rooms", response_model=RoomOut, status_code=status.HTTP_201_CREATED)
@@ -62,7 +55,7 @@ def update_room(
     current_user: User = Depends(require_role(RoleEnum.admin)),
     db: Session = Depends(get_db),
 ) -> Room:
-    room = _get_room(db, room_id)
+    room = get_or_404(db, Room, room_id, detail="Room not found")
 
     if payload.name is not None:
         room.name = payload.name

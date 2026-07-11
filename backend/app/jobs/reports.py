@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.report import Report, ReportPeriodType
 from app.models.user import RoleEnum, User
 from app.services.report_assistant import generate_periodic_report
+from app.services.users import active_user_filters
 
 
 def _period_bounds(period_type: ReportPeriodType, *, now: datetime) -> tuple[datetime, datetime]:
@@ -33,27 +34,27 @@ def generate_scheduled_reports(db: Session) -> int:
     """
     now = datetime.now(UTC)
     recipients = list(
-        db.scalars(
-            select(User).where(
-                User.role.in_((RoleEnum.student, RoleEnum.attending)),
-                User.is_active.is_(True),
-                User.deleted_at.is_(None),
-            )
-        )
+        db.scalars(select(User).where(*active_user_filters(RoleEnum.student, RoleEnum.attending)))
     )
 
     generated = 0
     for period_type in (ReportPeriodType.weekly, ReportPeriodType.monthly):
         start, end = _period_bounds(period_type, now=now)
-        for recipient in recipients:
-            existing = db.scalar(
-                select(Report).where(
-                    Report.recipient_id == recipient.id,
+
+        # One query for the whole period/type, not one per recipient -- the
+        # existence check still throttles Ollama calls to once per user per
+        # period, just without a DB round trip per recipient to do it.
+        already_generated = set(
+            db.scalars(
+                select(Report.recipient_id).where(
                     Report.period_type == period_type,
                     Report.period_start == start,
                 )
             )
-            if existing is not None:
+        )
+
+        for recipient in recipients:
+            if recipient.id in already_generated:
                 continue
             generate_periodic_report(
                 db, recipient, period_type=period_type, period_start=start, period_end=end

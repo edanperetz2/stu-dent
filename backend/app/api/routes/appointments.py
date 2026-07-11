@@ -15,6 +15,7 @@ from app.services.patients import require_confirmed_patient
 from app.services.scheduling import (
     TERMINAL_STATUSES,
     flush_or_409,
+    is_visible_to_participant,
     recompute_status,
     validate_participants,
 )
@@ -23,23 +24,11 @@ from app.services.waitlist import check_and_notify_waitlist
 router = APIRouter(tags=["appointments"])
 
 
-def _is_visible(appointment: Appointment, current_user: User) -> bool:
-    if current_user.role == RoleEnum.admin:
-        return True
-    if current_user.role == RoleEnum.student:
-        return appointment.student_id == current_user.id
-    if current_user.role == RoleEnum.attending:
-        return appointment.attending_id == current_user.id
-    if current_user.role == RoleEnum.patient:
-        return appointment.patient_id == current_user.id
-    return False
-
-
 def _get_visible_appointment(
     db: Session, appointment_id: uuid.UUID, current_user: User
 ) -> Appointment:
     appointment = db.get(Appointment, appointment_id)
-    if appointment is None or not _is_visible(appointment, current_user):
+    if appointment is None or not is_visible_to_participant(appointment, current_user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
     return appointment
 

@@ -6,6 +6,7 @@ from app.core.deps import get_current_user, require_role
 from app.database import get_db
 from app.models.user import RoleEnum, User
 from app.schemas.user import UserOut
+from app.services.users import active_user_filters
 
 router = APIRouter(tags=["attending"])
 
@@ -28,12 +29,4 @@ def list_attendings(
     appointment -- there was previously no way for a non-admin to see who
     the attendings even are (GET /admin/users is admin-only).
     """
-    return list(
-        db.scalars(
-            select(User).where(
-                User.role == RoleEnum.attending,
-                User.is_active.is_(True),
-                User.deleted_at.is_(None),
-            )
-        )
-    )
+    return list(db.scalars(select(User).where(*active_user_filters(RoleEnum.attending))))

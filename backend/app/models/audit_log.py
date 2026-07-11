@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Uuid, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,6 +10,17 @@ from app.database import Base
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
+    __table_args__ = (
+        # Covers the login rate limiter's exact query shape (core/rate_limit.py:
+        # identifier + action + created_at >= window_start), run on every
+        # login attempt against a table that grows without bound.
+        Index(
+            "ix_audit_log_identifier_action_created",
+            "attempted_identifier",
+            "action",
+            "created_at",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
 

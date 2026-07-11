@@ -108,7 +108,10 @@ class Appointment(TimestampMixin, Base):
     start_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
-    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Indexed: jobs/expiry.py filters on this every worker poll, against a
+    # table that only grows (soft-delete convention, terminal rows never
+    # removed).
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
 
     status: Mapped[AppointmentStatus] = mapped_column(
         Enum(AppointmentStatus, name="appointment_status_enum", native_enum=True),

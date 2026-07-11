@@ -12,6 +12,7 @@ from app.schemas.auth import LoginIn, RegisterIn, TokenOut
 from app.schemas.user import UserOut, UserSelfUpdate
 from app.services.audit import record_audit_log
 from app.services.notifications import notify
+from app.services.users import active_user_filters
 
 router = APIRouter(tags=["auth"])
 
@@ -32,10 +33,7 @@ def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db
     if payload.role == RoleEnum.patient:
         student = db.scalar(
             select(User).where(
-                User.id == payload.owner_student_id,
-                User.role == RoleEnum.student,
-                User.is_active.is_(True),
-                User.deleted_at.is_(None),
+                User.id == payload.owner_student_id, *active_user_filters(RoleEnum.student)
             )
         )
         if student is None:

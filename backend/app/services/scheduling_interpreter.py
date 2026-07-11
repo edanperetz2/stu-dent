@@ -10,6 +10,7 @@ from app.models.user import RoleEnum, User
 from app.schemas.scheduling_assistant import InterpretedAppointmentOut
 from app.services import ollama_client
 from app.services.nl_dates import TIME_OF_DAY_HOURS, resolve_relative_date
+from app.services.users import active_user_filters
 
 DEFAULT_APPOINTMENT_MINUTES = 30
 
@@ -77,11 +78,7 @@ def interpret_request(db: Session, *, user: User, text: str) -> InterpretedAppoi
         )
         attendings = list(
             db.execute(
-                select(User.id, User.full_name).where(
-                    User.role == RoleEnum.attending,
-                    User.is_active.is_(True),
-                    User.deleted_at.is_(None),
-                )
+                select(User.id, User.full_name).where(*active_user_filters(RoleEnum.attending))
             )
         )
         rooms = list(db.execute(select(Room.id, Room.name).where(Room.is_active.is_(True))))
