@@ -15,13 +15,19 @@ shared resources (rooms/equipment), reminders, and communication.
 ## Stack
 
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2 (sync `Session`, `psycopg` v3
-  driver — no async; not needed yet, see Phase 1 plan for rationale),
+  driver for all request/route/job code — no async there, not needed).
+  Phase 4 adds one narrow exception: a dedicated async Postgres
+  LISTEN/NOTIFY task (`app/realtime/listener.py`) using `psycopg`'s native
+  `AsyncConnection` support (no new dependency) to relay real-time events to
+  WebSocket clients — this is isolated to that one task, not a general
+  async migration.
   Pydantic v2, Alembic, pytest.
 - DB: PostgreSQL 16. Chosen because later phases need transactions and
   range/exclusion constraints to prevent double-booking (§4.3).
 - Frontend: React + Vite + TypeScript.
-- Infra: Docker Compose (`api`, `db`, `frontend`, `mailhog`), one startup
-  command, `.env.example`.
+- Infra: Docker Compose (`api`, `db`, `frontend`, `mailhog`, `worker` — the
+  worker shares the `backend` image/build context with `api`, just runs a
+  different command), one startup command, `.env.example`.
 - Auth: argon2 password hashing (`argon2-cffi`), JWT access tokens (`PyJWT`,
   HS256, no refresh token).
 
@@ -138,15 +144,26 @@ docker compose exec frontend npm run lint
 - **3 — Waitlists + reminders + notifications** (§4.4): waitlist for
   cancelled/newly-available slots, background job worker for
   reminders/expiry checks, in-app notifications, MailHog-based email.
-- **4 — Forum + DMs + real-time** (§2, §4.2): student community
-  posts/comments/voting, private patient↔student DMs, WebSockets for live
-  notifications.
-- **5 — Local AI** (§1-2, §5): two distinct functions — (a) natural-language
+- **4 — Forum + DMs + real-time** (§2, §4.2): **backend-only**, same as
+  phases 0-3 — student community posts/comments/voting (students
+  create/read/comment/vote; admin reads and moderates; attending/patient
+  have no forum access — judged from proposal wording, not asked), private
+  patient↔student DMs, WebSockets (backed by Postgres LISTEN/NOTIFY so
+  worker-originated events reach connected clients too) for live
+  notifications. The frontend UI for this phase, and for everything built
+  so far, is explicitly deferred to Phase 5.
+- **5 — Frontend** (whole app so far): the first real frontend work — the
+  frontend has been an untouched Vite scaffold through phases 0-4. Covers
+  auth (login/register, role-aware routing) plus real screens for
+  patients, appointments, rooms/equipment, availability, notifications,
+  waitlist, forum, and DMs (including live updates over the Phase 4
+  WebSocket). Needs its own `/plan` pass when reached — not designed yet.
+- **6 — Local AI** (§1-2, §5): two distinct functions — (a) natural-language
   scheduling interpretation, where a local Ollama model only *interprets*
   requests and all final decisions are validated by deterministic backend
   logic, and (b) a separate summary/report assistant that scans historic
   data for attending/student-facing monthly/weekly reports. Do not conflate
   the two; they have different prompts, different data access, and different
   trust boundaries.
-- **6 — CI/CD + Azure deploy + seed data** (§6): full CI pipeline, Azure
+- **7 — CI/CD + Azure deploy + seed data** (§6): full CI pipeline, Azure
   deployment, seed data for demos.

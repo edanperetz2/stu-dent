@@ -1,6 +1,10 @@
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.audit_log import AuditLog
 from app.models.equipment import Equipment
+from app.models.forum_comment import ForumComment
+from app.models.forum_comment_vote import ForumCommentVote
+from app.models.forum_post import ForumPost
+from app.models.forum_post_vote import ForumPostVote
 from app.models.notification import Notification, NotificationType
 from app.models.patient import Patient, PreferredTimeOfDay
 from app.models.room import Room
@@ -13,6 +17,10 @@ __all__ = [
     "AppointmentStatus",
     "AuditLog",
     "Equipment",
+    "ForumComment",
+    "ForumCommentVote",
+    "ForumPost",
+    "ForumPostVote",
     "Notification",
     "NotificationType",
     "Patient",
