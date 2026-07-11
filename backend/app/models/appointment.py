@@ -128,4 +128,9 @@ class Appointment(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Set once a reminder job has sent a reminder, so it never re-sends.
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
