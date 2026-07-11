@@ -1,6 +1,8 @@
-import { AppShell, Burger, Button, Group, NavLink, Text } from '@mantine/core'
+import { AppShell, Badge, Burger, Button, Group, NavLink, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
+import { useQuery } from '@tanstack/react-query'
 import { Outlet, useNavigate } from 'react-router-dom'
+import { listNotifications } from '../api/notifications'
 import { useAuth, type Principal } from '../auth/AuthContext'
 
 interface NavItem {
@@ -58,6 +60,13 @@ export function AppLayout() {
   const navigate = useNavigate()
   const links = linksForPrincipal(principal)
 
+  const { data: unreadNotifications } = useQuery({
+    queryKey: ['notifications', true],
+    queryFn: () => listNotifications(principal!.token, true),
+    enabled: !!principal,
+  })
+  const unreadCount = unreadNotifications?.length ?? 0
+
   return (
     <AppShell
       header={{ height: 60 }}
@@ -87,7 +96,18 @@ export function AppLayout() {
       </AppShell.Header>
       <AppShell.Navbar p="md">
         {links.map((link) => (
-          <NavLink key={link.to} label={link.label} onClick={() => navigate(link.to)} />
+          <NavLink
+            key={link.to}
+            label={link.label}
+            onClick={() => navigate(link.to)}
+            rightSection={
+              link.to === '/notifications' && unreadCount > 0 ? (
+                <Badge size="sm" circle color="red">
+                  {unreadCount}
+                </Badge>
+              ) : undefined
+            }
+          />
         ))}
       </AppShell.Navbar>
       <AppShell.Main>
