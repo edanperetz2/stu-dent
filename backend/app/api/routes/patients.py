@@ -109,6 +109,8 @@ def update_patient(
         patient.full_name = payload.full_name
     if payload.contact_phone is not None:
         patient.contact_phone = payload.contact_phone
+    if payload.preferred_time_of_day is not None:
+        patient.preferred_time_of_day = payload.preferred_time_of_day
 
     record_audit_log(
         db,

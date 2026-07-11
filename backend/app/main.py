@@ -1,6 +1,15 @@
 from fastapi import FastAPI
 
-from app.api.routes import admin, appointments, attending, auth, equipment, patients, rooms
+from app.api.routes import (
+    admin,
+    appointments,
+    attending,
+    auth,
+    availability,
+    equipment,
+    patients,
+    rooms,
+)
 
 app = FastAPI(title="Stu-Dent API")
 
@@ -11,6 +20,7 @@ app.include_router(admin.router)
 app.include_router(rooms.router)
 app.include_router(equipment.router)
 app.include_router(appointments.router)
+app.include_router(availability.router)
 
 
 @app.get("/health")

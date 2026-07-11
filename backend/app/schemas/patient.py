@@ -2,6 +2,8 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.models.patient import PreferredTimeOfDay
+
 
 class PatientCreate(BaseModel):
     full_name: str
@@ -11,6 +13,7 @@ class PatientCreate(BaseModel):
 class PatientUpdate(BaseModel):
     full_name: str | None = None
     contact_phone: str | None = None
+    preferred_time_of_day: PreferredTimeOfDay | None = None
 
 
 class PatientOut(BaseModel):
@@ -22,6 +25,7 @@ class PatientOut(BaseModel):
     contact_phone: str | None
     email: str | None
     is_active: bool
+    preferred_time_of_day: PreferredTimeOfDay | None
 
 
 class PatientCredentialsIn(BaseModel):
