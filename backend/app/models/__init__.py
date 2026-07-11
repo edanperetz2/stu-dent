@@ -1,5 +1,6 @@
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.audit_log import AuditLog
+from app.models.direct_message import DirectMessage
 from app.models.equipment import Equipment
 from app.models.forum_comment import ForumComment
 from app.models.forum_comment_vote import ForumCommentVote
@@ -16,6 +17,7 @@ __all__ = [
     "Appointment",
     "AppointmentStatus",
     "AuditLog",
+    "DirectMessage",
     "Equipment",
     "ForumComment",
     "ForumCommentVote",

@@ -6,6 +6,7 @@ from app.api.routes import (
     attending,
     auth,
     availability,
+    direct_messages,
     equipment,
     forum,
     notifications,
@@ -27,6 +28,7 @@ app.include_router(availability.router)
 app.include_router(notifications.router)
 app.include_router(waitlist.router)
 app.include_router(forum.router)
+app.include_router(direct_messages.router)
 
 
 @app.get("/health")
