@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models.notification import NotificationType
 from app.models.user import RoleEnum, User
 from app.schemas.auth import LoginIn, RegisterIn, TokenOut
-from app.schemas.user import UserOut
+from app.schemas.user import UserOut, UserSelfUpdate
 from app.services.audit import record_audit_log
 from app.services.notifications import notify
 
@@ -124,4 +124,27 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)) -> 
 
 @router.get("/users/me", response_model=UserOut)
 def read_current_user(current_user: User = Depends(get_current_user)) -> User:
+    return current_user
+
+
+@router.patch("/users/me", response_model=UserOut)
+def update_current_user(
+    payload: UserSelfUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    if payload.contact_phone is not None:
+        current_user.contact_phone = payload.contact_phone
+    if payload.preferred_time_of_day is not None:
+        current_user.preferred_time_of_day = payload.preferred_time_of_day
+
+    record_audit_log(
+        db,
+        action="user_self_update",
+        actor_id=current_user.id,
+        target_type="user",
+        target_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(current_user)
     return current_user

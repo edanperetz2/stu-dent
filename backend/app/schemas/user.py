@@ -19,3 +19,15 @@ class UserOut(BaseModel):
     owner_confirmed_at: datetime | None = None
     contact_phone: str | None = None
     preferred_time_of_day: PreferredTimeOfDay | None = None
+
+
+class UserSelfUpdate(BaseModel):
+    """Self-service profile update via PATCH /users/me.
+
+    Deliberately narrow: only the two fields meaningful for a patient's own
+    preferences. Full name/email/role changes go through admin endpoints,
+    not self-service.
+    """
+
+    contact_phone: str | None = None
+    preferred_time_of_day: PreferredTimeOfDay | None = None

@@ -1,5 +1,10 @@
 import { request } from './httpClient'
-import type { Role, TokenResponse, User } from './types'
+import type { PreferredTimeOfDay, Role, TokenResponse, User } from './types'
+
+export interface UserSelfUpdateInput {
+  contact_phone?: string | null
+  preferred_time_of_day?: PreferredTimeOfDay | null
+}
 
 export function registerUser(
   email: string,
@@ -29,4 +34,8 @@ export function login(email: string, password: string, role?: Role) {
 
 export function getCurrentUser(token: string) {
   return request<User>('/users/me', { token })
+}
+
+export function updateCurrentUser(token: string, payload: UserSelfUpdateInput) {
+  return request<User>('/users/me', { method: 'PATCH', body: payload, token })
 }

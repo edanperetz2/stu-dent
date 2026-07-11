@@ -3,6 +3,7 @@ import { AppLayout } from '../layouts/AppLayout'
 import { AuthLayout } from '../layouts/AuthLayout'
 import { EquipmentPage } from '../pages/admin/EquipmentPage'
 import { RoomsPage } from '../pages/admin/RoomsPage'
+import { UsersPage } from '../pages/admin/UsersPage'
 import { AppointmentDetailPage } from '../pages/appointments/AppointmentDetailPage'
 import { AppointmentsListPage } from '../pages/appointments/AppointmentsListPage'
 import { LoginPage } from '../pages/auth/LoginPage'
@@ -15,6 +16,7 @@ import { NotificationsPage } from '../pages/notifications/NotificationsPage'
 import { PatientDetailPage } from '../pages/patients/PatientDetailPage'
 import { PatientsListPage } from '../pages/patients/PatientsListPage'
 import { PlaceholderPage } from '../pages/PlaceholderPage'
+import { PreferencesPage } from '../pages/preferences/PreferencesPage'
 import { WaitlistPage } from '../pages/waitlist/WaitlistPage'
 import { RequireAuth } from './RequireAuth'
 
@@ -38,8 +40,7 @@ export function AppRouter() {
             <Route path="/waitlist" element={<WaitlistPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/messages" element={<MessagesPage />} />
-            <Route path="/preferences" element={<PlaceholderPage title="Preferences" />} />
-            <Route path="/admin/users" element={<PlaceholderPage title="Users" />} />
+            <Route path="/preferences" element={<PreferencesPage />} />
 
             <Route element={<RequireAuth roles={['student', 'admin']} />}>
               <Route path="/forum" element={<ForumListPage />} />
@@ -47,6 +48,7 @@ export function AppRouter() {
             </Route>
 
             <Route element={<RequireAuth roles={['admin']} />}>
+              <Route path="/admin/users" element={<UsersPage />} />
               <Route path="/admin/rooms" element={<RoomsPage />} />
               <Route path="/admin/equipment" element={<EquipmentPage />} />
             </Route>

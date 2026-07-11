@@ -103,3 +103,36 @@ def test_users_me_returns_current_user(client):
     response = client.get("/users/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json()["email"] == "student@example.com"
+
+
+def test_users_me_update_requires_auth(client):
+    response = client.patch("/users/me", json={"contact_phone": "555-1234"})
+    assert response.status_code == 401
+
+
+def test_users_me_update_sets_contact_phone_and_preferred_time(client):
+    _register(client, email="prefs@example.com")
+    token = _login(client, email="prefs@example.com").json()["access_token"]
+
+    response = client.patch(
+        "/users/me",
+        json={"contact_phone": "555-1234", "preferred_time_of_day": "evening"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["contact_phone"] == "555-1234"
+    assert body["preferred_time_of_day"] == "evening"
+
+
+def test_users_me_update_partial_leaves_other_field_untouched(client):
+    _register(client, email="prefs2@example.com")
+    token = _login(client, email="prefs2@example.com").json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.patch("/users/me", json={"contact_phone": "555-1234"}, headers=headers)
+    response = client.patch("/users/me", json={"preferred_time_of_day": "morning"}, headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["contact_phone"] == "555-1234"
+    assert body["preferred_time_of_day"] == "morning"
