@@ -18,6 +18,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_started
     volumes:
       - ./backend:/app
     ports:
@@ -41,9 +43,18 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_started
     volumes:
       - ./backend:/app
     command: python -m app.worker
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
 
   frontend:
     build: ./frontend
@@ -68,3 +79,4 @@ services:
 
 volumes:
   pgdata:
+  ollama_data:

@@ -22,5 +22,9 @@ class Settings(BaseSettings):
 
     frontend_origin: str = "http://localhost:5173"
 
+    ollama_base_url: str = "http://ollama:11434"
+    ollama_model: str = "llama3.2"
+    ollama_timeout_seconds: int = 30
+
 
 settings = Settings()
