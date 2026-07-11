@@ -17,6 +17,7 @@ import { PatientDetailPage } from '../pages/patients/PatientDetailPage'
 import { PatientsListPage } from '../pages/patients/PatientsListPage'
 import { PlaceholderPage } from '../pages/PlaceholderPage'
 import { PreferencesPage } from '../pages/preferences/PreferencesPage'
+import { ReportsPage } from '../pages/reports/ReportsPage'
 import { WaitlistPage } from '../pages/waitlist/WaitlistPage'
 import { RequireAuth } from './RequireAuth'
 
@@ -45,6 +46,10 @@ export function AppRouter() {
             <Route element={<RequireAuth roles={['student', 'admin']} />}>
               <Route path="/forum" element={<ForumListPage />} />
               <Route path="/forum/:postId" element={<ForumPostPage />} />
+            </Route>
+
+            <Route element={<RequireAuth roles={['student', 'attending']} />}>
+              <Route path="/reports" element={<ReportsPage />} />
             </Route>
 
             <Route element={<RequireAuth roles={['admin']} />}>

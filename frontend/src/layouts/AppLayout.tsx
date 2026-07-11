@@ -19,12 +19,14 @@ const STUDENT_LINKS: NavItem[] = [
   { label: 'Forum', to: '/forum' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
+  { label: 'Reports', to: '/reports' },
 ]
 
 const ATTENDING_LINKS: NavItem[] = [
   { label: 'Dashboard', to: '/' },
   { label: 'Appointments', to: '/appointments' },
   { label: 'Notifications', to: '/notifications' },
+  { label: 'Reports', to: '/reports' },
 ]
 
 const ADMIN_LINKS: NavItem[] = [

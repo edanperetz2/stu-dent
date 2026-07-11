@@ -19,6 +19,8 @@ export type NotificationType =
 
 export type PreferredTimeOfDay = 'morning' | 'afternoon' | 'evening'
 
+export type ReportPeriodType = 'weekly' | 'monthly' | 'ad_hoc'
+
 export interface User {
   id: string
   email: string
@@ -138,6 +140,17 @@ export interface AuditLogEntry {
 export interface TokenResponse {
   access_token: string
   token_type: string
+}
+
+export interface Report {
+  id: string
+  period_type: ReportPeriodType
+  period_start: string
+  period_end: string
+  question: string | null
+  title: string
+  content: string
+  created_at: string
 }
 
 export interface RealtimeEvent {
