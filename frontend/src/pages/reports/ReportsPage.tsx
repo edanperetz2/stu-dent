@@ -3,9 +3,10 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { askQuestion, generateReport, listReports } from '../../api/reports'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import type { ReportPeriodType } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { EmptyText, LoadingText } from '../../components/StateText'
 
 const PERIOD_COLORS: Record<ReportPeriodType, string> = {
   weekly: 'blue',
@@ -38,7 +39,7 @@ export function ReportsPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to generate report',
+        message: apiErrorMessage(err, 'Failed to generate report'),
         color: 'red',
       })
     },
@@ -52,7 +53,7 @@ export function ReportsPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to get an answer',
+        message: apiErrorMessage(err, 'Failed to get an answer'),
         color: 'red',
       })
     },
@@ -87,9 +88,9 @@ export function ReportsPage() {
       </Stack>
 
       {isLoading ? (
-        <Text>Loading...</Text>
+        <LoadingText />
       ) : reports?.length === 0 ? (
-        <Text c="dimmed">No reports yet.</Text>
+        <EmptyText>No reports yet.</EmptyText>
       ) : (
         <Stack gap="xs">
           {reports?.map((report) => (

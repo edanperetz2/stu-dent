@@ -4,7 +4,7 @@ import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import {
   createRoom,
   listAllRooms,
@@ -12,6 +12,7 @@ import {
   type RoomCreateInput,
 } from '../../api/rooms'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { LoadingText } from '../../components/StateText'
 
 export function RoomsPage() {
   const token = useAuthToken()
@@ -43,7 +44,7 @@ export function RoomsPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to create room',
+        message: apiErrorMessage(err, 'Failed to create room'),
         color: 'red',
       })
     },
@@ -58,7 +59,7 @@ export function RoomsPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to update room',
+        message: apiErrorMessage(err, 'Failed to update room'),
         color: 'red',
       })
     },
@@ -72,7 +73,7 @@ export function RoomsPage() {
       </Group>
 
       {isLoading ? (
-        <Text>Loading...</Text>
+        <LoadingText />
       ) : (
         <Table highlightOnHover>
           <Table.Thead>
@@ -107,6 +108,15 @@ export function RoomsPage() {
                         setRenamingId(room.id)
                         setRenameValue(room.name)
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setRenamingId(room.id)
+                          setRenameValue(room.name)
+                        }
+                      }}
+                      tabIndex={0}
+                      role="button"
                     >
                       {room.name}
                     </Text>

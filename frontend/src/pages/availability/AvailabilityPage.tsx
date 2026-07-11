@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Group, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { ActionIcon, Button, Group, Select, Stack, Table, TextInput, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconTrash } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -8,8 +8,9 @@ import {
   replaceMyAvailability,
   type AvailabilityWindowInput,
 } from '../../api/availability'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { LoadingText } from '../../components/StateText'
 
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const DAY_OPTIONS = DAY_LABELS.map((label, index) => ({ value: String(index), label }))
@@ -48,7 +49,7 @@ export function AvailabilityPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to save availability',
+        message: apiErrorMessage(err, 'Failed to save availability'),
         color: 'red',
       })
     },
@@ -66,7 +67,7 @@ export function AvailabilityPage() {
     setWindows((prev) => prev.filter((_, i) => i !== index))
   }
 
-  if (isLoading) return <Text>Loading...</Text>
+  if (isLoading) return <LoadingText />
 
   return (
     <Stack maw={560}>
@@ -88,7 +89,12 @@ export function AvailabilityPage() {
               <Table.Td>{window.start_time.slice(0, 5)}</Table.Td>
               <Table.Td>{window.end_time.slice(0, 5)}</Table.Td>
               <Table.Td>
-                <ActionIcon color="red" variant="subtle" onClick={() => removeWindow(index)}>
+                <ActionIcon
+                  color="red"
+                  variant="subtle"
+                  onClick={() => removeWindow(index)}
+                  aria-label="Remove availability window"
+                >
                   <IconTrash size={16} />
                 </ActionIcon>
               </Table.Td>

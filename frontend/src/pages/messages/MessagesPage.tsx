@@ -2,7 +2,7 @@ import { Button, Group, Paper, Select, Stack, Text, Textarea, Title } from '@man
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { listMessages, markMessageRead, sendMessage } from '../../api/directMessages'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import { notifications } from '@mantine/notifications'
 import { listPatients } from '../../api/patients'
 import { useAuth } from '../../auth/AuthContext'
@@ -62,7 +62,7 @@ export function MessagesPage() {
     },
     onError: (err) =>
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to send message',
+        message: apiErrorMessage(err, 'Failed to send message'),
         color: 'red',
       }),
   })

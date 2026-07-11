@@ -14,7 +14,7 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import {
   confirmPatient,
   deletePatient,
@@ -25,6 +25,7 @@ import {
 import type { PreferredTimeOfDay } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
+import { LoadingText } from '../../components/StateText'
 
 const PREFERRED_TIME_OPTIONS: { value: PreferredTimeOfDay; label: string }[] = [
   { value: 'morning', label: 'Morning' },
@@ -68,7 +69,7 @@ export function PatientDetailPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to update patient',
+        message: apiErrorMessage(err, 'Failed to update patient'),
         color: 'red',
       })
     },
@@ -83,7 +84,7 @@ export function PatientDetailPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to confirm patient',
+        message: apiErrorMessage(err, 'Failed to confirm patient'),
         color: 'red',
       })
     },
@@ -98,13 +99,13 @@ export function PatientDetailPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to delete patient',
+        message: apiErrorMessage(err, 'Failed to delete patient'),
         color: 'red',
       })
     },
   })
 
-  if (isLoading) return <Text>Loading...</Text>
+  if (isLoading) return <LoadingText />
   if (!patient) return <Text>Patient not found.</Text>
 
   return (

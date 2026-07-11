@@ -1,8 +1,11 @@
 import { Badge, Group, Paper, Stack, Switch, Text, Title } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { listNotifications, markNotificationRead } from '../../api/notifications'
+import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { EmptyText, LoadingText } from '../../components/StateText'
 
 function formatType(notificationType: string): string {
   return notificationType
@@ -26,6 +29,12 @@ export function NotificationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
+    onError: (err) => {
+      notifications.show({
+        message: apiErrorMessage(err, 'Failed to mark notification as read'),
+        color: 'red',
+      })
+    },
   })
 
   return (
@@ -40,9 +49,9 @@ export function NotificationsPage() {
       </Group>
 
       {isLoading ? (
-        <Text>Loading...</Text>
+        <LoadingText />
       ) : items?.length === 0 ? (
-        <Text c="dimmed">No notifications.</Text>
+        <EmptyText>No notifications.</EmptyText>
       ) : (
         <Stack gap="xs">
           {items?.map((item) => (
@@ -54,6 +63,14 @@ export function NotificationsPage() {
               onClick={() => {
                 if (!item.read_at) markReadMutation.mutate(item.id)
               }}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && !item.read_at) {
+                  e.preventDefault()
+                  markReadMutation.mutate(item.id)
+                }
+              }}
+              tabIndex={item.read_at ? undefined : 0}
+              role={item.read_at ? undefined : 'button'}
               bg={item.read_at ? undefined : 'var(--mantine-color-blue-0)'}
             >
               <Group justify="space-between" wrap="nowrap">

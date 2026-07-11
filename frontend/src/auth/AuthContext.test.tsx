@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as authApi from '../api/auth'
+import { resetAuthTestState } from '../test/resetAuthTestState'
 import { AuthProvider, useAuth } from './AuthContext'
 
 vi.mock('../api/auth')
@@ -12,10 +13,7 @@ function PrincipalProbe() {
 }
 
 describe('AuthProvider', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    localStorage.clear()
-  })
+  beforeEach(resetAuthTestState)
 
   it('rehydrates a persisted session on load', async () => {
     localStorage.setItem('stu_dent_auth', JSON.stringify({ token: 'tok123' }))

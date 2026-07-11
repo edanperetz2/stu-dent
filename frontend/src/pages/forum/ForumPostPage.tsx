@@ -28,10 +28,11 @@ import {
   voteComment,
   votePost,
 } from '../../api/forum'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
+import { LoadingText } from '../../components/StateText'
 
 export function ForumPostPage() {
   const { postId } = useParams<{ postId: string }>()
@@ -79,7 +80,7 @@ export function ForumPostPage() {
     },
     onError: (err) =>
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to update post',
+        message: apiErrorMessage(err, 'Failed to update post'),
         color: 'red',
       }),
   })
@@ -92,7 +93,7 @@ export function ForumPostPage() {
     },
     onError: (err) =>
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to delete post',
+        message: apiErrorMessage(err, 'Failed to delete post'),
         color: 'red',
       }),
   })
@@ -114,7 +115,7 @@ export function ForumPostPage() {
     },
     onError: (err) =>
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to add comment',
+        message: apiErrorMessage(err, 'Failed to add comment'),
         color: 'red',
       }),
   })
@@ -134,7 +135,7 @@ export function ForumPostPage() {
     onSuccess: invalidateComments,
   })
 
-  if (isLoading) return <Text>Loading...</Text>
+  if (isLoading) return <LoadingText />
   if (!post) return <Text>Post not found.</Text>
 
   const isAuthor = principal?.id === post.author_student_id

@@ -75,3 +75,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   return (await response.json()) as T
 }
+
+/** The `err instanceof ApiError ? err.message : fallback` ternary, deduped
+ * -- repeated identically across every page's mutation onError handler. */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof ApiError ? err.message : fallback
+}

@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Modal, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { Badge, Button, Group, Modal, Stack, Table, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
@@ -9,8 +9,9 @@ import {
   updateEquipment,
   type EquipmentCreateInput,
 } from '../../api/equipment'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { LoadingText } from '../../components/StateText'
 
 export function EquipmentPage() {
   const token = useAuthToken()
@@ -40,7 +41,7 @@ export function EquipmentPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to create equipment',
+        message: apiErrorMessage(err, 'Failed to create equipment'),
         color: 'red',
       })
     },
@@ -55,7 +56,7 @@ export function EquipmentPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to update equipment',
+        message: apiErrorMessage(err, 'Failed to update equipment'),
         color: 'red',
       })
     },
@@ -69,7 +70,7 @@ export function EquipmentPage() {
       </Group>
 
       {isLoading ? (
-        <Text>Loading...</Text>
+        <LoadingText />
       ) : (
         <Table highlightOnHover>
           <Table.Thead>

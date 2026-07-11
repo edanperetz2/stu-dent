@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listStudents } from '../../api/students'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import type { Role } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 
@@ -64,7 +64,7 @@ export function RegisterPage() {
         navigate('/')
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Registration failed')
+      setError(apiErrorMessage(err, 'Registration failed'))
     } finally {
       setSubmitting(false)
     }

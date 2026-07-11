@@ -4,16 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as authApi from '../../api/auth'
 import * as studentsApi from '../../api/students'
 import { renderWithProviders } from '../../test/renderWithProviders'
+import { resetAuthTestState } from '../../test/resetAuthTestState'
 import { RegisterPage } from './RegisterPage'
 
 vi.mock('../../api/auth')
 vi.mock('../../api/students')
 
 describe('RegisterPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    localStorage.clear()
-  })
+  beforeEach(resetAuthTestState)
 
   it('registers then logs in with the same credentials', async () => {
     vi.mocked(authApi.registerUser).mockResolvedValue({

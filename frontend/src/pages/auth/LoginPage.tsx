@@ -2,7 +2,7 @@ import { Anchor, Button, PasswordInput, Select, Stack, Text, TextInput } from '@
 import { useForm } from '@mantine/form'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import type { Role } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 
@@ -41,7 +41,7 @@ export function LoginPage() {
       await login(values.email, values.password, values.role || undefined)
       navigate('/')
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Login failed')
+      setError(apiErrorMessage(err, 'Login failed'))
     } finally {
       setSubmitting(false)
     }

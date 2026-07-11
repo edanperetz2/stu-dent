@@ -24,13 +24,14 @@ import {
 } from '../../api/appointments'
 import { listAttendings } from '../../api/attendings'
 import { listActiveEquipment } from '../../api/equipment'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import { listPatients } from '../../api/patients'
 import { listActiveRooms } from '../../api/rooms'
 import { interpretSchedulingRequest } from '../../api/schedulingAssistant'
 import type { AppointmentStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { LoadingText } from '../../components/StateText'
 import { isoToMantineDateTime, mantineDateTimeToIso } from '../../utils/dates'
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
@@ -124,7 +125,7 @@ export function AppointmentsListPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to create appointment',
+        message: apiErrorMessage(err, 'Failed to create appointment'),
         color: 'red',
       })
     },
@@ -146,7 +147,7 @@ export function AppointmentsListPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to interpret request',
+        message: apiErrorMessage(err, 'Failed to interpret request'),
         color: 'red',
       })
     },
@@ -186,7 +187,7 @@ export function AppointmentsListPage() {
       </Group>
 
       {isLoading ? (
-        <Text>Loading...</Text>
+        <LoadingText />
       ) : (
         <Table highlightOnHover>
           <Table.Thead>
@@ -202,6 +203,14 @@ export function AppointmentsListPage() {
                 key={appointment.id}
                 style={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/appointments/${appointment.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/appointments/${appointment.id}`)
+                  }
+                }}
+                tabIndex={0}
+                role="button"
               >
                 <Table.Td>{new Date(appointment.start_time).toLocaleString()}</Table.Td>
                 <Table.Td>{new Date(appointment.end_time).toLocaleString()}</Table.Td>

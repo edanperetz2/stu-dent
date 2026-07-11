@@ -1,12 +1,13 @@
-import { Button, Select, Stack, Text, TextInput, Title } from '@mantine/core'
+import { Button, Select, Stack, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { getCurrentUser, updateCurrentUser, type UserSelfUpdateInput } from '../../api/auth'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import type { PreferredTimeOfDay } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { LoadingText } from '../../components/StateText'
 
 const PREFERRED_TIME_OPTIONS: { value: PreferredTimeOfDay; label: string }[] = [
   { value: 'morning', label: 'Morning' },
@@ -45,13 +46,13 @@ export function PreferencesPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to save preferences',
+        message: apiErrorMessage(err, 'Failed to save preferences'),
         color: 'red',
       })
     },
   })
 
-  if (isLoading) return <Text>Loading...</Text>
+  if (isLoading) return <LoadingText />
 
   return (
     <Stack maw={420}>

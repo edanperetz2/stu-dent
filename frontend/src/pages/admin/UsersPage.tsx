@@ -1,12 +1,13 @@
-import { Badge, Group, Select, Stack, Table, Text, Title } from '@mantine/core'
+import { Badge, Group, Select, Stack, Table, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteUser, listAllUsers, updateUser } from '../../api/admin'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import type { Role } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
+import { LoadingText } from '../../components/StateText'
 
 const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'student', label: 'Student' },
@@ -33,7 +34,7 @@ export function UsersPage() {
     onSuccess: invalidate,
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to update user',
+        message: apiErrorMessage(err, 'Failed to update user'),
         color: 'red',
       })
     },
@@ -47,7 +48,7 @@ export function UsersPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to delete user',
+        message: apiErrorMessage(err, 'Failed to delete user'),
         color: 'red',
       })
     },
@@ -58,7 +59,7 @@ export function UsersPage() {
       <Title order={2}>Users</Title>
 
       {isLoading ? (
-        <Text>Loading...</Text>
+        <LoadingText />
       ) : (
         <Table highlightOnHover>
           <Table.Thead>

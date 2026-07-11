@@ -18,11 +18,12 @@ import {
 } from '../../api/appointments'
 import { listAttendings } from '../../api/attendings'
 import { listActiveEquipment } from '../../api/equipment'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import { listActiveRooms } from '../../api/rooms'
 import type { Appointment, AppointmentStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { LoadingText } from '../../components/StateText'
 import { isoToMantineDateTime, mantineDateTimeToIso } from '../../utils/dates'
 import { getAvailableActions, type AppointmentActionName } from './appointmentActions'
 
@@ -101,7 +102,7 @@ export function AppointmentDetailPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Action failed',
+        message: apiErrorMessage(err, 'Action failed'),
         color: 'red',
       })
     },
@@ -129,13 +130,13 @@ export function AppointmentDetailPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to update appointment',
+        message: apiErrorMessage(err, 'Failed to update appointment'),
         color: 'red',
       })
     },
   })
 
-  if (isLoading) return <Text>Loading...</Text>
+  if (isLoading) return <LoadingText />
   if (!appointment || !principal) return <Text>Appointment not found.</Text>
 
   const actions = getAvailableActions(appointment, principal)

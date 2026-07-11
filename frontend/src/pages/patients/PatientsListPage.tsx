@@ -1,12 +1,13 @@
-import { Badge, Button, Group, Modal, PasswordInput, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { Badge, Button, Group, Modal, PasswordInput, Stack, Table, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import { createPatient, listPatients, type PatientCreateInput } from '../../api/patients'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { LoadingText } from '../../components/StateText'
 
 export function PatientsListPage() {
   const token = useAuthToken()
@@ -38,7 +39,7 @@ export function PatientsListPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to create patient',
+        message: apiErrorMessage(err, 'Failed to create patient'),
         color: 'red',
       })
     },
@@ -52,7 +53,7 @@ export function PatientsListPage() {
       </Group>
 
       {isLoading ? (
-        <Text>Loading...</Text>
+        <LoadingText />
       ) : (
         <Table highlightOnHover>
           <Table.Thead>
@@ -69,6 +70,14 @@ export function PatientsListPage() {
                 key={patient.id}
                 style={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/patients/${patient.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/patients/${patient.id}`)
+                  }
+                }}
+                tabIndex={0}
+                role="button"
               >
                 <Table.Td>{patient.full_name}</Table.Td>
                 <Table.Td>{patient.contact_phone ?? '-'}</Table.Td>

@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Modal, Select, Stack, Table, Text, Title } from '@mantine/core'
+import { Badge, Button, Group, Modal, Select, Stack, Table, Title } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
@@ -6,7 +6,7 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listAttendings } from '../../api/attendings'
 import { listActiveEquipment } from '../../api/equipment'
-import { ApiError } from '../../api/httpClient'
+import { apiErrorMessage } from '../../api/httpClient'
 import { listPatients } from '../../api/patients'
 import { listActiveRooms } from '../../api/rooms'
 import type { WaitlistStatus } from '../../api/types'
@@ -14,6 +14,7 @@ import { cancelWaitlistEntry, createWaitlistEntry, listWaitlistEntries } from '.
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
+import { LoadingText } from '../../components/StateText'
 import { mantineDateTimeToIso } from '../../utils/dates'
 
 const STATUS_COLORS: Record<WaitlistStatus, string> = {
@@ -106,7 +107,7 @@ export function WaitlistPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to join waitlist',
+        message: apiErrorMessage(err, 'Failed to join waitlist'),
         color: 'red',
       })
     },
@@ -120,7 +121,7 @@ export function WaitlistPage() {
     },
     onError: (err) => {
       notifications.show({
-        message: err instanceof ApiError ? err.message : 'Failed to cancel entry',
+        message: apiErrorMessage(err, 'Failed to cancel entry'),
         color: 'red',
       })
     },
@@ -139,7 +140,7 @@ export function WaitlistPage() {
       </Group>
 
       {isLoading ? (
-        <Text>Loading...</Text>
+        <LoadingText />
       ) : (
         <Table highlightOnHover>
           <Table.Thead>

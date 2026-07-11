@@ -4,15 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as authApi from '../../api/auth'
 import { ApiError } from '../../api/httpClient'
 import { renderWithProviders } from '../../test/renderWithProviders'
+import { resetAuthTestState } from '../../test/resetAuthTestState'
 import { LoginPage } from './LoginPage'
 
 vi.mock('../../api/auth')
 
 describe('LoginPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    localStorage.clear()
-  })
+  beforeEach(resetAuthTestState)
 
   it('logs in and persists the session', async () => {
     vi.mocked(authApi.login).mockResolvedValue({ access_token: 'tok123', token_type: 'bearer' })
