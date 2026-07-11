@@ -12,7 +12,7 @@ Localhost-first, fully Dockerized, zero paid services.
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2, Pydantic v2, Alembic, pytest
 - DB: PostgreSQL 16
 - Frontend: React + Vite + TypeScript
-- Infra: Docker Compose (`api`, `db`, `frontend`, `mailhog`)
+- Infra: Docker Compose (`api`, `db`, `frontend`, `mailhog`, `worker`, `ollama`)
 
 ## Prerequisites
 
@@ -35,6 +35,19 @@ Then open:
 
 Stop the stack with `Ctrl+C`, then `docker compose down` (add `-v` to also drop
 the Postgres volume and start from a clean database).
+
+## Local AI (Ollama)
+
+The scheduling-interpretation and report/Q&A assistant features call a
+local Ollama model. After the first `docker compose up`, pull the model
+once (it isn't baked into the `ollama/ollama` image):
+
+```powershell
+docker compose exec ollama ollama pull llama3.2
+```
+
+Both features degrade gracefully (a plain warning / raw-data fallback,
+never an error) if Ollama is unreachable or the model isn't pulled yet.
 
 ## Running database migrations
 

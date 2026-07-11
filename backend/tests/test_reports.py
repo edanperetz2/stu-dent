@@ -112,6 +112,20 @@ def test_ask_question_resource_utilization_narrates_successfully(client, monkeyp
     assert body["content"] == "All rooms are used about evenly."
 
 
+def test_generate_report_falls_back_when_model_returns_blank_summary(client, monkeypatch):
+    # A real model can return technically-valid JSON with an empty/blank
+    # "summary" -- this must fall back to the raw-data string rather than
+    # silently producing a blank report (found via live testing).
+    _mock_ollama_router(monkeypatch, narrate={"summary": "   "})
+    student_token = register_and_login(client, "rep-s9@example.com", role="student")
+
+    response = client.post("/reports/generate", headers=auth_header(student_token))
+    assert response.status_code == 201
+    for report in response.json():
+        assert report["content"].strip() != ""
+        assert "Narration unavailable" in report["content"]
+
+
 def test_generate_scheduled_reports_idempotent(client, db_session, monkeypatch):
     _mock_ollama_router(monkeypatch, narrate={"summary": "ok"})
     register_and_login(client, "rep-job-s1@example.com", role="student")

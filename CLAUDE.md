@@ -188,12 +188,41 @@ docker compose exec frontend npm run lint
   live cross-role appointment-lifecycle walkthrough (student books with
   an attending assigned → attending approves → student completes,
   checked from all three roles' views) via a browser-automation MCP tool.
-- **6 — Local AI** (§1-2, §5): two distinct functions — (a) natural-language
-  scheduling interpretation, where a local Ollama model only *interprets*
-  requests and all final decisions are validated by deterministic backend
-  logic, and (b) a separate summary/report assistant that scans historic
-  data for attending/student-facing monthly/weekly reports. Do not conflate
-  the two; they have different prompts, different data access, and different
-  trust boundaries.
+- **6 — Local AI** (§1-2, §5): **done**. Two distinct functions, kept
+  deliberately separate — (a) natural-language scheduling interpretation:
+  `services/scheduling_interpreter.py` asks Ollama for candidate names and
+  a date/time phrase only; every ID and every date is then resolved
+  deterministically against real active rows and server time
+  (`services/nl_dates.py`), never trusted verbatim from the model.
+  `POST /scheduling/interpret` pre-fills the existing appointment
+  create-form (`form.setValues`) for human review — it never books
+  anything itself, so `services/scheduling.py`'s validation still gates
+  every real submit. (b) a summary/report assistant, scoped larger than
+  originally proposed at the user's explicit request: auto-generated
+  weekly/monthly reports **plus live ad-hoc natural-language Q&A**, both
+  built on one shared deterministic aggregation layer
+  (`services/report_data.py`: `resource_utilization`,
+  `time_impact` — plain SQL/Python math, no ML). The ad-hoc path
+  (`services/report_assistant.py::answer_ad_hoc_question`) is the
+  narrower of the two AI surfaces on purpose: the model only ever
+  classifies a question into a small fixed set of supported types
+  (`resource_utilization` | `time_impact` | `unsupported`) and extracts a
+  date-range phrase — it never sees the database or writes a query, and
+  an unsupported question gets a plain "I can't answer that yet" message
+  rather than a guess. `jobs/reports.py` generates each user's
+  weekly/monthly report once per calendar period (existence-check
+  idempotent, wired into `worker.py`), and `POST /reports/generate` +
+  `POST /reports/ask` cover manual/on-demand generation from the new
+  `ReportsPage`. `ollama_client.py` is the single, best-effort
+  (never-raises) boundary both features call through — if Ollama is
+  unreachable or a model isn't pulled, both paths degrade gracefully
+  (plain warnings / raw-data fallback) instead of erroring. Built across
+  6 milestones (Ollama infra + NL interpreter backend, NL interpreter
+  frontend, report data + periodic reports backend, ad-hoc Q&A backend —
+  ended up folding into the same milestone as periodic reports since they
+  share `report_assistant.py`/`report_data.py`, reports frontend, full
+  regression + live verification). Requires a one-time
+  `docker compose exec ollama ollama pull <model>` after first `docker
+  compose up` — models aren't baked into the `ollama/ollama` image.
 - **7 — CI/CD + Azure deploy + seed data** (§6): full CI pipeline, Azure
   deployment, seed data for demos.

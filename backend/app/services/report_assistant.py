@@ -38,8 +38,9 @@ _CLASSIFY_PROMPT_TEMPLATE = (
 
 def _narrate(data: dict[str, Any], *, audience: str) -> str:
     raw = ollama_client.generate_json(_NARRATE_PROMPT_TEMPLATE.format(audience=audience, data=data))
-    if raw is not None and isinstance(raw.get("summary"), str):
-        return raw["summary"]
+    summary = raw.get("summary") if raw is not None else None
+    if isinstance(summary, str) and summary.strip():
+        return summary
     return f"(Narration unavailable -- showing raw data instead)\n{data}"
 
 
