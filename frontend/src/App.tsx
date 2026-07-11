@@ -1,28 +1,28 @@
-import { useEffect, useState } from 'react'
-import { getHealth } from './api/client'
-import './App.css'
+import '@mantine/core/styles.css'
+import '@mantine/notifications/styles.css'
+import '@mantine/dates/styles.css'
 
-type Status = 'checking' | 'ok' | 'error'
+import { MantineProvider } from '@mantine/core'
+import { Notifications } from '@mantine/notifications'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AuthProvider } from './auth/AuthContext'
+import { RealtimeProvider } from './realtime/RealtimeContext'
+import { AppRouter } from './router/AppRouter'
+
+const queryClient = new QueryClient()
 
 function App() {
-  const [status, setStatus] = useState<Status>('checking')
-
-  useEffect(() => {
-    getHealth()
-      .then(() => setStatus('ok'))
-      .catch(() => setStatus('error'))
-  }, [])
-
   return (
-    <main className="status-card">
-      <h1>Stu-Dent</h1>
-      <p>
-        API status:{' '}
-        <span className={`status status-${status}`}>
-          {status === 'checking' ? 'checking...' : status}
-        </span>
-      </p>
-    </main>
+    <MantineProvider>
+      <Notifications />
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RealtimeProvider>
+            <AppRouter />
+          </RealtimeProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </MantineProvider>
   )
 }
 
