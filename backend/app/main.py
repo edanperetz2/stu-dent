@@ -16,6 +16,7 @@ from app.api.routes import (
     forum,
     notifications,
     patients,
+    reports,
     rooms,
     scheduling_assistant,
     students,
@@ -63,6 +64,7 @@ app.include_router(waitlist.router)
 app.include_router(forum.router)
 app.include_router(direct_messages.router)
 app.include_router(scheduling_assistant.router)
+app.include_router(reports.router)
 app.include_router(websocket.router)
 
 

@@ -5,6 +5,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.jobs.expiry import expire_stale_appointments
 from app.jobs.reminders import send_appointment_reminders
+from app.jobs.reports import generate_scheduled_reports
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,9 +15,14 @@ def run_once() -> None:
     with SessionLocal() as db:
         sent = send_appointment_reminders(db)
         expired = expire_stale_appointments(db)
-        if sent or expired:
+        reports = generate_scheduled_reports(db)
+        if sent or expired or reports:
             logger.info(
-                "worker pass: %d reminder(s) sent, %d appointment(s) expired", sent, expired
+                "worker pass: %d reminder(s) sent, %d appointment(s) expired, "
+                "%d report(s) generated",
+                sent,
+                expired,
+                reports,
             )
 
 
