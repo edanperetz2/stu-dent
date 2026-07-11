@@ -157,6 +157,17 @@ deploy/bootstrap-vm.sh      first-time VM setup script
   bootstrap script, SSH-based deploy workflow) — built and locally
   rehearsed end-to-end; actual deployment is pending VM access from the
   course (see Deployment and Risks below).
+- **Codebase review + cleanup** (cross-phase, not a proposal-scoped
+  phase): a full scan of every phase's code produced 29 concrete,
+  file-cited improvement findings — efficiency, explainability, and
+  developer/accessibility comfort, deliberately never changing behavior
+  or scope. Implemented in 4 tested, CI-verified batches: CI/infra
+  caching + doc fixes; backend index/N+1/dedup fixes (`get_or_404`,
+  `is_visible_to_participant`, `active_user_filters`); frontend
+  code-splitting (main bundle 657KB→355KB via `React.lazy`) and memoized
+  context/derived state; and frontend error-handling/loading-state
+  dedup plus keyboard navigation and an `aria-label` fix for icon-only
+  controls that previously had no accessible name.
 
 ## 4. Testing
 
@@ -189,7 +200,11 @@ deploy/bootstrap-vm.sh      first-time VM setup script
   (student books → attending approves → student completes → patient
   views), and — for Phase 6 — genuine live tests against a real pulled
   Ollama model (not just mocked responses), which is what surfaced the
-  blank-narration bug described above.
+  blank-narration bug described above. The post-Phase-7 codebase cleanup
+  closed with the same bar: full regression after every batch, plus a
+  live check of the new keyboard-navigation and accessible-name fixes
+  and a fresh end-to-end reseed of the demo data against the
+  post-cleanup code.
 
 ## 5. Deployment
 
@@ -223,7 +238,13 @@ deploy/bootstrap-vm.sh      first-time VM setup script
   student, attending, or admin. This is an accepted simplification for a
   course project (called out in the README), not something fixed
   unprompted; a real identity-verification + admin-approval flow is
-  documented as a backlog item but wasn't scheduled to any phase.
+  documented as a backlog item but deliberately not implemented as part
+  of this submission — retrofitting an approval gate at this stage would
+  touch registration behavior that tests, the seed script, and every
+  other phase's manual verification currently depend on being
+  immediate/ungated. It's recorded here as a suggested upgrade for a
+  real production rollout after course submission and approval, not a
+  gap to close now.
 - **The VM deploy plan hasn't been validated against a real network/
   firewall setup.** `docker-compose.prod.yml` doesn't expose Postgres or
   Ollama outside the VM's own Docker network at all (only the frontend,
