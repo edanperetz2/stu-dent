@@ -10,6 +10,7 @@ from app.api.routes import (
     notifications,
     patients,
     rooms,
+    waitlist,
 )
 
 app = FastAPI(title="Stu-Dent API")
@@ -23,6 +24,7 @@ app.include_router(equipment.router)
 app.include_router(appointments.router)
 app.include_router(availability.router)
 app.include_router(notifications.router)
+app.include_router(waitlist.router)
 
 
 @app.get("/health")

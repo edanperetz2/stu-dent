@@ -18,6 +18,7 @@ from app.services.scheduling import (
     recompute_status,
     validate_participants,
 )
+from app.services.waitlist import check_and_notify_waitlist
 
 router = APIRouter(tags=["appointments"])
 
@@ -307,6 +308,7 @@ def reject_appointment(
         raise HTTPException(status_code=409, detail="Appointment is already finalized")
 
     appointment.status = AppointmentStatus.cancelled
+    check_and_notify_waitlist(db, appointment)
     flush_or_409(db)
 
     record_audit_log(
@@ -347,6 +349,7 @@ def cancel_appointment(
         raise HTTPException(status_code=409, detail="Appointment is already finalized")
 
     appointment.status = AppointmentStatus.cancelled
+    check_and_notify_waitlist(db, appointment)
     flush_or_409(db)
 
     record_audit_log(
