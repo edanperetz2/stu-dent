@@ -21,3 +21,10 @@ def test_cors_rejects_unlisted_origin(client):
         },
     )
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_frontend_origin_list_parses_comma_separated_origins():
+    from app.config import Settings
+
+    settings = Settings(frontend_origins="http://a.example.com, http://b.example.com")
+    assert settings.frontend_origin_list == ["http://a.example.com", "http://b.example.com"]

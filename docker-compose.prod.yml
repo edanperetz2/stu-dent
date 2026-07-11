@@ -1,0 +1,92 @@
+# Production stack for a VM deploy (or a local rehearsal of one).
+# Standalone file, not a `-f base -f override` merge over docker-compose.yml
+# -- deliberately, to avoid Compose's list-merge semantics for
+# volumes/ports, which are easy to get subtly wrong. Every service mirrors
+# the dev stack in docker-compose.yml, hardened for production: no
+# bind-mounts, no --reload, restart: unless-stopped.
+#
+# Usage:
+#   cp .env.example .env   # then edit VITE_API_URL to the real deploy URL
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# One-time model pull (no port needs to be exposed for this):
+#   docker compose -f docker-compose.prod.yml exec ollama ollama pull llama3.2
+
+services:
+  db:
+    image: postgres:16
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    image: stu-dent-api:prod
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    image: stu-dent-api:prod
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    command: python -m app.worker
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    image: stu-dent-frontend:prod
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  ollama_data:

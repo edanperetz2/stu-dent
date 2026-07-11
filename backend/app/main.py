@@ -44,7 +44,7 @@ app = FastAPI(title="Stu-Dent API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=settings.frontend_origin_list,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

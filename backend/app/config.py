@@ -20,11 +20,15 @@ class Settings(BaseSettings):
     reminder_lead_hours: int = 24
     job_poll_interval_seconds: int = 300
 
-    frontend_origin: str = "http://localhost:5173"
+    frontend_origins: str = "http://localhost:5173"
 
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "llama3.2"
     ollama_timeout_seconds: int = 30
+
+    @property
+    def frontend_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.frontend_origins.split(",") if origin.strip()]
 
 
 settings = Settings()
