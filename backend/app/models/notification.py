@@ -2,7 +2,17 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Text, Uuid
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Identity,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -22,9 +32,18 @@ class Notification(TimestampMixin, Base):
             "(recipient_user_id IS NOT NULL) != (recipient_patient_id IS NOT NULL)",
             name="ck_notifications_exactly_one_recipient",
         ),
+        UniqueConstraint("sequence", name="uq_notifications_sequence"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Postgres's now()/CURRENT_TIMESTAMP is the transaction start time, so
+    # several notifications inserted in one transaction (e.g. one
+    # cancellation matching multiple waitlist entries) share the same
+    # created_at. This monotonic sequence breaks ties for "newest first"
+    # ordering; it's not the primary key so routes still address rows by
+    # the UUID `id`.
+    sequence: Mapped[int] = mapped_column(BigInteger, Identity(), nullable=False)
 
     recipient_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True

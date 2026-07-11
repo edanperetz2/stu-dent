@@ -7,6 +7,7 @@ from app.api.routes import (
     auth,
     availability,
     equipment,
+    notifications,
     patients,
     rooms,
 )
@@ -21,6 +22,7 @@ app.include_router(rooms.router)
 app.include_router(equipment.router)
 app.include_router(appointments.router)
 app.include_router(availability.router)
+app.include_router(notifications.router)
 
 
 @app.get("/health")
