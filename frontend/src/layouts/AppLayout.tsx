@@ -1,7 +1,17 @@
-import { AppShell, Badge, Burger, Button, Group, NavLink, Text } from '@mantine/core'
+import {
+  AppShell,
+  Badge,
+  Burger,
+  Button,
+  Group,
+  Image,
+  NavLink,
+  Text,
+  UnstyledButton,
+} from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { listNotifications } from '../api/notifications'
 import { useAuth, type Principal } from '../auth/AuthContext'
 
@@ -65,6 +75,7 @@ export function AppLayout() {
   const { principal, logout } = useAuth()
   const navigate = useNavigate()
   const links = linksForPrincipal(principal)
+  const homePath = links[0]?.to ?? '/'
 
   const { data: unreadNotifications } = useQuery({
     queryKey: ['notifications', true],
@@ -75,21 +86,36 @@ export function AppLayout() {
 
   return (
     <AppShell
-      header={{ height: 60 }}
+      header={{ height: 72 }}
       navbar={{ width: 220, breakpoint: 'sm', collapsed: { mobile: !opened } }}
       padding="md"
     >
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Group>
+          <Group gap="xs">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Text fw={700}>Stu-Dent</Text>
+            <UnstyledButton
+              component={Link}
+              to={homePath}
+              aria-label="Go to your home page"
+              className="header-logo-link"
+            >
+              <Image
+                src="/stu-dent-logo-header.png"
+                alt="Stu-Dent logo"
+                w={68}
+                h={68}
+                fit="contain"
+              />
+            </UnstyledButton>
           </Group>
           <Group>
             <Text size="sm">{displayName(principal)}</Text>
             <Button
               variant="subtle"
+              color="gray"
               size="xs"
+              className="header-logout-button"
               onClick={() => {
                 logout()
                 navigate('/login')
@@ -105,6 +131,7 @@ export function AppLayout() {
           <NavLink
             key={link.to}
             label={link.label}
+            className="app-nav-link"
             onClick={() => navigate(link.to)}
             rightSection={
               link.to === '/notifications' && unreadCount > 0 ? (

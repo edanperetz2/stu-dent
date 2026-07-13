@@ -6,3 +6,78 @@
 body {
   margin: 0;
 }
+
+.header-logo-link {
+  display: flex;
+  border-radius: var(--mantine-radius-md);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.header-logo-link:hover {
+  background-color: var(--mantine-color-gray-1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+  transform: translateY(-1px) scale(1.02);
+}
+
+.header-logo-link:focus-visible {
+  outline: 2px solid var(--mantine-color-blue-6);
+  outline-offset: 2px;
+}
+
+.header-logout-button {
+  color: var(--mantine-color-gray-7);
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.header-logout-button:hover {
+  background-color: var(--mantine-color-gray-1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+  transform: translateY(-1px) scale(1.02);
+}
+
+.header-logout-button:focus-visible {
+  outline: 2px solid var(--mantine-color-blue-6);
+  outline-offset: 2px;
+}
+
+.app-nav-link {
+  margin-bottom: 2px;
+  border-radius: var(--mantine-radius-md);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.app-nav-link:hover {
+  background-color: var(--mantine-color-gray-1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+  transform: translateX(3px);
+}
+
+.app-nav-link:focus-visible {
+  outline: 2px solid var(--mantine-color-blue-6);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-logo-link,
+  .header-logout-button,
+  .app-nav-link {
+    transition: none;
+  }
+
+  .header-logo-link:hover,
+  .header-logout-button:hover,
+  .app-nav-link:hover {
+    transform: none;
+  }
+}
