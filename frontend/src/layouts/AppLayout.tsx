@@ -34,6 +34,7 @@ const ADMIN_LINKS: NavItem[] = [
   { label: 'Users', to: '/admin/users' },
   { label: 'Rooms', to: '/admin/rooms' },
   { label: 'Equipment', to: '/admin/equipment' },
+  { label: 'Appointments', to: '/appointments' },
   { label: 'Forum', to: '/forum' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },

@@ -8,6 +8,7 @@ export interface RoomCreateInput {
 export interface RoomUpdateInput {
   name?: string
   is_active?: boolean
+  inactive_until?: string | null
 }
 
 export function listActiveRooms(token: string) {

@@ -23,6 +23,7 @@ class NotificationType(enum.StrEnum):
     appointment_expired = "appointment_expired"
     waitlist_slot_available = "waitlist_slot_available"
     patient_registration_request = "patient_registration_request"
+    resource_deactivated = "resource_deactivated"
 
 
 class Notification(TimestampMixin, Base):

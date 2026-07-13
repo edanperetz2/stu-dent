@@ -1,6 +1,7 @@
 from tests.helpers import (
     auth_header,
     create_and_login_patient,
+    create_default_room,
     create_equipment,
     create_patient,
     create_room,
@@ -26,6 +27,8 @@ def _book(
     body = {"start_time": start_time, "end_time": end_time}
     if patient_id is not None:
         body["patient_id"] = patient_id
+        if room_id is None:
+            room_id = create_default_room(client)
     if attending_id is not None:
         body["attending_id"] = attending_id
     if room_id is not None:
@@ -110,25 +113,47 @@ def test_student_accepts_proposed_patient_request(client):
 
     appointment = _book(client, patient_token).json()
     assert appointment["status"] == "proposed"
+    assert appointment["room_id"] is None
+
+    room_id = create_default_room(client)
+    response = client.post(
+        f"/appointments/{appointment['id']}/accept",
+        json={"room_id": room_id},
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "confirmed"
+    assert response.json()["room_id"] == room_id
+
+
+def test_accept_without_a_room_is_rejected(client):
+    student_token = register_and_login(client, "s6b@example.com", role="student")
+    _, patient_token = create_and_login_patient(client, student_token, "p6b@example.com")
+
+    appointment = _book(client, patient_token).json()
 
     response = client.post(
         f"/appointments/{appointment['id']}/accept", headers=auth_header(student_token)
     )
-    assert response.status_code == 200
-    assert response.json()["status"] == "confirmed"
+    assert response.status_code == 422
 
 
 def test_accept_twice_conflicts(client):
     student_token = register_and_login(client, "s7@example.com", role="student")
     _, patient_token = create_and_login_patient(client, student_token, "p7@example.com")
     appointment = _book(client, patient_token).json()
+    room_id = create_default_room(client)
 
     first = client.post(
-        f"/appointments/{appointment['id']}/accept", headers=auth_header(student_token)
+        f"/appointments/{appointment['id']}/accept",
+        json={"room_id": room_id},
+        headers=auth_header(student_token),
     )
     assert first.status_code == 200
     second = client.post(
-        f"/appointments/{appointment['id']}/accept", headers=auth_header(student_token)
+        f"/appointments/{appointment['id']}/accept",
+        json={"room_id": room_id},
+        headers=auth_header(student_token),
     )
     assert second.status_code == 409
 
@@ -173,6 +198,42 @@ def test_create_rejects_patient_not_owned_by_student(client):
 
     response = _book(client, student_token, patient_id=other_patient_id)
     assert response.status_code == 422
+
+
+def test_update_cannot_clear_room_id(client):
+    student_token = register_and_login(client, "s11c@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    appointment = _book(client, student_token, patient_id=patient_id).json()
+
+    response = client.patch(
+        f"/appointments/{appointment['id']}",
+        json={"room_id": None},
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 422
+
+
+def test_student_can_assign_room_to_pending_patient_request_before_accepting(client):
+    student_token = register_and_login(client, "s11d@example.com", role="student")
+    _, patient_token = create_and_login_patient(client, student_token, "p11d@example.com")
+    appointment = _book(client, patient_token).json()
+    room_id = create_default_room(client)
+
+    patched = client.patch(
+        f"/appointments/{appointment['id']}",
+        json={"room_id": room_id},
+        headers=auth_header(student_token),
+    )
+    assert patched.status_code == 200
+    assert patched.json()["room_id"] == room_id
+    assert patched.json()["status"] == "proposed"
+
+    accepted = client.post(
+        f"/appointments/{appointment['id']}/accept", headers=auth_header(student_token)
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "confirmed"
+    assert accepted.json()["room_id"] == room_id
 
 
 def test_reassigning_attending_without_time_change_is_awaiting_confirmation(client):

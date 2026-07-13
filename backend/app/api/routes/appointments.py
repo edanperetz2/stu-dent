@@ -9,7 +9,12 @@ from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.user import RoleEnum, User
-from app.schemas.appointment import AppointmentCreate, AppointmentOut, AppointmentUpdate
+from app.schemas.appointment import (
+    AppointmentAccept,
+    AppointmentCreate,
+    AppointmentOut,
+    AppointmentUpdate,
+)
 from app.services.audit import record_audit_log
 from app.services.patients import require_confirmed_patient
 from app.services.scheduling import (
@@ -60,6 +65,8 @@ def create_appointment(
     elif current_user.role == RoleEnum.student:
         if payload.patient_id is None:
             raise HTTPException(status_code=422, detail="patient_id is required")
+        if payload.room_id is None:
+            raise HTTPException(status_code=422, detail="room_id is required")
         student_id = current_user.id
         patient_id = payload.patient_id
         student_confirmed_at = datetime.now(UTC)
@@ -144,6 +151,9 @@ def update_appointment(
 
     fields = payload.model_dump(exclude_unset=True)
 
+    if "room_id" in fields and fields["room_id"] is None:
+        raise HTTPException(status_code=422, detail="room_id cannot be cleared")
+
     new_start = fields.get("start_time", appointment.start_time)
     new_end = fields.get("end_time", appointment.end_time)
     if new_end <= new_start:
@@ -198,6 +208,7 @@ def update_appointment(
 @router.post("/appointments/{appointment_id}/accept", response_model=AppointmentOut)
 def accept_appointment(
     appointment_id: uuid.UUID,
+    payload: AppointmentAccept | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Appointment:
@@ -206,6 +217,23 @@ def accept_appointment(
 
     if appointment.status != AppointmentStatus.proposed:
         raise HTTPException(status_code=409, detail="Only a proposed appointment can be accepted")
+
+    supplied_room_id = payload.room_id if payload is not None else None
+    room_id = supplied_room_id if supplied_room_id is not None else appointment.room_id
+    if room_id is None:
+        raise HTTPException(
+            status_code=422, detail="room_id is required to accept this appointment"
+        )
+    if room_id != appointment.room_id:
+        validate_participants(
+            db,
+            student_id=appointment.student_id,
+            patient_id=appointment.patient_id,
+            attending_id=appointment.attending_id,
+            room_id=room_id,
+            equipment_id=appointment.equipment_id,
+        )
+        appointment.room_id = room_id
 
     appointment.student_confirmed_at = datetime.now(UTC)
     recompute_status(appointment)

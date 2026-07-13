@@ -85,6 +85,7 @@ export function AppointmentsListPage() {
 
   const isStudent = principal?.role === 'student'
   const isPatient = principal?.role === 'patient'
+  const isAdmin = principal?.role === 'admin'
   const canCreate = isStudent || isPatient
 
   const { data: appointments, isLoading } = useQuery({
@@ -105,7 +106,7 @@ export function AppointmentsListPage() {
   const { data: rooms } = useQuery({
     queryKey: ['rooms'],
     queryFn: () => listActiveRooms(token),
-    enabled: isStudent,
+    enabled: isStudent || isAdmin,
   })
   const { data: equipment } = useQuery({
     queryKey: ['equipment'],
@@ -125,6 +126,7 @@ export function AppointmentsListPage() {
     },
     validate: {
       patient_id: (value) => (isStudent && !value ? 'Patient is required' : null),
+      room_id: (value) => (isStudent && !value ? 'Room is required' : null),
       start_time: (value) => (value ? null : 'Start time is required'),
       end_time: (value, values) =>
         value && values.start_time && value <= values.start_time
@@ -216,12 +218,24 @@ export function AppointmentsListPage() {
     () =>
       (appointments ?? []).map((appointment) => ({
         id: appointment.id,
-        title: `${appointment.patient_name} · ${appointment.status}`,
+        title: isAdmin
+          ? `${appointment.patient_name} · ${appointment.equipment_id ? 'equipment in use' : 'no equipment'}`
+          : `${appointment.patient_name} · ${appointment.status}`,
         start: new Date(appointment.start_time),
         end: new Date(appointment.end_time),
+        resourceId: appointment.room_id ?? undefined,
         resource: appointment,
       })),
-    [appointments],
+    [appointments, isAdmin],
+  )
+
+  // Admin's calendar shows rooms as resource lanes (a room-in-use view) --
+  // every appointment always ends up with a room once confirmed, so this
+  // is meaningful for every non-proposed appointment. Only built/passed
+  // for admin; other roles keep the plain per-user calendar.
+  const roomResources = useMemo(
+    () => (rooms ?? []).map((r) => ({ resourceId: r.id, resourceTitle: r.name })),
+    [rooms],
   )
 
   return (
@@ -298,6 +312,13 @@ export function AppointmentsListPage() {
             eventPropGetter={(event) => ({
               style: { backgroundColor: STATUS_CSS_COLORS[event.resource.status] },
             })}
+            {...(isAdmin
+              ? {
+                  resources: roomResources,
+                  resourceIdAccessor: 'resourceId',
+                  resourceTitleAccessor: 'resourceTitle',
+                }
+              : {})}
             style={{ height: '100%' }}
           />
         </div>
@@ -344,12 +365,7 @@ export function AppointmentsListPage() {
                   clearable
                   {...form.getInputProps('attending_id')}
                 />
-                <Select
-                  label="Room (optional)"
-                  data={roomOptions}
-                  clearable
-                  {...form.getInputProps('room_id')}
-                />
+                <Select label="Room" data={roomOptions} {...form.getInputProps('room_id')} />
                 <Select
                   label="Equipment (optional)"
                   data={equipmentOptions}

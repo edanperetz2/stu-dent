@@ -52,7 +52,17 @@ function appointmentAction(actionName: string) {
     })
 }
 
-export const acceptAppointment = appointmentAction('accept')
+// A patient-initiated request starts room-less; the owning student supplies
+// one here if the appointment doesn't already have one -- see backend
+// AppointmentAccept.
+export function acceptAppointment(token: string, appointmentId: string, roomId?: string) {
+  return request<Appointment>(`/appointments/${appointmentId}/accept`, {
+    method: 'POST',
+    body: roomId ? { room_id: roomId } : undefined,
+    token,
+  })
+}
+
 export const approveAppointment = appointmentAction('approve')
 export const rejectAppointment = appointmentAction('reject')
 export const cancelAppointment = appointmentAction('cancel')

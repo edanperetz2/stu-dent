@@ -98,3 +98,12 @@ def create_equipment(client, admin_token, name="Equip A", equipment_type=None):
         json={"name": name, "equipment_type": equipment_type},
         headers=auth_header(admin_token),
     ).json()["id"]
+
+
+def create_default_room(client) -> str:
+    """A throwaway admin + room, for tests that need *some* valid room for a
+    student-initiated booking (now required) but don't care which one."""
+    admin_token = register_and_login(
+        client, f"auto-room-admin-{uuid.uuid4().hex}@example.com", role="admin"
+    )
+    return create_room(client, admin_token, f"Auto Room {uuid.uuid4().hex}")

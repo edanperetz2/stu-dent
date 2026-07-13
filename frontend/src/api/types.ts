@@ -45,6 +45,7 @@ export interface Room {
   id: string
   name: string
   is_active: boolean
+  inactive_until: string | null
 }
 
 export interface Equipment {
@@ -52,6 +53,7 @@ export interface Equipment {
   name: string
   equipment_type: string | null
   is_active: boolean
+  inactive_until: string | null
 }
 
 export interface Appointment {

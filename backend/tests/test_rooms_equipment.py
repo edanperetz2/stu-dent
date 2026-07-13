@@ -1,4 +1,9 @@
-from tests.helpers import auth_header, register_and_login
+from datetime import UTC, datetime, timedelta
+
+from app.jobs.reactivation import reactivate_expired_deactivations
+from app.models.equipment import Equipment
+from app.models.room import Room
+from tests.helpers import auth_header, create_patient, register_and_login
 
 
 def _admin_token(client, email="rooms-admin1@example.com"):
@@ -106,3 +111,127 @@ def test_public_equipment_list_excludes_inactive(client):
 
     hidden = client.get("/equipment", headers=auth_header(attending_token))
     assert all(e["id"] != equipment_id for e in hidden.json())
+
+
+def test_deactivated_room_cannot_be_booked(client):
+    admin_token = _admin_token(client, "rooms-admin4@example.com")
+    student_token = register_and_login(client, "rooms-student4@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 505"}, headers=auth_header(admin_token)
+    ).json()["id"]
+    client.patch(
+        f"/admin/rooms/{room_id}", json={"is_active": False}, headers=auth_header(admin_token)
+    )
+
+    response = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "start_time": "2026-08-10T09:00:00+00:00",
+            "end_time": "2026-08-10T09:30:00+00:00",
+        },
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 422
+
+
+def test_deactivating_room_notifies_owning_student_via_message_and_notification(client):
+    admin_token = _admin_token(client, "rooms-admin5@example.com")
+    student_token = register_and_login(client, "rooms-student5@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 606"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "start_time": "2026-08-11T09:00:00+00:00",
+            "end_time": "2026-08-11T09:30:00+00:00",
+        },
+        headers=auth_header(student_token),
+    ).json()
+    assert appointment["status"] == "confirmed"
+
+    deactivated = client.patch(
+        f"/admin/rooms/{room_id}", json={"is_active": False}, headers=auth_header(admin_token)
+    )
+    assert deactivated.status_code == 200
+
+    admin_thread = client.get("/messages/admin", headers=auth_header(student_token)).json()
+    assert any("Room 606" in m["body"] for m in admin_thread)
+
+    student_notifications = client.get("/notifications", headers=auth_header(student_token)).json()
+    assert any(
+        n["notification_type"] == "resource_deactivated" and "Room 606" in n["message"]
+        for n in student_notifications
+    )
+
+
+def test_deactivating_room_with_no_future_appointments_sends_nothing(client):
+    admin_token = _admin_token(client, "rooms-admin6@example.com")
+    student_token = register_and_login(client, "rooms-student6@example.com", role="student")
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 707"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    client.patch(
+        f"/admin/rooms/{room_id}", json={"is_active": False}, headers=auth_header(admin_token)
+    )
+
+    admin_thread = client.get("/messages/admin", headers=auth_header(student_token)).json()
+    assert admin_thread == []
+
+
+def test_reactivating_room_clears_scheduled_deactivation(client):
+    admin_token = _admin_token(client, "rooms-admin7@example.com")
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 808"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    future = (datetime.now(UTC) + timedelta(days=3)).isoformat()
+    deactivated = client.patch(
+        f"/admin/rooms/{room_id}",
+        json={"is_active": False, "inactive_until": future},
+        headers=auth_header(admin_token),
+    )
+    assert deactivated.json()["inactive_until"] is not None
+
+    reactivated = client.patch(
+        f"/admin/rooms/{room_id}", json={"is_active": True}, headers=auth_header(admin_token)
+    )
+    assert reactivated.json()["is_active"] is True
+    assert reactivated.json()["inactive_until"] is None
+
+
+def test_reactivation_job_flips_expired_scheduled_deactivations(client, db_session):
+    admin_token = _admin_token(client, "rooms-admin8@example.com")
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 909"}, headers=auth_header(admin_token)
+    ).json()["id"]
+    equipment_id = client.post(
+        "/admin/equipment", json={"name": "Autoclave 909"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    past = datetime.now(UTC) - timedelta(minutes=1)
+    room_row = db_session.get(Room, room_id)
+    room_row.is_active = False
+    room_row.inactive_until = past
+    equipment_row = db_session.get(Equipment, equipment_id)
+    equipment_row.is_active = False
+    equipment_row.inactive_until = past
+    db_session.commit()
+
+    reactivated = reactivate_expired_deactivations(db_session)
+    assert reactivated == 2
+
+    room_row = db_session.get(Room, room_id)
+    assert room_row.is_active is True
+    assert room_row.inactive_until is None
+    equipment_row = db_session.get(Equipment, equipment_id)
+    assert equipment_row.is_active is True
+    assert equipment_row.inactive_until is None

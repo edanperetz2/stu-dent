@@ -1,6 +1,7 @@
 from tests.helpers import (
     auth_header,
     create_and_login_patient,
+    create_default_room,
     create_equipment,
     create_patient,
     create_room,
@@ -25,6 +26,8 @@ def _book(
     body = {"start_time": start_time, "end_time": end_time}
     if patient_id is not None:
         body["patient_id"] = patient_id
+        if room_id is None:
+            room_id = create_default_room(client)
     if attending_id is not None:
         body["attending_id"] = attending_id
     if room_id is not None:

@@ -1,18 +1,15 @@
 import { Badge, Button, Group, Modal, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiErrorMessage } from '../../api/httpClient'
-import {
-  createRoom,
-  listAllRooms,
-  updateRoom,
-  type RoomCreateInput,
-} from '../../api/rooms'
+import { createRoom, listAllRooms, updateRoom, type RoomCreateInput } from '../../api/rooms'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { LoadingText } from '../../components/StateText'
+import { mantineDateTimeToIso } from '../../utils/dates'
 
 export function RoomsPage() {
   const token = useAuthToken()
@@ -20,6 +17,9 @@ export function RoomsPage() {
   const [opened, { open, close }] = useDisclosure(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [deactivateOpened, { open: openDeactivate, close: closeDeactivate }] = useDisclosure(false)
+  const [deactivatingRoomId, setDeactivatingRoomId] = useState<string | null>(null)
+  const [reactivateAt, setReactivateAt] = useState<string | null>(null)
 
   const { data: rooms, isLoading } = useQuery({
     queryKey: ['admin', 'rooms'],
@@ -51,8 +51,15 @@ export function RoomsPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ roomId, ...payload }: { roomId: string; name?: string; is_active?: boolean }) =>
-      updateRoom(token, roomId, payload),
+    mutationFn: ({
+      roomId,
+      ...payload
+    }: {
+      roomId: string
+      name?: string
+      is_active?: boolean
+      inactive_until?: string | null
+    }) => updateRoom(token, roomId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'rooms'] })
       queryClient.invalidateQueries({ queryKey: ['rooms'] })
@@ -64,6 +71,22 @@ export function RoomsPage() {
       })
     },
   })
+
+  function handleDeactivateClick(roomId: string) {
+    setDeactivatingRoomId(roomId)
+    setReactivateAt(null)
+    openDeactivate()
+  }
+
+  function confirmDeactivate() {
+    if (!deactivatingRoomId) return
+    updateMutation.mutate({
+      roomId: deactivatingRoomId,
+      is_active: false,
+      inactive_until: reactivateAt ? mantineDateTimeToIso(reactivateAt) : null,
+    })
+    closeDeactivate()
+  }
 
   return (
     <Stack>
@@ -126,6 +149,11 @@ export function RoomsPage() {
                   <Badge color={room.is_active ? 'blue' : 'gray'}>
                     {room.is_active ? 'Active' : 'Inactive'}
                   </Badge>
+                  {!room.is_active && room.inactive_until && (
+                    <Text size="xs" c="dimmed">
+                      Reactivates {new Date(room.inactive_until).toLocaleString()}
+                    </Text>
+                  )}
                 </Table.Td>
                 <Table.Td>
                   <Button
@@ -134,7 +162,9 @@ export function RoomsPage() {
                     color={room.is_active ? 'red' : 'green'}
                     loading={updateMutation.isPending}
                     onClick={() =>
-                      updateMutation.mutate({ roomId: room.id, is_active: !room.is_active })
+                      room.is_active
+                        ? handleDeactivateClick(room.id)
+                        : updateMutation.mutate({ roomId: room.id, is_active: true })
                     }
                   >
                     {room.is_active ? 'Deactivate' : 'Activate'}
@@ -155,6 +185,23 @@ export function RoomsPage() {
             </Button>
           </Stack>
         </form>
+      </Modal>
+
+      <Modal opened={deactivateOpened} onClose={closeDeactivate} title="Deactivate room">
+        <Stack>
+          <Text size="sm" c="dimmed">
+            Students booking a future appointment in this room will be notified.
+          </Text>
+          <DateTimePicker
+            label="Automatically reactivate on (optional)"
+            clearable
+            value={reactivateAt}
+            onChange={setReactivateAt}
+          />
+          <Button color="red" loading={updateMutation.isPending} onClick={confirmDeactivate}>
+            Deactivate
+          </Button>
+        </Stack>
       </Modal>
     </Stack>
   )

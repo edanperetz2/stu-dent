@@ -4,6 +4,7 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   acceptAppointment,
@@ -67,6 +68,8 @@ export function AppointmentDetailPage() {
   const { principal } = useAuth()
   const queryClient = useQueryClient()
   const [editOpened, { open: openEdit, close: closeEdit }] = useDisclosure(false)
+  const [acceptOpened, { open: openAccept, close: closeAccept }] = useDisclosure(false)
+  const [acceptRoomId, setAcceptRoomId] = useState<string | null>(null)
 
   const { data: appointment, isLoading } = useQuery({
     queryKey: ['appointments', appointmentId],
@@ -108,6 +111,26 @@ export function AppointmentDetailPage() {
     },
   })
 
+  // A patient-initiated request starts room-less -- accepting it is the
+  // point where the owning student must supply one, so it gets its own
+  // mutation/modal instead of going through the generic actionMutation
+  // above (which assumes no extra input is needed).
+  const acceptMutation = useMutation({
+    mutationFn: (roomId?: string) => acceptAppointment(token, appointmentId!, roomId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['appointments', appointmentId], updated)
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      notifications.show({ message: 'Appointment updated', color: 'green' })
+      closeAccept()
+    },
+    onError: (err) => {
+      notifications.show({
+        message: apiErrorMessage(err, 'Action failed'),
+        color: 'red',
+      })
+    },
+  })
+
   const editForm = useForm<EditFormValues>({
     initialValues: {
       start_time: null,
@@ -116,6 +139,9 @@ export function AppointmentDetailPage() {
       room_id: null,
       equipment_id: null,
       notes: '',
+    },
+    validate: {
+      room_id: (value) => (value ? null : 'Room is required'),
     },
   })
 
@@ -140,8 +166,19 @@ export function AppointmentDetailPage() {
   if (!appointment || !principal) return <Text>Appointment not found.</Text>
 
   const actions = getAvailableActions(appointment, principal)
+  const acceptAction = actions.find((a) => a.name === 'accept')
+  const otherActions = actions.filter((a) => a.name !== 'accept')
   const isOwningStudent = isStudent && appointment.student_id === principal.id
   const isTerminal = TERMINAL_STATUSES.includes(appointment.status)
+
+  function handleAcceptClick() {
+    if (appointment!.room_id) {
+      acceptMutation.mutate(undefined)
+    } else {
+      setAcceptRoomId(null)
+      openAccept()
+    }
+  }
 
   function openEditModal() {
     editForm.setValues({
@@ -171,7 +208,17 @@ export function AppointmentDetailPage() {
       {appointment.notes && <Text>Notes: {appointment.notes}</Text>}
 
       <Group>
-        {actions.map((action) => (
+        {acceptAction && (
+          <Button
+            key={acceptAction.name}
+            color={acceptAction.color}
+            loading={acceptMutation.isPending}
+            onClick={handleAcceptClick}
+          >
+            {acceptAction.label}
+          </Button>
+        )}
+        {otherActions.map((action) => (
           <Button
             key={action.name}
             color={action.color}
@@ -213,7 +260,6 @@ export function AppointmentDetailPage() {
             <Select
               label="Room"
               data={(rooms ?? []).map((r) => ({ value: r.id, label: r.name }))}
-              clearable
               {...editForm.getInputProps('room_id')}
             />
             <Select
@@ -228,6 +274,24 @@ export function AppointmentDetailPage() {
             </Button>
           </Stack>
         </form>
+      </Modal>
+
+      <Modal opened={acceptOpened} onClose={closeAccept} title="Assign a room to accept">
+        <Stack>
+          <Select
+            label="Room"
+            data={(rooms ?? []).map((r) => ({ value: r.id, label: r.name }))}
+            value={acceptRoomId}
+            onChange={setAcceptRoomId}
+          />
+          <Button
+            disabled={!acceptRoomId}
+            loading={acceptMutation.isPending}
+            onClick={() => acceptMutation.mutate(acceptRoomId ?? undefined)}
+          >
+            Accept
+          </Button>
+        </Stack>
       </Modal>
     </Stack>
   )

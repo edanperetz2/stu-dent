@@ -9,6 +9,7 @@ from app.models.user import RoleEnum, User
 from tests.conftest import engine
 from tests.helpers import (
     auth_header,
+    create_default_room,
     create_equipment,
     create_patient,
     create_room,
@@ -32,11 +33,16 @@ def _book(
     start_time=START,
     end_time=END,
 ):
-    body = {"patient_id": patient_id, "start_time": start_time, "end_time": end_time}
+    if room_id is None:
+        room_id = create_default_room(client)
+    body = {
+        "patient_id": patient_id,
+        "room_id": room_id,
+        "start_time": start_time,
+        "end_time": end_time,
+    }
     if attending_id is not None:
         body["attending_id"] = attending_id
-    if room_id is not None:
-        body["room_id"] = room_id
     if equipment_id is not None:
         body["equipment_id"] = equipment_id
     return client.post("/appointments", json=body, headers=auth_header(token))

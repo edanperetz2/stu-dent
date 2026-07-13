@@ -20,9 +20,24 @@ class AppointmentUpdate(BaseModel):
     start_time: datetime | None = None
     end_time: datetime | None = None
     attending_id: uuid.UUID | None = None
+    # Not `uuid.UUID | None = None` on purpose: that shape can't tell "not
+    # provided" apart from "explicitly clear it" once combined with
+    # exclude_unset, and room can never be cleared. The route rejects an
+    # explicit null itself; see PATCH /appointments/{id}.
     room_id: uuid.UUID | None = None
     equipment_id: uuid.UUID | None = None
     notes: str | None = None
+
+
+class AppointmentAccept(BaseModel):
+    """Body for POST /appointments/{id}/accept. A patient-initiated request
+    starts room-less (patients can't pick one); the owning student supplies
+    it here if the appointment doesn't already have one. Optional only
+    because it's a no-op to resend the same value the appointment already
+    has.
+    """
+
+    room_id: uuid.UUID | None = None
 
 
 class AppointmentOut(BaseModel):

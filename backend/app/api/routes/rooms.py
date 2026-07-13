@@ -10,6 +10,7 @@ from app.models.room import Room
 from app.models.user import RoleEnum, User
 from app.schemas.room import RoomCreate, RoomOut, RoomUpdate
 from app.services.audit import record_audit_log
+from app.services.resource_availability import notify_students_of_deactivation
 
 router = APIRouter(tags=["rooms"])
 
@@ -56,11 +57,16 @@ def update_room(
     db: Session = Depends(get_db),
 ) -> Room:
     room = get_or_404(db, Room, room_id, detail="Room not found")
+    was_active = room.is_active
 
     if payload.name is not None:
         room.name = payload.name
     if payload.is_active is not None:
         room.is_active = payload.is_active
+        if payload.is_active:
+            room.inactive_until = None
+    if payload.inactive_until is not None:
+        room.inactive_until = payload.inactive_until
 
     record_audit_log(
         db,
@@ -69,6 +75,16 @@ def update_room(
         target_type="room",
         target_id=room.id,
     )
+
+    if was_active and not room.is_active:
+        notify_students_of_deactivation(
+            db,
+            actor=current_user,
+            resource_kind="room",
+            resource_id=room.id,
+            resource_name=room.name,
+        )
+
     db.commit()
     db.refresh(room)
     return room

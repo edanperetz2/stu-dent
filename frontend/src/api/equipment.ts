@@ -10,6 +10,7 @@ export interface EquipmentUpdateInput {
   name?: string
   equipment_type?: string | null
   is_active?: boolean
+  inactive_until?: string | null
 }
 
 export function listActiveEquipment(token: string) {

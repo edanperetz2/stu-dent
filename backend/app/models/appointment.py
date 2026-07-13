@@ -100,6 +100,13 @@ class Appointment(TimestampMixin, Base):
     attending_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
     )
+    # Every appointment must end up in a room -- enforced by application
+    # logic (create_appointment/accept_appointment/update_appointment), not
+    # a DB NOT NULL: a patient-initiated request starts room-less (patients
+    # can't pick one) while still `proposed`, and the owning student
+    # supplies one before/while accepting it, see
+    # POST /appointments/{id}/accept. Once set, a room can never be
+    # cleared back to null (see AppointmentUpdate).
     room_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("rooms.id"), nullable=True, index=True
     )

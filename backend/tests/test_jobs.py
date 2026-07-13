@@ -3,15 +3,22 @@ from datetime import UTC, datetime, timedelta
 from app.jobs.expiry import expire_stale_appointments
 from app.jobs.reminders import send_appointment_reminders
 from app.models.appointment import Appointment, AppointmentStatus
-from tests.helpers import auth_header, create_patient, register_and_login
+from tests.helpers import auth_header, create_default_room, create_patient, register_and_login
 
 
 def _iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
-def _book(client, token, *, patient_id, attending_id=None, start_time, end_time):
-    body = {"patient_id": patient_id, "start_time": start_time, "end_time": end_time}
+def _book(client, token, *, patient_id, attending_id=None, room_id=None, start_time, end_time):
+    if room_id is None:
+        room_id = create_default_room(client)
+    body = {
+        "patient_id": patient_id,
+        "room_id": room_id,
+        "start_time": start_time,
+        "end_time": end_time,
+    }
     if attending_id is not None:
         body["attending_id"] = attending_id
     return client.post("/appointments", json=body, headers=auth_header(token))

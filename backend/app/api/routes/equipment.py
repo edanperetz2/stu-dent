@@ -10,6 +10,7 @@ from app.models.equipment import Equipment
 from app.models.user import RoleEnum, User
 from app.schemas.equipment import EquipmentCreate, EquipmentOut, EquipmentUpdate
 from app.services.audit import record_audit_log
+from app.services.resource_availability import notify_students_of_deactivation
 
 router = APIRouter(tags=["equipment"])
 
@@ -52,6 +53,7 @@ def update_equipment(
     db: Session = Depends(get_db),
 ) -> Equipment:
     equipment = get_or_404(db, Equipment, equipment_id, detail="Equipment not found")
+    was_active = equipment.is_active
 
     if payload.name is not None:
         equipment.name = payload.name
@@ -59,6 +61,10 @@ def update_equipment(
         equipment.equipment_type = payload.equipment_type
     if payload.is_active is not None:
         equipment.is_active = payload.is_active
+        if payload.is_active:
+            equipment.inactive_until = None
+    if payload.inactive_until is not None:
+        equipment.inactive_until = payload.inactive_until
 
     record_audit_log(
         db,
@@ -67,6 +73,16 @@ def update_equipment(
         target_type="equipment",
         target_id=equipment.id,
     )
+
+    if was_active and not equipment.is_active:
+        notify_students_of_deactivation(
+            db,
+            actor=current_user,
+            resource_kind="equipment",
+            resource_id=equipment.id,
+            resource_name=equipment.name,
+        )
+
     db.commit()
     db.refresh(equipment)
     return equipment

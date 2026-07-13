@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -10,6 +11,10 @@ class RoomCreate(BaseModel):
 class RoomUpdate(BaseModel):
     name: str | None = None
     is_active: bool | None = None
+    # Only meaningful alongside is_active=False -- schedules an automatic
+    # reactivation instead of an indefinite one. Reactivating (is_active=True)
+    # always clears it server-side, regardless of what's passed here.
+    inactive_until: datetime | None = None
 
 
 class RoomOut(BaseModel):
@@ -18,3 +23,4 @@ class RoomOut(BaseModel):
     id: uuid.UUID
     name: str
     is_active: bool
+    inactive_until: datetime | None

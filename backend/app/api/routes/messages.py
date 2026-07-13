@@ -14,7 +14,6 @@ from app.models.conversation import (
     Message,
 )
 from app.models.user import RoleEnum, User
-from app.realtime.events import publish
 from app.schemas.messaging import (
     ContactOut,
     GroupCreate,
@@ -23,19 +22,18 @@ from app.schemas.messaging import (
     MessageOut,
     ReadReceiptOut,
 )
-from app.services.audit import record_audit_log
 from app.services.messaging import (
     active_admin_ids,
     admin_key,
     can_message_directly,
     create_group_conversation,
     direct_key,
-    ensure_participant,
     get_or_create_conversation,
     is_participant,
     list_contacts,
     list_conversation_messages,
     list_participants,
+    send_message,
     touch_read,
 )
 from app.services.patients import require_confirmed_patient
@@ -51,49 +49,6 @@ def _get_active_user_or_404(db: Session, user_id: uuid.UUID) -> User:
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
-
-
-def _send_message(
-    db: Session,
-    *,
-    conversation: Conversation,
-    sender: User,
-    body: str,
-    recipient_ids: list[uuid.UUID],
-) -> Message:
-    ensure_participant(db, conversation, sender.id)
-
-    message = Message(conversation_id=conversation.id, sender_id=sender.id, body=body)
-    db.add(message)
-    db.flush()
-
-    record_audit_log(
-        db,
-        action="message_create",
-        actor_id=sender.id,
-        target_type="message",
-        target_id=message.id,
-    )
-    touch_read(db, conversation, sender.id)
-
-    for recipient_id in recipient_ids:
-        if recipient_id == sender.id:
-            continue
-        publish(
-            db,
-            recipient_id=recipient_id,
-            event={
-                "event": "message",
-                "conversation_id": str(conversation.id),
-                "id": str(message.id),
-                "body": message.body,
-                "sender_id": str(sender.id),
-            },
-        )
-
-    db.commit()
-    db.refresh(message)
-    return message
 
 
 @router.get("/contacts", response_model=list[ContactOut])
@@ -147,7 +102,7 @@ def send_direct_message(
         key=direct_key(current_user.id, other.id),
         participant_ids=[current_user.id, other.id],
     )
-    return _send_message(
+    return send_message(
         db,
         conversation=conversation,
         sender=current_user,
@@ -214,7 +169,7 @@ def send_own_admin_message(
         participant_ids=[current_user.id],
     )
     recipients = active_admin_ids(db)
-    return _send_message(
+    return send_message(
         db,
         conversation=conversation,
         sender=current_user,
@@ -273,7 +228,7 @@ def send_admin_inbox_message(
         db, kind=ConversationKind.admin, key=admin_key(owner.id), participant_ids=[owner.id]
     )
     recipients = [owner.id, *(a for a in active_admin_ids(db) if a != current_user.id)]
-    return _send_message(
+    return send_message(
         db,
         conversation=conversation,
         sender=current_user,
@@ -398,7 +353,7 @@ def send_group_message(
 ) -> Message:
     conversation = _get_group_or_404(db, conversation_id, current_user)
     recipients = [p.id for p in list_participants(db, conversation_id)]
-    return _send_message(
+    return send_message(
         db,
         conversation=conversation,
         sender=current_user,

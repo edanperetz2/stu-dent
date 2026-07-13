@@ -11,6 +11,8 @@ from app.models.conversation import (
     Message,
 )
 from app.models.user import RoleEnum, User
+from app.realtime.events import publish
+from app.services.audit import record_audit_log
 from app.services.users import active_user_filters
 
 
@@ -159,3 +161,53 @@ def active_admin_ids(db: Session) -> list[uuid.UUID]:
 
 def is_participant(db: Session, conversation_id: uuid.UUID, user_id: uuid.UUID) -> bool:
     return db.get(ConversationParticipant, (conversation_id, user_id)) is not None
+
+
+def send_message(
+    db: Session,
+    *,
+    conversation: Conversation,
+    sender: User,
+    body: str,
+    recipient_ids: list[uuid.UUID],
+) -> Message:
+    """Insert a message, audit-log it, mark the sender caught up, and
+    publish a realtime event to every other recipient. Commits on its own
+    (like services/notifications.py::notify's callers are expected to for
+    their own writes) since every current caller -- the messages routes,
+    and system-triggered sends like a room/equipment deactivation notice --
+    treats one message as a complete, independent unit of work.
+    """
+    ensure_participant(db, conversation, sender.id)
+
+    message = Message(conversation_id=conversation.id, sender_id=sender.id, body=body)
+    db.add(message)
+    db.flush()
+
+    record_audit_log(
+        db,
+        action="message_create",
+        actor_id=sender.id,
+        target_type="message",
+        target_id=message.id,
+    )
+    touch_read(db, conversation, sender.id)
+
+    for recipient_id in recipient_ids:
+        if recipient_id == sender.id:
+            continue
+        publish(
+            db,
+            recipient_id=recipient_id,
+            event={
+                "event": "message",
+                "conversation_id": str(conversation.id),
+                "id": str(message.id),
+                "body": message.body,
+                "sender_id": str(sender.id),
+            },
+        )
+
+    db.commit()
+    db.refresh(message)
+    return message

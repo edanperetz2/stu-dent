@@ -1,8 +1,10 @@
-import { Badge, Button, Group, Modal, Stack, Table, TextInput, Title } from '@mantine/core'
+import { Badge, Button, Group, Modal, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import {
   createEquipment,
   listAllEquipment,
@@ -12,11 +14,15 @@ import {
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { LoadingText } from '../../components/StateText'
+import { mantineDateTimeToIso } from '../../utils/dates'
 
 export function EquipmentPage() {
   const token = useAuthToken()
   const queryClient = useQueryClient()
   const [opened, { open, close }] = useDisclosure(false)
+  const [deactivateOpened, { open: openDeactivate, close: closeDeactivate }] = useDisclosure(false)
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
+  const [reactivateAt, setReactivateAt] = useState<string | null>(null)
 
   const { data: equipment, isLoading } = useQuery({
     queryKey: ['admin', 'equipment'],
@@ -47,9 +53,15 @@ export function EquipmentPage() {
     },
   })
 
-  const toggleActiveMutation = useMutation({
-    mutationFn: ({ equipmentId, is_active }: { equipmentId: string; is_active: boolean }) =>
-      updateEquipment(token, equipmentId, { is_active }),
+  const updateMutation = useMutation({
+    mutationFn: ({
+      equipmentId,
+      ...payload
+    }: {
+      equipmentId: string
+      is_active?: boolean
+      inactive_until?: string | null
+    }) => updateEquipment(token, equipmentId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'equipment'] })
       queryClient.invalidateQueries({ queryKey: ['equipment'] })
@@ -61,6 +73,22 @@ export function EquipmentPage() {
       })
     },
   })
+
+  function handleDeactivateClick(equipmentId: string) {
+    setDeactivatingId(equipmentId)
+    setReactivateAt(null)
+    openDeactivate()
+  }
+
+  function confirmDeactivate() {
+    if (!deactivatingId) return
+    updateMutation.mutate({
+      equipmentId: deactivatingId,
+      is_active: false,
+      inactive_until: reactivateAt ? mantineDateTimeToIso(reactivateAt) : null,
+    })
+    closeDeactivate()
+  }
 
   return (
     <Stack>
@@ -90,18 +118,22 @@ export function EquipmentPage() {
                   <Badge color={item.is_active ? 'blue' : 'gray'}>
                     {item.is_active ? 'Active' : 'Inactive'}
                   </Badge>
+                  {!item.is_active && item.inactive_until && (
+                    <Text size="xs" c="dimmed">
+                      Reactivates {new Date(item.inactive_until).toLocaleString()}
+                    </Text>
+                  )}
                 </Table.Td>
                 <Table.Td>
                   <Button
                     size="xs"
                     variant="light"
                     color={item.is_active ? 'red' : 'green'}
-                    loading={toggleActiveMutation.isPending}
+                    loading={updateMutation.isPending}
                     onClick={() =>
-                      toggleActiveMutation.mutate({
-                        equipmentId: item.id,
-                        is_active: !item.is_active,
-                      })
+                      item.is_active
+                        ? handleDeactivateClick(item.id)
+                        : updateMutation.mutate({ equipmentId: item.id, is_active: true })
                     }
                   >
                     {item.is_active ? 'Deactivate' : 'Activate'}
@@ -123,6 +155,23 @@ export function EquipmentPage() {
             </Button>
           </Stack>
         </form>
+      </Modal>
+
+      <Modal opened={deactivateOpened} onClose={closeDeactivate} title="Deactivate equipment">
+        <Stack>
+          <Text size="sm" c="dimmed">
+            Students booking a future appointment using this equipment will be notified.
+          </Text>
+          <DateTimePicker
+            label="Automatically reactivate on (optional)"
+            clearable
+            value={reactivateAt}
+            onChange={setReactivateAt}
+          />
+          <Button color="red" loading={updateMutation.isPending} onClick={confirmDeactivate}>
+            Deactivate
+          </Button>
+        </Stack>
       </Modal>
     </Stack>
   )
