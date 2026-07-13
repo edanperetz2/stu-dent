@@ -40,3 +40,9 @@ class AppointmentOut(BaseModel):
     student_confirmed_at: datetime | None
     attending_approved_at: datetime | None
     notes: str | None
+    # Resolved from the corresponding _id column for display -- see
+    # Appointment's eager-loaded relationships/computed properties.
+    student_name: str
+    patient_name: str
+    attending_name: str | None
+    room_name: str | None

@@ -164,6 +164,10 @@ export function AppointmentDetailPage() {
 
       <Text>Start: {new Date(appointment.start_time).toLocaleString()}</Text>
       <Text>End: {new Date(appointment.end_time).toLocaleString()}</Text>
+      <Text>Student: {appointment.student_name}</Text>
+      <Text>Patient: {appointment.patient_name}</Text>
+      <Text>Attending: {appointment.attending_name ?? '—'}</Text>
+      <Text>Room: {appointment.room_name ?? '—'}</Text>
       {appointment.notes && <Text>Notes: {appointment.notes}</Text>}
 
       <Group>

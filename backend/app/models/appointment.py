@@ -14,10 +14,12 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.mixins import TimestampMixin
+from app.models.room import Room
+from app.models.user import User
 
 
 class AppointmentStatus(enum.StrEnum):
@@ -137,3 +139,29 @@ class Appointment(TimestampMixin, Base):
     )
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Eager-loaded: every appointment listing/detail view also needs
+    # participant and room names, so this avoids an N+1 lookup per row --
+    # same pattern as Message.sender.
+    student: Mapped[User] = relationship("User", foreign_keys=[student_id], lazy="joined")
+    patient: Mapped[User] = relationship("User", foreign_keys=[patient_id], lazy="joined")
+    attending: Mapped[User | None] = relationship(
+        "User", foreign_keys=[attending_id], lazy="joined"
+    )
+    room: Mapped[Room | None] = relationship("Room", lazy="joined")
+
+    @property
+    def student_name(self) -> str:
+        return self.student.full_name
+
+    @property
+    def patient_name(self) -> str:
+        return self.patient.full_name
+
+    @property
+    def attending_name(self) -> str | None:
+        return self.attending.full_name if self.attending else None
+
+    @property
+    def room_name(self) -> str | None:
+        return self.room.name if self.room else None

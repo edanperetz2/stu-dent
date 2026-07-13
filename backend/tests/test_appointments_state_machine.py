@@ -385,3 +385,34 @@ def test_equipment_reference_validated(client):
     accepted = _book(client, student_token, patient_id=patient_id, equipment_id=equipment_id)
     assert accepted.status_code == 201
     assert accepted.json()["equipment_id"] == equipment_id
+
+
+def test_response_includes_denormalized_participant_and_room_names(client):
+    student_token = register_and_login(
+        client, "s20@example.com", role="student", full_name="Stu Dent"
+    )
+    attending_token = register_and_login(
+        client, "a20@example.com", role="attending", full_name="Dr. Attend"
+    )
+    admin_token = register_and_login(client, "admin20@example.com", role="admin")
+    attending_id = client.get("/users/me", headers=auth_header(attending_token)).json()["id"]
+    patient_id = create_patient(client, student_token, full_name="Pat Ient")
+    room_id = create_room(client, admin_token, "Room 20")
+
+    response = _book(
+        client,
+        student_token,
+        patient_id=patient_id,
+        attending_id=attending_id,
+        room_id=room_id,
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["student_name"] == "Stu Dent"
+    assert body["patient_name"] == "Pat Ient"
+    assert body["attending_name"] == "Dr. Attend"
+    assert body["room_name"] == "Room 20"
+
+    listed = client.get("/appointments", headers=auth_header(student_token)).json()
+    booked = next(a for a in listed if a["id"] == body["id"])
+    assert booked["room_name"] == "Room 20"

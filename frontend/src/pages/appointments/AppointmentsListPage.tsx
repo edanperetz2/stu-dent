@@ -3,6 +3,7 @@ import {
   Button,
   Group,
   Modal,
+  SegmentedControl,
   Select,
   Stack,
   Table,
@@ -15,7 +16,9 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import dayjs from 'dayjs'
+import { useMemo, useState } from 'react'
+import { Calendar, dayjsLocalizer, type SlotInfo, type View } from 'react-big-calendar'
 import { useNavigate } from 'react-router-dom'
 import {
   createAppointment,
@@ -44,6 +47,20 @@ const STATUS_COLORS: Record<AppointmentStatus, string> = {
   rescheduling_requested: 'yellow',
 }
 
+// react-big-calendar's eventPropGetter needs a real CSS color, not a
+// Mantine theme key -- these are the hex values behind STATUS_COLORS above.
+const STATUS_CSS_COLORS: Record<AppointmentStatus, string> = {
+  proposed: '#868e96',
+  awaiting_confirmation: '#f59f00',
+  confirmed: '#2f9e44',
+  cancelled: '#e03131',
+  completed: '#1971c2',
+  no_show: '#e8590c',
+  rescheduling_requested: '#f59f00',
+}
+
+const localizer = dayjsLocalizer(dayjs)
+
 interface CreateFormValues {
   patient_id: string
   attending_id: string | null
@@ -63,9 +80,12 @@ export function AppointmentsListPage() {
   const [opened, { open, close }] = useDisclosure(false)
   const [describeText, setDescribeText] = useState('')
   const [interpretWarnings, setInterpretWarnings] = useState<string[]>([])
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
+  const [calendarView, setCalendarView] = useState<View>('week')
 
   const isStudent = principal?.role === 'student'
   const isPatient = principal?.role === 'patient'
+  const canCreate = isStudent || isPatient
 
   const { data: appointments, isLoading } = useQuery({
     queryKey: ['appointments'],
@@ -159,6 +179,19 @@ export function AppointmentsListPage() {
     open()
   }
 
+  function handleSelectSlot(slotInfo: SlotInfo) {
+    if (!canCreate) return
+    handleOpenModal()
+    form.setValues({
+      start_time: isoToMantineDateTime(slotInfo.start.toISOString()),
+      end_time: isoToMantineDateTime(slotInfo.end.toISOString()),
+    })
+  }
+
+  function handleSelectEvent(event: { id: string }) {
+    navigate(`/appointments/${event.id}`)
+  }
+
   function handleSubmit(values: CreateFormValues) {
     const payload: AppointmentCreateInput = {
       start_time: mantineDateTimeToIso(values.start_time!),
@@ -179,22 +212,48 @@ export function AppointmentsListPage() {
   const roomOptions = (rooms ?? []).map((r) => ({ value: r.id, label: r.name }))
   const equipmentOptions = (equipment ?? []).map((e) => ({ value: e.id, label: e.name }))
 
+  const calendarEvents = useMemo(
+    () =>
+      (appointments ?? []).map((appointment) => ({
+        id: appointment.id,
+        title: `${appointment.patient_name} · ${appointment.status}`,
+        start: new Date(appointment.start_time),
+        end: new Date(appointment.end_time),
+        resource: appointment,
+      })),
+    [appointments],
+  )
+
   return (
     <Stack>
       <Group justify="space-between">
         <Title order={2}>Appointments</Title>
-        {(isStudent || isPatient) && <Button onClick={handleOpenModal}>New Appointment</Button>}
+        <Group>
+          <SegmentedControl
+            value={viewMode}
+            onChange={(value) => setViewMode(value as 'list' | 'calendar')}
+            data={[
+              { label: 'List', value: 'list' },
+              { label: 'Calendar', value: 'calendar' },
+            ]}
+          />
+          {canCreate && <Button onClick={handleOpenModal}>New Appointment</Button>}
+        </Group>
       </Group>
 
       {isLoading ? (
         <LoadingText />
-      ) : (
+      ) : viewMode === 'list' ? (
         <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Start</Table.Th>
               <Table.Th>End</Table.Th>
               <Table.Th>Status</Table.Th>
+              <Table.Th>Student</Table.Th>
+              <Table.Th>Patient</Table.Th>
+              <Table.Th>Attending</Table.Th>
+              <Table.Th>Room</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -217,10 +276,31 @@ export function AppointmentsListPage() {
                 <Table.Td>
                   <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
                 </Table.Td>
+                <Table.Td>{appointment.student_name}</Table.Td>
+                <Table.Td>{appointment.patient_name}</Table.Td>
+                <Table.Td>{appointment.attending_name ?? '—'}</Table.Td>
+                <Table.Td>{appointment.room_name ?? '—'}</Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
         </Table>
+      ) : (
+        <div style={{ height: 700 }}>
+          <Calendar
+            localizer={localizer}
+            events={calendarEvents}
+            views={['month', 'week', 'day']}
+            view={calendarView}
+            onView={setCalendarView}
+            selectable={canCreate}
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={handleSelectEvent}
+            eventPropGetter={(event) => ({
+              style: { backgroundColor: STATUS_CSS_COLORS[event.resource.status] },
+            })}
+            style={{ height: '100%' }}
+          />
+        </div>
       )}
 
       <Modal opened={opened} onClose={close} title="New Appointment">

@@ -21,6 +21,10 @@ function makeAppointment(overrides: Partial<Appointment> = {}): Appointment {
     student_confirmed_at: null,
     attending_approved_at: null,
     notes: null,
+    student_name: 'Student',
+    patient_name: 'Patient',
+    attending_name: 'Attending',
+    room_name: null,
     ...overrides,
   }
 }

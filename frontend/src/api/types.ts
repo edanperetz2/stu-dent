@@ -67,6 +67,10 @@ export interface Appointment {
   student_confirmed_at: string | null
   attending_approved_at: string | null
   notes: string | null
+  student_name: string
+  patient_name: string
+  attending_name: string | null
+  room_name: string | null
 }
 
 export interface AvailabilityWindow {
