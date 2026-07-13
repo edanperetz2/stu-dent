@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password
 from app.database import SessionLocal
 from app.models.appointment import Appointment, AppointmentStatus
-from app.models.direct_message import DirectMessage
+from app.models.conversation import Conversation, ConversationKind, ConversationParticipant, Message
 from app.models.equipment import Equipment
 from app.models.forum_comment import ForumComment
 from app.models.forum_comment_vote import ForumCommentVote
@@ -27,6 +27,7 @@ from app.models.room import Room
 from app.models.student_availability import StudentAvailability
 from app.models.user import RoleEnum, User
 from app.models.waitlist_entry import WaitlistEntry, WaitlistStatus
+from app.services.messaging import admin_key, direct_key
 from app.services.notifications import notify
 from app.services.report_assistant import generate_periodic_report
 from app.services.scheduling import recompute_status, validate_participants
@@ -412,11 +413,39 @@ def _seed_forum(db: Session, students: list[User]) -> None:
     db.flush()
 
 
-def _seed_direct_messages(db: Session, students: list[User], patients: list[User]) -> None:
+def _seed_messages(
+    db: Session,
+    students: list[User],
+    attendings: list[User],
+    patients: list[User],
+    admin: User,
+) -> None:
+    """One thread of each conversation kind, so all four messaging surfaces
+    (patient<->student, student<->attending, the shared admin inbox, and a
+    student/attending group chat) render real data out of the box.
+    """
     student = students[1]
     patient = patients[1]
     now = datetime.now(UTC)
 
+    # Direct: patient <-> owning student.
+    patient_thread = Conversation(
+        kind=ConversationKind.direct, direct_key=direct_key(student.id, patient.id)
+    )
+    db.add(patient_thread)
+    db.flush()
+    db.add_all(
+        [
+            ConversationParticipant(
+                conversation_id=patient_thread.id, user_id=student.id, last_read_at=now
+            ),
+            ConversationParticipant(
+                conversation_id=patient_thread.id,
+                user_id=patient.id,
+                last_read_at=now - timedelta(minutes=5),
+            ),
+        ]
+    )
     exchanges = [
         (
             patient.id,
@@ -432,13 +461,96 @@ def _seed_direct_messages(db: Session, students: list[User], patients: list[User
         ),
         (patient.id, "Great, thank you!", now - timedelta(minutes=5)),
     ]
-    for i, (sender_id, body, created_at) in enumerate(exchanges):
-        message = DirectMessage(
-            patient_id=patient.id, sender_id=sender_id, body=body, created_at=created_at
+    for sender_id, body, created_at in exchanges:
+        db.add(
+            Message(
+                conversation_id=patient_thread.id,
+                sender_id=sender_id,
+                body=body,
+                created_at=created_at,
+            )
         )
-        if i < 2:
-            message.read_at = created_at + timedelta(minutes=5)
-        db.add(message)
+
+    # Direct: student <-> attending.
+    other_student = students[0]
+    attending = attendings[0]
+    attending_thread = Conversation(
+        kind=ConversationKind.direct, direct_key=direct_key(other_student.id, attending.id)
+    )
+    db.add(attending_thread)
+    db.flush()
+    db.add_all(
+        [
+            ConversationParticipant(conversation_id=attending_thread.id, user_id=other_student.id),
+            ConversationParticipant(conversation_id=attending_thread.id, user_id=attending.id),
+        ]
+    )
+    db.add(
+        Message(
+            conversation_id=attending_thread.id,
+            sender_id=other_student.id,
+            body="Could you review my case notes before tomorrow's procedure?",
+            created_at=now - timedelta(hours=1),
+        )
+    )
+    db.add(
+        Message(
+            conversation_id=attending_thread.id,
+            sender_id=attending.id,
+            body="Sent some feedback over -- looks good overall.",
+            created_at=now - timedelta(minutes=45),
+        )
+    )
+
+    # Shared admin inbox: a patient reaching out to admin.
+    admin_thread = Conversation(kind=ConversationKind.admin, direct_key=admin_key(patient.id))
+    db.add(admin_thread)
+    db.flush()
+    db.add(ConversationParticipant(conversation_id=admin_thread.id, user_id=patient.id))
+    db.add(
+        Message(
+            conversation_id=admin_thread.id,
+            sender_id=patient.id,
+            body="Hi, I'm having trouble logging in on the mobile site.",
+            created_at=now - timedelta(hours=3),
+        )
+    )
+    db.add(
+        Message(
+            conversation_id=admin_thread.id,
+            sender_id=admin.id,
+            body="Thanks for flagging it -- we're looking into it.",
+            created_at=now - timedelta(hours=2, minutes=30),
+        )
+    )
+
+    # Group chat among students/attendings.
+    group = Conversation(kind=ConversationKind.group, title="Case review - Week 3")
+    db.add(group)
+    db.flush()
+    db.add_all(
+        [
+            ConversationParticipant(conversation_id=group.id, user_id=students[0].id),
+            ConversationParticipant(conversation_id=group.id, user_id=students[1].id),
+            ConversationParticipant(conversation_id=group.id, user_id=attendings[0].id),
+        ]
+    )
+    db.add(
+        Message(
+            conversation_id=group.id,
+            sender_id=students[0].id,
+            body="Sharing this week's tricky cases here.",
+            created_at=now - timedelta(hours=4),
+        )
+    )
+    db.add(
+        Message(
+            conversation_id=group.id,
+            sender_id=attendings[0].id,
+            body="Great idea -- I'll chime in after reviewing.",
+            created_at=now - timedelta(hours=3, minutes=30),
+        )
+    )
     db.flush()
 
 
@@ -467,6 +579,7 @@ def main() -> None:
         users = _seed_users(db)
         students = users["students"]
         attendings = users["attendings"]
+        admin = users["admin"]
 
         rooms, equipment = _seed_rooms_and_equipment(db)
         _seed_availability(db, students)
@@ -475,7 +588,7 @@ def main() -> None:
         _seed_waitlist(db, students, patients)
         _seed_notifications(db, students, patients, appointments)
         _seed_forum(db, students)
-        _seed_direct_messages(db, students, patients)
+        _seed_messages(db, students, attendings, patients, admin)
         _seed_reports(db, students, attendings)
 
         db.commit()

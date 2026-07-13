@@ -118,13 +118,26 @@ export interface ForumComment {
   updated_at: string
 }
 
-export interface DirectMessage {
+export interface Message {
   id: string
-  patient_id: string
+  conversation_id: string
   sender_id: string
+  sender_name: string
   body: string
-  read_at: string | null
   created_at: string
+}
+
+export interface Contact {
+  id: string
+  full_name: string
+  role: Role
+}
+
+export interface GroupSummary {
+  id: string
+  title: string
+  participant_ids: string[]
+  participant_names: string[]
 }
 
 export interface AuditLogEntry {
@@ -156,7 +169,7 @@ export interface Report {
 }
 
 export interface RealtimeEvent {
-  event: 'notification' | 'direct_message'
+  event: 'notification' | 'message'
   recipient_id: string
   [key: string]: unknown
 }

@@ -56,8 +56,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         const data = JSON.parse(event.data) as RealtimeEvent
         if (data.event === 'notification') {
           queryClient.invalidateQueries({ queryKey: ['notifications'] })
-        } else if (data.event === 'direct_message') {
-          queryClient.invalidateQueries({ queryKey: ['messages', data.patient_id] })
+        } else if (data.event === 'message') {
+          // Broad prefix match: also refreshes the contacts/groups sidebar
+          // lists, not just the open thread, since a new message can be the
+          // first one in a not-yet-listed conversation.
+          queryClient.invalidateQueries({ queryKey: ['messages'] })
         }
       }
     }

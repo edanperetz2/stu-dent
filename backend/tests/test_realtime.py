@@ -2,13 +2,14 @@ import json
 
 import psycopg
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token
 from app.database import get_db
 from app.main import app
 from app.models.audit_log import AuditLog
-from app.models.direct_message import DirectMessage
+from app.models.conversation import Conversation, ConversationKind, ConversationParticipant, Message
 from app.models.notification import Notification, NotificationType
 from app.models.user import RoleEnum, User
 from app.realtime.events import CHANNEL
@@ -133,14 +134,14 @@ def test_websocket_receives_direct_message_live():
 
             with real_client.websocket_connect(f"/ws?token={patient_token}") as websocket:
                 response = real_client.post(
-                    f"/patients/{patient_id}/messages",
+                    f"/messages/direct/{patient_id}",
                     json={"body": "live hello"},
                     headers=auth_header(student_jwt),
                 )
                 assert response.status_code == 201
 
                 event = websocket.receive_json()
-                assert event["event"] == "direct_message"
+                assert event["event"] == "message"
                 assert event["body"] == "live hello"
                 assert event["recipient_id"] == str(patient_id)
     finally:
@@ -149,15 +150,117 @@ def test_websocket_receives_direct_message_live():
         try:
             if patient_id is not None:
                 cleanup_session.query(AuditLog).filter(AuditLog.actor_id == patient_id).delete()
-                cleanup_session.query(DirectMessage).filter(
-                    DirectMessage.patient_id == patient_id
-                ).delete()
             if student_id is not None:
                 cleanup_session.query(AuditLog).filter(AuditLog.actor_id == student_id).delete()
+            conversation = cleanup_session.scalar(
+                select(Conversation).where(Conversation.direct_key.contains(str(patient_id)))
+            )
+            if conversation is not None:
+                cleanup_session.query(Message).filter(
+                    Message.conversation_id == conversation.id
+                ).delete()
+                cleanup_session.query(ConversationParticipant).filter(
+                    ConversationParticipant.conversation_id == conversation.id
+                ).delete()
+                cleanup_session.query(Conversation).filter(
+                    Conversation.id == conversation.id
+                ).delete()
             if patient_id is not None:
                 cleanup_session.query(User).filter(User.id == patient_id).delete()
             if student_id is not None:
                 cleanup_session.query(User).filter(User.id == student_id).delete()
+            cleanup_session.commit()
+        finally:
+            cleanup_session.close()
+
+
+def test_websocket_broadcasts_group_message_to_every_other_participant():
+    """Group chat is the one case where `_send_message` calls `publish()`
+    more than once per send -- worth its own live check that every other
+    participant actually gets a push, not just the first one.
+    """
+
+    def _real_get_db():
+        db = Session(bind=engine)
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = _real_get_db
+    student_ids: list = []
+    conversation_id = None
+    try:
+        with TestClient(app) as real_client:
+            setup_session = Session(bind=engine)
+            try:
+                students = [
+                    User(
+                        email=f"realtime-ws-group-{i}@example.com",
+                        hashed_password="x",
+                        role=RoleEnum.student,
+                        full_name=f"Realtime WS Group Student {i}",
+                    )
+                    for i in range(3)
+                ]
+                setup_session.add_all(students)
+                setup_session.flush()
+                conversation = Conversation(kind=ConversationKind.group, title="Realtime group")
+                setup_session.add(conversation)
+                setup_session.flush()
+                setup_session.add_all(
+                    [
+                        ConversationParticipant(conversation_id=conversation.id, user_id=s.id)
+                        for s in students
+                    ]
+                )
+                setup_session.commit()
+                student_ids = [s.id for s in students]
+                conversation_id = conversation.id
+            finally:
+                setup_session.close()
+
+            sender_jwt = create_access_token(subject=student_ids[0], role=RoleEnum.student.value)
+            listener_tokens = [
+                create_access_token(subject=sid, role=RoleEnum.student.value)
+                for sid in student_ids[1:]
+            ]
+
+            with (
+                real_client.websocket_connect(f"/ws?token={listener_tokens[0]}") as ws1,
+                real_client.websocket_connect(f"/ws?token={listener_tokens[1]}") as ws2,
+            ):
+                response = real_client.post(
+                    f"/messages/groups/{conversation_id}",
+                    json={"body": "hello group"},
+                    headers=auth_header(sender_jwt),
+                )
+                assert response.status_code == 201
+
+                event1 = ws1.receive_json()
+                event2 = ws2.receive_json()
+                for event, recipient_id in zip([event1, event2], student_ids[1:], strict=True):
+                    assert event["event"] == "message"
+                    assert event["body"] == "hello group"
+                    assert event["recipient_id"] == str(recipient_id)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        cleanup_session = Session(bind=engine)
+        try:
+            for sid in student_ids:
+                cleanup_session.query(AuditLog).filter(AuditLog.actor_id == sid).delete()
+            if conversation_id is not None:
+                cleanup_session.query(Message).filter(
+                    Message.conversation_id == conversation_id
+                ).delete()
+                cleanup_session.query(ConversationParticipant).filter(
+                    ConversationParticipant.conversation_id == conversation_id
+                ).delete()
+                cleanup_session.query(Conversation).filter(
+                    Conversation.id == conversation_id
+                ).delete()
+            for sid in student_ids:
+                cleanup_session.query(User).filter(User.id == sid).delete()
             cleanup_session.commit()
         finally:
             cleanup_session.close()

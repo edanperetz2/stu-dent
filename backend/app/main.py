@@ -11,9 +11,9 @@ from app.api.routes import (
     attending,
     auth,
     availability,
-    direct_messages,
     equipment,
     forum,
+    messages,
     notifications,
     patients,
     reports,
@@ -62,7 +62,7 @@ app.include_router(availability.router)
 app.include_router(notifications.router)
 app.include_router(waitlist.router)
 app.include_router(forum.router)
-app.include_router(direct_messages.router)
+app.include_router(messages.router)
 app.include_router(scheduling_assistant.router)
 app.include_router(reports.router)
 app.include_router(websocket.router)

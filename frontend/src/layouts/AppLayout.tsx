@@ -25,6 +25,7 @@ const STUDENT_LINKS: NavItem[] = [
 const ATTENDING_LINKS: NavItem[] = [
   { label: 'Dashboard', to: '/' },
   { label: 'Appointments', to: '/appointments' },
+  { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
   { label: 'Reports', to: '/reports' },
 ]
@@ -34,6 +35,7 @@ const ADMIN_LINKS: NavItem[] = [
   { label: 'Rooms', to: '/admin/rooms' },
   { label: 'Equipment', to: '/admin/equipment' },
   { label: 'Forum', to: '/forum' },
+  { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
 ]
 
