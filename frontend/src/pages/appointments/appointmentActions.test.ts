@@ -32,6 +32,7 @@ const owningStudent: Principal = {
   fullName: 'Student',
   email: 's@example.com',
   ownerStudentId: null,
+  ownerStudentName: null,
   ownerConfirmedAt: null,
 }
 const otherStudent: Principal = { ...owningStudent, id: 'other-student' }
@@ -42,6 +43,7 @@ const assignedAttending: Principal = {
   fullName: 'Attending',
   email: 'a@example.com',
   ownerStudentId: null,
+  ownerStudentName: null,
   ownerConfirmedAt: null,
 }
 const otherAttending: Principal = { ...assignedAttending, id: 'other-attending' }
@@ -52,6 +54,7 @@ const admin: Principal = {
   fullName: 'Admin',
   email: 'admin@example.com',
   ownerStudentId: null,
+  ownerStudentName: null,
   ownerConfirmedAt: null,
 }
 const selfPatient: Principal = {
@@ -61,6 +64,7 @@ const selfPatient: Principal = {
   fullName: 'Patient',
   email: 'p@example.com',
   ownerStudentId: STUDENT_ID,
+  ownerStudentName: 'Student',
   ownerConfirmedAt: '2026-01-01T00:00:00Z',
 }
 const otherPatient: Principal = { ...selfPatient, id: 'other-patient' }

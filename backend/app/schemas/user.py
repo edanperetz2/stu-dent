@@ -16,6 +16,10 @@ class UserOut(BaseModel):
     is_active: bool
     # Meaningful only when role == patient; null for student/attending/admin.
     owner_student_id: uuid.UUID | None = None
+    # Resolved from owner_student_id; only populated by GET/PATCH /users/me,
+    # left None everywhere else UserOut is used (e.g. admin user lists) to
+    # avoid an N+1 lookup per row.
+    owner_student_name: str | None = None
     owner_confirmed_at: datetime | None = None
     contact_phone: str | None = None
     preferred_time_of_day: PreferredTimeOfDay | None = None

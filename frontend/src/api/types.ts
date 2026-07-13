@@ -29,6 +29,8 @@ export interface User {
   is_active: boolean
   // Meaningful only when role === 'patient'; null for student/attending/admin.
   owner_student_id: string | null
+  // Resolved server-side from owner_student_id; only populated by GET/PATCH /users/me.
+  owner_student_name: string | null
   owner_confirmed_at: string | null
   contact_phone: string | null
   preferred_time_of_day: PreferredTimeOfDay | null

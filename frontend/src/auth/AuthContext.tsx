@@ -17,6 +17,7 @@ export interface Principal {
   fullName: string
   email: string
   ownerStudentId: string | null
+  ownerStudentName: string | null
   ownerConfirmedAt: string | null
 }
 
@@ -54,6 +55,7 @@ function toPrincipal(token: string, user: Awaited<ReturnType<typeof getCurrentUs
     fullName: user.full_name,
     email: user.email,
     ownerStudentId: user.owner_student_id,
+    ownerStudentName: user.owner_student_name,
     ownerConfirmedAt: user.owner_confirmed_at,
   }
 }

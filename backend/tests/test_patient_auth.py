@@ -30,7 +30,9 @@ def test_other_student_cannot_access_patient(client):
 
 
 def test_student_provisioned_patient_can_log_in(client):
-    token = register_and_login(client, "patauth-stud4@example.com", role="student")
+    token = register_and_login(
+        client, "patauth-stud4@example.com", role="student", full_name="Dr. Mentor"
+    )
     patient_id = create_patient(
         client, token, email="patauth-patient1@example.com", password="patientpass123"
     )
@@ -43,6 +45,7 @@ def test_student_provisioned_patient_can_log_in(client):
     assert me_response.status_code == 200
     assert me_response.json()["id"] == patient_id
     assert me_response.json()["role"] == "patient"
+    assert me_response.json()["owner_student_name"] == "Dr. Mentor"
 
 
 def test_patient_token_cannot_access_student_endpoints(client):
@@ -94,6 +97,7 @@ def test_patient_self_registration_is_pending_until_student_confirms(client):
     me = client.get("/users/me", headers=auth_header(patient_token)).json()
     assert me["owner_confirmed_at"] is None
     assert me["owner_student_id"] == student_id
+    assert me["owner_student_name"] == "Test User"
 
     blocked_response = client.post(
         "/appointments",

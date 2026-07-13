@@ -1,4 +1,4 @@
-import { Button, Select, Stack, TextInput, Title } from '@mantine/core'
+import { Button, Select, Stack, Text, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -57,6 +57,12 @@ export function PreferencesPage() {
   return (
     <Stack maw={420}>
       <Title order={2}>Preferences</Title>
+      {user?.owner_student_id && (
+        <Text size="sm" c="dimmed">
+          In-charge student: {user.owner_student_name ?? 'Unknown'}
+          {!user.owner_confirmed_at && ' (pending confirmation)'}
+        </Text>
+      )}
       <form onSubmit={form.onSubmit((values) => updateMutation.mutate(values))}>
         <Stack>
           <TextInput label="Contact phone" {...form.getInputProps('contact_phone')} />

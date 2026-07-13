@@ -21,6 +21,7 @@ describe('LoginPage', () => {
       role: 'student',
       is_active: true,
       owner_student_id: null,
+      owner_student_name: null,
       owner_confirmed_at: null,
       contact_phone: null,
       preferred_time_of_day: null,

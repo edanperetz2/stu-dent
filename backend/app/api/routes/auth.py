@@ -120,9 +120,20 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)) -> 
     return TokenOut(access_token=token)
 
 
+def _with_owner_student_name(db: Session, user: User) -> UserOut:
+    out = UserOut.model_validate(user)
+    if user.owner_student_id is not None:
+        owner = db.get(User, user.owner_student_id)
+        if owner is not None:
+            out.owner_student_name = owner.full_name
+    return out
+
+
 @router.get("/users/me", response_model=UserOut)
-def read_current_user(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
+def read_current_user(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> UserOut:
+    return _with_owner_student_name(db, current_user)
 
 
 @router.patch("/users/me", response_model=UserOut)
@@ -130,7 +141,7 @@ def update_current_user(
     payload: UserSelfUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> User:
+) -> UserOut:
     if payload.contact_phone is not None:
         current_user.contact_phone = payload.contact_phone
     if payload.preferred_time_of_day is not None:
@@ -145,4 +156,4 @@ def update_current_user(
     )
     db.commit()
     db.refresh(current_user)
-    return current_user
+    return _with_owner_student_name(db, current_user)
