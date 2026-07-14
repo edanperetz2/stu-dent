@@ -1,6 +1,7 @@
 import {
   Badge,
   Button,
+  Chip,
   Group,
   Modal,
   SegmentedControl,
@@ -29,9 +30,10 @@ import { listAttendings } from '../../api/attendings'
 import { listActiveEquipment } from '../../api/equipment'
 import { apiErrorMessage } from '../../api/httpClient'
 import { listPatients } from '../../api/patients'
+import { getResourcesSchedule } from '../../api/resources'
 import { listActiveRooms } from '../../api/rooms'
 import { interpretSchedulingRequest } from '../../api/schedulingAssistant'
-import type { AppointmentStatus } from '../../api/types'
+import type { Appointment, AppointmentStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { LoadingText } from '../../components/StateText'
@@ -61,6 +63,77 @@ const STATUS_CSS_COLORS: Record<AppointmentStatus, string> = {
 
 const localizer = dayjsLocalizer(dayjs)
 
+// What the calendar/list view is currently showing: the signed-in user's own
+// appointments (default, status-colored), or a clinic-wide resource view --
+// every room+equipment booking, colored per resource instead of per status.
+// Patients only ever get 'personal'. Students/attendings can switch to
+// 'resources', which is anonymized (reveals only which student booked a
+// slot, never the patient) via the /resources/schedule endpoint. Admin only
+// ever gets 'resources' too, but built from the full appointment list it
+// already has -- same shape, full detail, no anonymization.
+type CalendarLens = 'personal' | 'resources'
+
+// A stable palette so each resource gets a distinct color -- looked up by
+// hashing the resourceId (see hashResourceColor) rather than by its
+// position in a list, so a resource's color never shifts just because
+// another resource was added, deactivated, or reactivated. Paired arrays
+// (same key = same color) since Mantine's <Chip color> wants a theme color
+// name but react-big-calendar's eventPropGetter needs a real CSS hex value.
+const RESOURCE_COLOR_NAMES = [
+  'gray',
+  'orange',
+  'blue',
+  'green',
+  'red',
+  'grape',
+  'cyan',
+  'pink',
+  'yellow',
+  'teal',
+] as const
+const RESOURCE_COLOR_HEX: Record<(typeof RESOURCE_COLOR_NAMES)[number], string> = {
+  gray: '#868e96',
+  orange: '#f59f00',
+  blue: '#1971c2',
+  green: '#2f9e44',
+  red: '#e03131',
+  grape: '#9c36b5',
+  cyan: '#0c8599',
+  pink: '#c2255c',
+  yellow: '#f08c00',
+  teal: '#0ca678',
+}
+
+function hashResourceColor(resourceId: string): (typeof RESOURCE_COLOR_NAMES)[number] {
+  let hash = 0
+  for (let i = 0; i < resourceId.length; i++) {
+    hash = (hash * 31 + resourceId.charCodeAt(i)) | 0
+  }
+  return RESOURCE_COLOR_NAMES[Math.abs(hash) % RESOURCE_COLOR_NAMES.length]
+}
+
+interface ResourceOption {
+  resourceId: string
+  resourceTitle: string
+}
+
+// `resource` is null for the anonymized Resources-lens busy-window events
+// (no real appointment behind them for a non-admin viewer) -- `studentName`
+// covers that case instead. `resourceId`/`resourceName`/`resourceKind` are
+// only set for Resources-lens events; they drive the color, the show/hide
+// filter chips, and the List view's columns.
+interface CalendarEventItem {
+  id: string
+  title: string
+  start: Date
+  end: Date
+  resourceId?: string
+  resourceName?: string
+  resourceKind?: 'room' | 'equipment'
+  resource: Appointment | null
+  studentName?: string
+}
+
 interface CreateFormValues {
   patient_id: string
   attending_id: string | null
@@ -82,11 +155,27 @@ export function AppointmentsListPage() {
   const [interpretWarnings, setInterpretWarnings] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [calendarView, setCalendarView] = useState<View>('week')
+  const [calendarDate, setCalendarDate] = useState(new Date())
+  const [calendarLens, setCalendarLens] = useState<CalendarLens>('personal')
+  const [hiddenResourceIds, setHiddenResourceIds] = useState<string[]>([])
 
   const isStudent = principal?.role === 'student'
   const isPatient = principal?.role === 'patient'
+  const isAttending = principal?.role === 'attending'
   const isAdmin = principal?.role === 'admin'
   const canCreate = isStudent || isPatient
+  // Resources deliberately excludes patients -- a patient has no reason to
+  // see clinic-wide room/equipment usage, only their own appointments.
+  const canSeeResources = isStudent || isAttending
+  // Admin has no personal option at all -- it's always Resources, just
+  // built from data admin already sees in full. Students/attendings pick
+  // between Personal (default) and Resources; patients never leave
+  // Personal.
+  const effectiveLens: CalendarLens = isAdmin
+    ? 'resources'
+    : canSeeResources && calendarLens === 'resources'
+      ? 'resources'
+      : 'personal'
 
   const { data: appointments, isLoading } = useQuery({
     queryKey: ['appointments'],
@@ -103,15 +192,28 @@ export function AppointmentsListPage() {
     queryFn: () => listAttendings(token),
     enabled: isStudent,
   })
+  // Fetched for every role now: the Resources lens's color legend/filter
+  // chips need the active lists regardless of role, not just for the
+  // student create-appointment form. Only ever the currently-active
+  // resources -- deactivated ones with existing bookings are recovered
+  // from the booking data itself instead, see combinedResourceOptions.
   const { data: rooms } = useQuery({
     queryKey: ['rooms'],
     queryFn: () => listActiveRooms(token),
-    enabled: isStudent || isAdmin,
   })
   const { data: equipment } = useQuery({
     queryKey: ['equipment'],
     queryFn: () => listActiveEquipment(token),
-    enabled: isStudent,
+  })
+
+  // Combined anonymized resource schedule -- only fetched for non-admin
+  // roles, since admin's Resources lens reuses the already-fetched full
+  // `appointments` list instead (see resourceCalendarEvents). Needed for
+  // both List and Calendar sub-views now, not just Calendar.
+  const { data: resourcesSchedule } = useQuery({
+    queryKey: ['resources', 'schedule'],
+    queryFn: () => getResourcesSchedule(token),
+    enabled: !isAdmin && effectiveLens === 'resources',
   })
 
   const form = useForm<CreateFormValues>({
@@ -182,7 +284,10 @@ export function AppointmentsListPage() {
   }
 
   function handleSelectSlot(slotInfo: SlotInfo) {
-    if (!canCreate) return
+    // Only the personal lens represents "your own bookable calendar" --
+    // the Resources lens is a read-only availability check, not a place to
+    // start a new booking from.
+    if (!canCreate || effectiveLens !== 'personal') return
     handleOpenModal()
     form.setValues({
       start_time: isoToMantineDateTime(slotInfo.start.toISOString()),
@@ -190,7 +295,16 @@ export function AppointmentsListPage() {
     })
   }
 
-  function handleSelectEvent(event: { id: string }) {
+  function handleSelectEvent(event: CalendarEventItem) {
+    // Non-admin Resources lens has no real appointment to navigate to --
+    // clicking a busy block instead reveals only which student booked it,
+    // never the patient or any other detail. Admin's Resources events are
+    // full real appointments (see resourceCalendarEvents), so they still
+    // navigate through like Personal ones.
+    if (effectiveLens === 'resources' && !isAdmin) {
+      notifications.show({ message: `Booked by ${event.studentName}` })
+      return
+    }
     navigate(`/appointments/${event.id}`)
   }
 
@@ -214,28 +328,125 @@ export function AppointmentsListPage() {
   const roomOptions = (rooms ?? []).map((r) => ({ value: r.id, label: r.name }))
   const equipmentOptions = (equipment ?? []).map((e) => ({ value: e.id, label: e.name }))
 
-  const calendarEvents = useMemo(
+  // Personal lens: your own appointments, full detail -- unchanged from
+  // before the Resources lens existed.
+  const personalCalendarEvents = useMemo<CalendarEventItem[]>(
     () =>
       (appointments ?? []).map((appointment) => ({
         id: appointment.id,
-        title: isAdmin
-          ? `${appointment.patient_name} · ${appointment.equipment_id ? 'equipment in use' : 'no equipment'}`
-          : `${appointment.patient_name} · ${appointment.status}`,
+        title: `${appointment.patient_name} · ${appointment.status}`,
         start: new Date(appointment.start_time),
         end: new Date(appointment.end_time),
-        resourceId: appointment.room_id ?? undefined,
         resource: appointment,
       })),
-    [appointments, isAdmin],
+    [appointments],
   )
 
-  // Admin's calendar shows rooms as resource lanes (a room-in-use view) --
-  // every appointment always ends up with a room once confirmed, so this
-  // is meaningful for every non-proposed appointment. Only built/passed
-  // for admin; other roles keep the plain per-user calendar.
-  const roomResources = useMemo(
-    () => (rooms ?? []).map((r) => ({ resourceId: r.id, resourceTitle: r.name })),
-    [rooms],
+  // Resources lens, both roles: one entry per resource actually occupied by
+  // an appointment -- an appointment using both a room and equipment
+  // produces two entries, one per resource, so filtering/coloring by
+  // resourceId is always unambiguous (matches what /resources/schedule
+  // already returns for the non-admin case below). Admin builds this
+  // straight from the full appointment list it already has (full detail,
+  // no anonymization); everyone else builds it from the anonymized
+  // schedule endpoint.
+  const resourceCalendarEvents = useMemo<CalendarEventItem[]>(() => {
+    if (isAdmin) {
+      const events: CalendarEventItem[] = []
+      for (const appointment of appointments ?? []) {
+        const title = `${appointment.patient_name} · ${appointment.status}`
+        if (appointment.room_id) {
+          events.push({
+            id: appointment.id,
+            title,
+            start: new Date(appointment.start_time),
+            end: new Date(appointment.end_time),
+            resourceId: `room:${appointment.room_id}`,
+            resourceName: appointment.room_name ?? undefined,
+            resourceKind: 'room',
+            resource: appointment,
+            studentName: appointment.student_name,
+          })
+        }
+        if (appointment.equipment_id) {
+          events.push({
+            id: appointment.id,
+            title,
+            start: new Date(appointment.start_time),
+            end: new Date(appointment.end_time),
+            resourceId: `equipment:${appointment.equipment_id}`,
+            resourceName: appointment.equipment_name ?? undefined,
+            resourceKind: 'equipment',
+            resource: appointment,
+            studentName: appointment.student_name,
+          })
+        }
+      }
+      return events
+    }
+    // Non-admin: no title text, since the resource name/color is the only
+    // detail shown by default -- the booking student's name is only
+    // revealed on click (Calendar) or as its own column (List), see
+    // handleSelectEvent and the Resources list table below.
+    return (resourcesSchedule ?? []).map((booking, index) => ({
+      id: `resource-busy-${index}`,
+      title: '',
+      start: new Date(booking.start_time),
+      end: new Date(booking.end_time),
+      resourceId: `${booking.resource_kind}:${booking.resource_id}`,
+      resourceName: booking.resource_name,
+      resourceKind: booking.resource_kind,
+      resource: null,
+      studentName: booking.student_name,
+    }))
+  }, [isAdmin, appointments, resourcesSchedule])
+
+  // Every currently-active room/equipment, plus any resource that's
+  // deactivated but still has a booking showing in resourceCalendarEvents
+  // above -- so a deactivated resource's past/future bookings keep a
+  // stable color and a chip to toggle them, instead of losing their color
+  // mapping the moment the resource itself is deactivated. A newly created
+  // resource shows up immediately (as soon as `rooms`/`equipment` refetch),
+  // with zero bookings, ready to be picked in the create-appointment form
+  // and booked like any other.
+  const combinedResourceOptions = useMemo<ResourceOption[]>(() => {
+    const options = new Map<string, ResourceOption>()
+    for (const room of rooms ?? []) {
+      options.set(`room:${room.id}`, { resourceId: `room:${room.id}`, resourceTitle: `${room.name} (Room)` })
+    }
+    for (const item of equipment ?? []) {
+      options.set(`equipment:${item.id}`, {
+        resourceId: `equipment:${item.id}`,
+        resourceTitle: `${item.name} (Equipment)`,
+      })
+    }
+    for (const event of resourceCalendarEvents) {
+      if (event.resourceId && event.resourceName && event.resourceKind && !options.has(event.resourceId)) {
+        options.set(event.resourceId, {
+          resourceId: event.resourceId,
+          resourceTitle: `${event.resourceName} (${event.resourceKind === 'room' ? 'Room' : 'Equipment'})`,
+        })
+      }
+    }
+    return Array.from(options.values()).sort((a, b) => a.resourceTitle.localeCompare(b.resourceTitle))
+  }, [rooms, equipment, resourceCalendarEvents])
+
+  const isResourceLens = effectiveLens === 'resources'
+
+  // Hashed by id, not by list position -- stays put across resource
+  // create/deactivate/reactivate churn (see hashResourceColor above).
+  const resourceColorNames = useMemo(
+    () => Object.fromEntries(combinedResourceOptions.map((opt) => [opt.resourceId, hashResourceColor(opt.resourceId)])),
+    [combinedResourceOptions],
+  )
+
+  const allEvents: CalendarEventItem[] =
+    effectiveLens === 'resources' ? resourceCalendarEvents : personalCalendarEvents
+  // Hidden-by-filter-chip events/rows are dropped entirely (not just
+  // dimmed) -- applies to both the Resources list and calendar below. The
+  // personal lens has no resourceId on its events, so it's unaffected.
+  const visibleEvents = allEvents.filter(
+    (event) => !event.resourceId || !hiddenResourceIds.includes(event.resourceId),
   )
 
   return (
@@ -251,13 +462,50 @@ export function AppointmentsListPage() {
               { label: 'Calendar', value: 'calendar' },
             ]}
           />
+          {canSeeResources && (
+            <SegmentedControl
+              value={effectiveLens}
+              onChange={(value) => setCalendarLens(value as CalendarLens)}
+              data={[
+                { label: 'Personal', value: 'personal' },
+                { label: 'Resources', value: 'resources' },
+              ]}
+            />
+          )}
           {canCreate && <Button onClick={handleOpenModal}>New Appointment</Button>}
         </Group>
       </Group>
 
+      {isResourceLens && combinedResourceOptions.length > 0 && (
+        <Chip.Group
+          multiple
+          value={combinedResourceOptions
+            .map((opt) => opt.resourceId)
+            .filter((id) => !hiddenResourceIds.includes(id))}
+          onChange={(visibleIds) => {
+            const hidden = combinedResourceOptions
+              .map((opt) => opt.resourceId)
+              .filter((id) => !visibleIds.includes(id))
+            setHiddenResourceIds(hidden)
+          }}
+        >
+          <Group gap="xs">
+            {combinedResourceOptions.map((opt) => (
+              <Chip
+                key={opt.resourceId}
+                value={opt.resourceId}
+                color={resourceColorNames[opt.resourceId]}
+              >
+                {opt.resourceTitle}
+              </Chip>
+            ))}
+          </Group>
+        </Chip.Group>
+      )}
+
       {isLoading ? (
         <LoadingText />
-      ) : viewMode === 'list' ? (
+      ) : viewMode === 'list' && effectiveLens === 'personal' ? (
         <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
@@ -268,6 +516,7 @@ export function AppointmentsListPage() {
               <Table.Th>Patient</Table.Th>
               <Table.Th>Attending</Table.Th>
               <Table.Th>Room</Table.Th>
+              <Table.Th>Equipment</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -294,31 +543,98 @@ export function AppointmentsListPage() {
                 <Table.Td>{appointment.patient_name}</Table.Td>
                 <Table.Td>{appointment.attending_name ?? '—'}</Table.Td>
                 <Table.Td>{appointment.room_name ?? '—'}</Table.Td>
+                <Table.Td>{appointment.equipment_name ?? '—'}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      ) : viewMode === 'list' ? (
+        <Table highlightOnHover>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Resource</Table.Th>
+              <Table.Th>Kind</Table.Th>
+              <Table.Th>Start</Table.Th>
+              <Table.Th>End</Table.Th>
+              {isAdmin ? (
+                <>
+                  <Table.Th>Student</Table.Th>
+                  <Table.Th>Patient</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                </>
+              ) : (
+                <Table.Th>Booked by</Table.Th>
+              )}
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {visibleEvents.map((event) => (
+              <Table.Tr
+                key={`${event.resourceId}-${event.id}`}
+                style={isAdmin ? { cursor: 'pointer' } : undefined}
+                onClick={isAdmin ? () => navigate(`/appointments/${event.id}`) : undefined}
+                onKeyDown={
+                  isAdmin
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/appointments/${event.id}`)
+                        }
+                      }
+                    : undefined
+                }
+                tabIndex={isAdmin ? 0 : undefined}
+                role={isAdmin ? 'button' : undefined}
+              >
+                <Table.Td>{event.resourceName}</Table.Td>
+                <Table.Td>{event.resourceKind === 'room' ? 'Room' : 'Equipment'}</Table.Td>
+                <Table.Td>{event.start.toLocaleString()}</Table.Td>
+                <Table.Td>{event.end.toLocaleString()}</Table.Td>
+                {isAdmin ? (
+                  <>
+                    <Table.Td>{event.resource?.student_name}</Table.Td>
+                    <Table.Td>{event.resource?.patient_name}</Table.Td>
+                    <Table.Td>
+                      {event.resource && (
+                        <Badge color={STATUS_COLORS[event.resource.status]}>
+                          {event.resource.status}
+                        </Badge>
+                      )}
+                    </Table.Td>
+                  </>
+                ) : (
+                  <Table.Td>{event.studentName}</Table.Td>
+                )}
               </Table.Tr>
             ))}
           </Table.Tbody>
         </Table>
       ) : (
+        // One flat calendar for every lens -- the Resources lens colors
+        // events by resource (via the chips above) instead of splitting
+        // into per-resource lanes, so every room/equipment's bookings are
+        // visible together without any horizontal scrolling.
         <div style={{ height: 700 }}>
           <Calendar
             localizer={localizer}
-            events={calendarEvents}
+            events={visibleEvents}
             views={['month', 'week', 'day']}
             view={calendarView}
             onView={setCalendarView}
-            selectable={canCreate}
+            date={calendarDate}
+            onNavigate={setCalendarDate}
+            selectable={canCreate && effectiveLens === 'personal'}
             onSelectSlot={handleSelectSlot}
             onSelectEvent={handleSelectEvent}
-            eventPropGetter={(event) => ({
-              style: { backgroundColor: STATUS_CSS_COLORS[event.resource.status] },
-            })}
-            {...(isAdmin
-              ? {
-                  resources: roomResources,
-                  resourceIdAccessor: 'resourceId',
-                  resourceTitleAccessor: 'resourceTitle',
-                }
-              : {})}
+            eventPropGetter={(event) => {
+              const color =
+                isResourceLens && event.resourceId
+                  ? RESOURCE_COLOR_HEX[resourceColorNames[event.resourceId]]
+                  : event.resource
+                    ? STATUS_CSS_COLORS[event.resource.status]
+                    : '#868e96'
+              return { style: { backgroundColor: color } }
+            }}
             style={{ height: '100%' }}
           />
         </div>

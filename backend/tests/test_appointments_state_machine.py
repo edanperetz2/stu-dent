@@ -459,6 +459,7 @@ def test_response_includes_denormalized_participant_and_room_names(client):
     attending_id = client.get("/users/me", headers=auth_header(attending_token)).json()["id"]
     patient_id = create_patient(client, student_token, full_name="Pat Ient")
     room_id = create_room(client, admin_token, "Room 20")
+    equipment_id = create_equipment(client, admin_token, "Autoclave 20")
 
     response = _book(
         client,
@@ -466,6 +467,7 @@ def test_response_includes_denormalized_participant_and_room_names(client):
         patient_id=patient_id,
         attending_id=attending_id,
         room_id=room_id,
+        equipment_id=equipment_id,
     )
     assert response.status_code == 201
     body = response.json()
@@ -473,7 +475,9 @@ def test_response_includes_denormalized_participant_and_room_names(client):
     assert body["patient_name"] == "Pat Ient"
     assert body["attending_name"] == "Dr. Attend"
     assert body["room_name"] == "Room 20"
+    assert body["equipment_name"] == "Autoclave 20"
 
     listed = client.get("/appointments", headers=auth_header(student_token)).json()
     booked = next(a for a in listed if a["id"] == body["id"])
     assert booked["room_name"] == "Room 20"
+    assert booked["equipment_name"] == "Autoclave 20"

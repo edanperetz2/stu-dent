@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from app.jobs.reactivation import reactivate_expired_deactivations
 from app.models.equipment import Equipment
 from app.models.room import Room
-from tests.helpers import auth_header, create_patient, register_and_login
+from tests.helpers import auth_header, create_default_room, create_patient, register_and_login
 
 
 def _admin_token(client, email="rooms-admin1@example.com"):
@@ -206,6 +206,177 @@ def test_reactivating_room_clears_scheduled_deactivation(client):
     )
     assert reactivated.json()["is_active"] is True
     assert reactivated.json()["inactive_until"] is None
+
+
+def test_deactivated_equipment_cannot_be_booked(client):
+    admin_token = _admin_token(client, "equip-admin4@example.com")
+    student_token = register_and_login(client, "equip-student4@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    room_id = create_default_room(client)
+    equipment_id = client.post(
+        "/admin/equipment", json={"name": "Autoclave 505"}, headers=auth_header(admin_token)
+    ).json()["id"]
+    client.patch(
+        f"/admin/equipment/{equipment_id}",
+        json={"is_active": False},
+        headers=auth_header(admin_token),
+    )
+
+    response = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "equipment_id": equipment_id,
+            "start_time": "2026-08-10T09:00:00+00:00",
+            "end_time": "2026-08-10T09:30:00+00:00",
+        },
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 422
+
+
+def test_deactivating_equipment_notifies_owning_student_via_message_and_notification(client):
+    admin_token = _admin_token(client, "equip-admin5@example.com")
+    student_token = register_and_login(client, "equip-student5@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    room_id = create_default_room(client)
+    equipment_id = client.post(
+        "/admin/equipment", json={"name": "Autoclave 606"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "equipment_id": equipment_id,
+            "start_time": "2026-08-11T09:00:00+00:00",
+            "end_time": "2026-08-11T09:30:00+00:00",
+        },
+        headers=auth_header(student_token),
+    ).json()
+    assert appointment["status"] == "confirmed"
+
+    deactivated = client.patch(
+        f"/admin/equipment/{equipment_id}",
+        json={"is_active": False},
+        headers=auth_header(admin_token),
+    )
+    assert deactivated.status_code == 200
+
+    admin_thread = client.get("/messages/admin", headers=auth_header(student_token)).json()
+    assert any("Autoclave 606" in m["body"] for m in admin_thread)
+
+    student_notifications = client.get("/notifications", headers=auth_header(student_token)).json()
+    assert any(
+        n["notification_type"] == "resource_deactivated" and "Autoclave 606" in n["message"]
+        for n in student_notifications
+    )
+
+
+def test_deactivating_equipment_with_no_future_appointments_sends_nothing(client):
+    admin_token = _admin_token(client, "equip-admin6@example.com")
+    student_token = register_and_login(client, "equip-student6@example.com", role="student")
+    equipment_id = client.post(
+        "/admin/equipment", json={"name": "Autoclave 707"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    client.patch(
+        f"/admin/equipment/{equipment_id}",
+        json={"is_active": False},
+        headers=auth_header(admin_token),
+    )
+
+    admin_thread = client.get("/messages/admin", headers=auth_header(student_token)).json()
+    assert admin_thread == []
+
+
+def test_resources_schedule_reveals_booking_student_but_not_patient(client):
+    admin_token = _admin_token(client, "rooms-admin9@example.com")
+    student_token = register_and_login(
+        client, "rooms-student9@example.com", role="student", full_name="Booking Student"
+    )
+    patient_id = create_patient(client, student_token, full_name="Confidential Patient")
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 1010"}, headers=auth_header(admin_token)
+    ).json()["id"]
+    equipment_id = client.post(
+        "/admin/equipment", json={"name": "Autoclave 1010"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    booked = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "equipment_id": equipment_id,
+            "start_time": "2026-08-12T09:00:00+00:00",
+            "end_time": "2026-08-12T09:30:00+00:00",
+        },
+        headers=auth_header(student_token),
+    ).json()
+    assert booked["status"] == "confirmed"
+
+    # Any authenticated role -- not just the booking student -- can see the
+    # combined feed, learn which student booked each slot, but never the
+    # patient or any other appointment detail.
+    other_student_token = register_and_login(client, "rooms-student10@example.com", role="student")
+    schedule = client.get("/resources/schedule", headers=auth_header(other_student_token))
+    assert schedule.status_code == 200
+    body = schedule.json()
+
+    room_entries = [
+        row for row in body if row["resource_kind"] == "room" and row["resource_id"] == room_id
+    ]
+    assert len(room_entries) == 1
+    assert room_entries[0]["resource_name"] == "Room 1010"
+    assert room_entries[0]["student_name"] == "Booking Student"
+    assert room_entries[0]["start_time"] == booked["start_time"]
+    assert room_entries[0]["end_time"] == booked["end_time"]
+    assert set(room_entries[0].keys()) == {
+        "resource_kind",
+        "resource_id",
+        "resource_name",
+        "start_time",
+        "end_time",
+        "student_name",
+    }
+
+    equipment_entries = [
+        row
+        for row in body
+        if row["resource_kind"] == "equipment" and row["resource_id"] == equipment_id
+    ]
+    assert len(equipment_entries) == 1
+    assert equipment_entries[0]["resource_name"] == "Autoclave 1010"
+    assert equipment_entries[0]["student_name"] == "Booking Student"
+
+    assert "Confidential Patient" not in schedule.text
+
+
+def test_resources_schedule_excludes_cancelled_and_proposed(client):
+    admin_token = _admin_token(client, "rooms-admin10@example.com")
+    student_token = register_and_login(client, "rooms-student11@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 1111"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    cancelled = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "start_time": "2026-08-13T09:00:00+00:00",
+            "end_time": "2026-08-13T09:30:00+00:00",
+        },
+        headers=auth_header(student_token),
+    ).json()
+    client.post(f"/appointments/{cancelled['id']}/cancel", headers=auth_header(student_token))
+
+    schedule = client.get("/resources/schedule", headers=auth_header(student_token))
+    assert all(row["resource_id"] != room_id for row in schedule.json())
 
 
 def test_reactivation_job_flips_expired_scheduled_deactivations(client, db_session):

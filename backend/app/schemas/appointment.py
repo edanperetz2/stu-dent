@@ -61,3 +61,4 @@ class AppointmentOut(BaseModel):
     patient_name: str
     attending_name: str | None
     room_name: str | None
+    equipment_name: str | None

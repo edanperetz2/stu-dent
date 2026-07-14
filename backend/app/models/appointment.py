@@ -17,6 +17,7 @@ from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.equipment import Equipment
 from app.models.mixins import TimestampMixin
 from app.models.room import Room
 from app.models.user import User
@@ -34,14 +35,16 @@ class AppointmentStatus(enum.StrEnum):
 
 # Statuses that represent a real (non-cancelled, non-terminal-freed) hold on a
 # resource. `proposed` is non-binding (a patient's request the student hasn't
-# accepted yet); completed/no_show/cancelled free the slot. Only these three
-# participate in the double-booking exclusion constraints below.
-_ACTIVE_STATUSES = (
+# accepted yet); completed/no_show/cancelled free the slot. Used both by the
+# double-booking exclusion constraints below and by any other code that needs
+# to know "is this a real, currently-blocking booking" (resource-deactivation
+# notifications, the anonymized room/equipment schedule endpoints).
+ACTIVE_STATUSES = (
     AppointmentStatus.awaiting_confirmation,
     AppointmentStatus.confirmed,
     AppointmentStatus.rescheduling_requested,
 )
-_ACTIVE_STATUSES_SQL = ", ".join(f"'{s.value}'" for s in _ACTIVE_STATUSES)
+_ACTIVE_STATUSES_SQL = ", ".join(f"'{s.value}'" for s in ACTIVE_STATUSES)
 
 
 def _time_range():
@@ -156,6 +159,7 @@ class Appointment(TimestampMixin, Base):
         "User", foreign_keys=[attending_id], lazy="joined"
     )
     room: Mapped[Room | None] = relationship("Room", lazy="joined")
+    equipment: Mapped[Equipment | None] = relationship("Equipment", lazy="joined")
 
     @property
     def student_name(self) -> str:
@@ -172,3 +176,7 @@ class Appointment(TimestampMixin, Base):
     @property
     def room_name(self) -> str | None:
         return self.room.name if self.room else None
+
+    @property
+    def equipment_name(self) -> str | None:
+        return self.equipment.name if self.equipment else None

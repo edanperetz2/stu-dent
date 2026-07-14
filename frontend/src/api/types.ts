@@ -56,6 +56,18 @@ export interface Equipment {
   inactive_until: string | null
 }
 
+// One busy window for a room or equipment item, from GET /resources/schedule --
+// reveals which student booked it (for coordination) but deliberately nothing
+// else about the appointment, see the backend schema's docstring.
+export interface ResourceBooking {
+  resource_kind: 'room' | 'equipment'
+  resource_id: string
+  resource_name: string
+  start_time: string
+  end_time: string
+  student_name: string
+}
+
 export interface Appointment {
   id: string
   student_id: string
@@ -73,6 +85,7 @@ export interface Appointment {
   patient_name: string
   attending_name: string | null
   room_name: string | null
+  equipment_name: string | null
 }
 
 export interface AvailabilityWindow {

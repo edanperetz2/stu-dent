@@ -17,6 +17,7 @@ from app.api.routes import (
     notifications,
     patients,
     reports,
+    resources,
     rooms,
     scheduling_assistant,
     students,
@@ -55,6 +56,7 @@ app.include_router(patients.router)
 app.include_router(attending.router)
 app.include_router(admin.router)
 app.include_router(rooms.router)
+app.include_router(resources.router)
 app.include_router(students.router)
 app.include_router(equipment.router)
 app.include_router(appointments.router)

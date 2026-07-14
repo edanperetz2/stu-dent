@@ -205,6 +205,7 @@ export function AppointmentDetailPage() {
       <Text>Patient: {appointment.patient_name}</Text>
       <Text>Attending: {appointment.attending_name ?? '—'}</Text>
       <Text>Room: {appointment.room_name ?? '—'}</Text>
+      <Text>Equipment: {appointment.equipment_name ?? '—'}</Text>
       {appointment.notes && <Text>Notes: {appointment.notes}</Text>}
 
       <Group>

@@ -25,6 +25,7 @@ function makeAppointment(overrides: Partial<Appointment> = {}): Appointment {
     patient_name: 'Patient',
     attending_name: 'Attending',
     room_name: null,
+    equipment_name: null,
     ...overrides,
   }
 }

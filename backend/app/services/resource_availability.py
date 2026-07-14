@@ -5,18 +5,12 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.appointment import Appointment, AppointmentStatus
+from app.models.appointment import ACTIVE_STATUSES, Appointment
 from app.models.conversation import ConversationKind
 from app.models.notification import NotificationType
 from app.models.user import User
 from app.services.messaging import admin_key, get_or_create_conversation, send_message
 from app.services.notifications import notify
-
-_ACTIVE_STATUSES = (
-    AppointmentStatus.awaiting_confirmation,
-    AppointmentStatus.confirmed,
-    AppointmentStatus.rescheduling_requested,
-)
 
 
 def notify_students_of_deactivation(
@@ -38,7 +32,7 @@ def notify_students_of_deactivation(
     affected = db.scalars(
         select(Appointment).where(
             column == resource_id,
-            Appointment.status.in_(_ACTIVE_STATUSES),
+            Appointment.status.in_(ACTIVE_STATUSES),
             Appointment.end_time > now,
         )
     )
