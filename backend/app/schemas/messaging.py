@@ -32,7 +32,8 @@ class ContactOut(BaseModel):
 class ReadReceiptOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    last_read_at: datetime
+    # None after an explicit "mark unread" -- see touch_unread.
+    last_read_at: datetime | None
 
 
 class GroupCreate(BaseModel):
@@ -45,3 +46,16 @@ class GroupSummaryOut(BaseModel):
     title: str
     participant_ids: list[uuid.UUID]
     participant_names: list[str]
+
+
+class UnreadCountOut(BaseModel):
+    count: int
+
+
+class ThreadSummaryOut(BaseModel):
+    # target_key matches the frontend's targetKey() exactly (direct:<id>,
+    # admin:self / admin:<owner_id>, group:<id>) so it can be used directly
+    # as a lookup key without any extra parsing.
+    target_key: str
+    last_message_at: datetime | None
+    has_unread: bool

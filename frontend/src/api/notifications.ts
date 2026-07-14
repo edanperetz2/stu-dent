@@ -14,3 +14,10 @@ export function markNotificationRead(token: string, notificationId: string) {
     token,
   })
 }
+
+export function markNotificationUnread(token: string, notificationId: string) {
+  return request<Notification>(`/notifications/${notificationId}/unread`, {
+    method: 'POST',
+    token,
+  })
+}

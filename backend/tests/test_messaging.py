@@ -101,6 +101,38 @@ def test_marking_read_on_nonexistent_thread_is_a_noop(client):
     assert response.json()["last_read_at"] is not None
 
 
+def test_marking_direct_thread_unread(client):
+    student_token = register_and_login(client, "msg-s4c@example.com", role="student")
+    patient_id, patient_token = create_and_login_patient(
+        client, student_token, "msg-p4c@example.com"
+    )
+
+    client.post(
+        f"/messages/direct/{patient_id}",
+        json={"body": "from student"},
+        headers=auth_header(student_token),
+    )
+    student_id = _student_id(client, student_token)
+    client.post(f"/messages/direct/{student_id}/read", headers=auth_header(patient_token))
+
+    response = client.post(
+        f"/messages/direct/{student_id}/unread", headers=auth_header(patient_token)
+    )
+    assert response.status_code == 200
+    assert response.json()["last_read_at"] is None
+
+
+def test_marking_unread_on_nonexistent_thread_is_a_noop(client):
+    student_token = register_and_login(client, "msg-s4d@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+
+    response = client.post(
+        f"/messages/direct/{patient_id}/unread", headers=auth_header(student_token)
+    )
+    assert response.status_code == 200
+    assert response.json()["last_read_at"] is None
+
+
 def test_third_party_gets_404_not_403(client):
     student_token = register_and_login(client, "msg-s7@example.com", role="student")
     other_student_token = register_and_login(client, "msg-s7b@example.com", role="student")
@@ -421,3 +453,191 @@ def test_group_appears_in_list_for_all_participants(client):
 
     groups_for_2 = client.get("/messages/groups", headers=auth_header(student2_token)).json()
     assert any(g["title"] == "Shared group" for g in groups_for_2)
+
+
+# ---- Unread count (drives the Messages nav badge) --------------------------
+
+
+def test_unread_count_reflects_new_message_and_own_messages_dont_count(client):
+    student_token = register_and_login(client, "msg-s25@example.com", role="student")
+    patient_id, patient_token = create_and_login_patient(
+        client, student_token, "msg-p25@example.com"
+    )
+
+    assert client.get("/messages/unread-count", headers=auth_header(student_token)).json() == {
+        "count": 0
+    }
+
+    client.post(
+        f"/messages/direct/{_student_id(client, student_token)}",
+        json={"body": "hi"},
+        headers=auth_header(patient_token),
+    )
+
+    # The sender never counts their own message as unread for themselves.
+    assert client.get("/messages/unread-count", headers=auth_header(patient_token)).json() == {
+        "count": 0
+    }
+    assert client.get("/messages/unread-count", headers=auth_header(student_token)).json() == {
+        "count": 1
+    }
+
+
+def test_unread_count_resets_after_read_and_returns_after_unread(client):
+    student_token = register_and_login(client, "msg-s26@example.com", role="student")
+    patient_id, patient_token = create_and_login_patient(
+        client, student_token, "msg-p26@example.com"
+    )
+    student_id = _student_id(client, student_token)
+
+    client.post(
+        f"/messages/direct/{student_id}", json={"body": "hi"}, headers=auth_header(patient_token)
+    )
+    assert (
+        client.get("/messages/unread-count", headers=auth_header(student_token)).json()["count"]
+        == 1
+    )
+
+    client.post(f"/messages/direct/{patient_id}/read", headers=auth_header(student_token))
+    assert (
+        client.get("/messages/unread-count", headers=auth_header(student_token)).json()["count"]
+        == 0
+    )
+
+    client.post(f"/messages/direct/{patient_id}/unread", headers=auth_header(student_token))
+    assert (
+        client.get("/messages/unread-count", headers=auth_header(student_token)).json()["count"]
+        == 1
+    )
+
+
+def test_unread_count_includes_admin_thread_no_admin_has_touched_yet(client):
+    """The shared admin inbox never adds a specific admin as a participant
+    when a thread is first created -- an admin's unread count must still
+    pick up a brand-new thread nobody on the admin side has opened yet,
+    not just ones they've already replied to or explicitly marked."""
+    admin_token = register_and_login(client, "msg-admin27@example.com", role="admin")
+    student_token = register_and_login(client, "msg-s27@example.com", role="student")
+
+    assert (
+        client.get("/messages/unread-count", headers=auth_header(admin_token)).json()["count"] == 0
+    )
+
+    client.post(
+        "/messages/admin", json={"body": "first ever message"}, headers=auth_header(student_token)
+    )
+
+    assert (
+        client.get("/messages/unread-count", headers=auth_header(admin_token)).json()["count"] == 1
+    )
+
+    student_id = _student_id(client, student_token)
+    client.post(f"/messages/admin-inbox/{student_id}/read", headers=auth_header(admin_token))
+    assert (
+        client.get("/messages/unread-count", headers=auth_header(admin_token)).json()["count"] == 0
+    )
+
+
+# ---- Thread summaries (drives the sidebar's unread indicator + sort) ------
+
+
+def _summary_for(client, token, target_key):
+    body = client.get("/messages/thread-summaries", headers=auth_header(token)).json()
+    return next((s for s in body if s["target_key"] == target_key), None)
+
+
+def test_thread_summary_marks_direct_contact_unread_with_last_message_time(client):
+    student_token = register_and_login(client, "msg-s28@example.com", role="student")
+    patient_id, patient_token = create_and_login_patient(
+        client, student_token, "msg-p28@example.com"
+    )
+    student_id = _student_id(client, student_token)
+
+    assert client.get("/messages/thread-summaries", headers=auth_header(student_token)).json() == []
+
+    sent = client.post(
+        f"/messages/direct/{student_id}", json={"body": "hi"}, headers=auth_header(patient_token)
+    ).json()
+
+    summary = _summary_for(client, student_token, f"direct:{patient_id}")
+    assert summary is not None
+    assert summary["has_unread"] is True
+    assert summary["last_message_at"] == sent["created_at"]
+
+    client.post(f"/messages/direct/{patient_id}/read", headers=auth_header(student_token))
+    summary = _summary_for(client, student_token, f"direct:{patient_id}")
+    assert summary["has_unread"] is False
+    # Marking read doesn't erase the thread or its last-activity time.
+    assert summary["last_message_at"] == sent["created_at"]
+
+
+def test_thread_summary_marks_own_admin_thread_as_admin_self(client):
+    # Admin reaches out first, before the student has ever touched the
+    # thread -- their participant row starts out with last_read_at NULL,
+    # so this doesn't depend on comparing a real read timestamp against a
+    # same-transaction message timestamp (see the untouched-thread test
+    # below for that comparison instead).
+    student_token = register_and_login(client, "msg-s29@example.com", role="student")
+    admin_token = register_and_login(client, "msg-admin29@example.com", role="admin")
+    student_id = _student_id(client, student_token)
+
+    client.post(
+        f"/messages/admin-inbox/{student_id}",
+        json={"body": "reaching out"},
+        headers=auth_header(admin_token),
+    )
+
+    summary = _summary_for(client, student_token, "admin:self")
+    assert summary is not None
+    assert summary["has_unread"] is True
+
+    client.post("/messages/admin/read", headers=auth_header(student_token))
+    summary = _summary_for(client, student_token, "admin:self")
+    assert summary["has_unread"] is False
+
+
+def test_thread_summary_marks_admin_inbox_by_owner_id_including_untouched(client):
+    admin_token = register_and_login(client, "msg-admin30@example.com", role="admin")
+    student_token = register_and_login(client, "msg-s30@example.com", role="student")
+    student_id = _student_id(client, student_token)
+
+    client.post(
+        "/messages/admin", json={"body": "brand new thread"}, headers=auth_header(student_token)
+    )
+
+    summary = _summary_for(client, admin_token, f"admin:{student_id}")
+    assert summary is not None
+    assert summary["has_unread"] is True
+
+    client.post(f"/messages/admin-inbox/{student_id}/read", headers=auth_header(admin_token))
+    summary = _summary_for(client, admin_token, f"admin:{student_id}")
+    assert summary["has_unread"] is False
+
+
+def test_thread_summary_marks_group_and_updates_last_message_time(client):
+    student1_token = register_and_login(client, "msg-s31@example.com", role="student")
+    student2_token = register_and_login(client, "msg-s31b@example.com", role="student")
+    student2_id = _student_id(client, student2_token)
+
+    group = client.post(
+        "/messages/groups",
+        json={"title": "Study group", "participant_ids": [student2_id]},
+        headers=auth_header(student1_token),
+    ).json()
+
+    # A group with no messages yet still shows up (participants are added
+    # at creation time), just with no last-activity timestamp.
+    summary = _summary_for(client, student2_token, f"group:{group['id']}")
+    assert summary is not None
+    assert summary["has_unread"] is False
+    assert summary["last_message_at"] is None
+
+    sent = client.post(
+        f"/messages/groups/{group['id']}",
+        json={"body": "hey team"},
+        headers=auth_header(student1_token),
+    ).json()
+
+    summary = _summary_for(client, student2_token, f"group:{group['id']}")
+    assert summary["has_unread"] is True
+    assert summary["last_message_at"] == sent["created_at"]

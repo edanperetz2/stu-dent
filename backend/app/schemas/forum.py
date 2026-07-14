@@ -22,7 +22,12 @@ class ForumPostOut(BaseModel):
     author_student_id: uuid.UUID
     title: str
     body: str
-    score: int
+    likes: int
+    dislikes: int
+    comment_count: int
+    # The requesting student's own vote on this post (1/-1), or None if they
+    # haven't voted (always None for a non-student viewer, e.g. admin).
+    my_vote: Literal[1, -1] | None
     created_at: datetime
     updated_at: datetime
 
@@ -38,7 +43,9 @@ class ForumCommentOut(BaseModel):
     post_id: uuid.UUID
     author_student_id: uuid.UUID
     body: str
-    score: int
+    likes: int
+    dislikes: int
+    my_vote: Literal[1, -1] | None
     created_at: datetime
     updated_at: datetime
 

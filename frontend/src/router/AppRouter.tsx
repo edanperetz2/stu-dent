@@ -34,16 +34,8 @@ const LoginPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import('../pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })),
 )
-const AvailabilityPage = lazy(() =>
-  import('../pages/availability/AvailabilityPage').then((m) => ({
-    default: m.AvailabilityPage,
-  })),
-)
 const ForumListPage = lazy(() =>
   import('../pages/forum/ForumListPage').then((m) => ({ default: m.ForumListPage })),
-)
-const ForumPostPage = lazy(() =>
-  import('../pages/forum/ForumPostPage').then((m) => ({ default: m.ForumPostPage })),
 )
 const MessagesPage = lazy(() =>
   import('../pages/messages/MessagesPage').then((m) => ({ default: m.MessagesPage })),
@@ -97,7 +89,6 @@ export function AppRouter() {
               <Route path="/patients/:patientId" element={<PatientDetailPage />} />
               <Route path="/appointments" element={<AppointmentsListPage />} />
               <Route path="/appointments/:appointmentId" element={<AppointmentDetailPage />} />
-              <Route path="/availability" element={<AvailabilityPage />} />
               <Route path="/waitlist" element={<WaitlistPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/messages" element={<MessagesPage />} />
@@ -105,7 +96,6 @@ export function AppRouter() {
 
               <Route element={<RequireAuth roles={['student', 'admin']} />}>
                 <Route path="/forum" element={<ForumListPage />} />
-                <Route path="/forum/:postId" element={<ForumPostPage />} />
               </Route>
 
               <Route element={<RequireAuth roles={['student', 'attending']} />}>

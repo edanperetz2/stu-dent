@@ -7,7 +7,7 @@ no-op, so re-running is always safe.
 """
 
 import logging
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,7 +24,6 @@ from app.models.forum_post_vote import ForumPostVote
 from app.models.notification import NotificationType
 from app.models.report import ReportPeriodType
 from app.models.room import Room
-from app.models.student_availability import StudentAvailability
 from app.models.user import RoleEnum, User
 from app.models.waitlist_entry import WaitlistEntry, WaitlistStatus
 from app.services.messaging import admin_key, direct_key
@@ -79,27 +78,6 @@ def _seed_rooms_and_equipment(db: Session) -> tuple[list[Room], list[Equipment]]
     db.add_all([*rooms, *equipment])
     db.flush()
     return rooms, equipment
-
-
-def _seed_availability(db: Session, students: list[User]) -> None:
-    for student in students:
-        db.add_all(
-            [
-                StudentAvailability(
-                    student_id=student.id,
-                    day_of_week=0,
-                    start_time=time(9, 0),
-                    end_time=time(17, 0),
-                ),
-                StudentAvailability(
-                    student_id=student.id,
-                    day_of_week=2,
-                    start_time=time(9, 0),
-                    end_time=time(17, 0),
-                ),
-            ]
-        )
-    db.flush()
 
 
 def _seed_patients(db: Session, students: list[User]) -> list[User]:
@@ -582,7 +560,6 @@ def main() -> None:
         admin = users["admin"]
 
         rooms, equipment = _seed_rooms_and_equipment(db)
-        _seed_availability(db, students)
         patients = _seed_patients(db, students)
         appointments = _seed_appointments(db, students, patients, attendings, rooms, equipment)
         _seed_waitlist(db, students, patients)

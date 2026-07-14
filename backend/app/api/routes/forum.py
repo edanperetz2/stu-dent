@@ -25,57 +25,147 @@ from app.services.audit import record_audit_log
 router = APIRouter(tags=["forum"])
 
 
-def _post_score_subquery():
+def _post_likes_subquery():
     return (
-        select(func.coalesce(func.sum(ForumPostVote.value), 0))
-        .where(ForumPostVote.post_id == ForumPost.id)
+        select(func.count(ForumPostVote.id))
+        .where(ForumPostVote.post_id == ForumPost.id, ForumPostVote.value == 1)
         .scalar_subquery()
     )
 
 
-def _comment_score_subquery():
+def _post_dislikes_subquery():
     return (
-        select(func.coalesce(func.sum(ForumCommentVote.value), 0))
-        .where(ForumCommentVote.comment_id == ForumComment.id)
+        select(func.count(ForumPostVote.id))
+        .where(ForumPostVote.post_id == ForumPost.id, ForumPostVote.value == -1)
         .scalar_subquery()
     )
 
 
-def _post_score(db: Session, post_id: uuid.UUID) -> int:
+def _comment_likes_subquery():
+    return (
+        select(func.count(ForumCommentVote.id))
+        .where(ForumCommentVote.comment_id == ForumComment.id, ForumCommentVote.value == 1)
+        .scalar_subquery()
+    )
+
+
+def _comment_dislikes_subquery():
+    return (
+        select(func.count(ForumCommentVote.id))
+        .where(ForumCommentVote.comment_id == ForumComment.id, ForumCommentVote.value == -1)
+        .scalar_subquery()
+    )
+
+
+def _post_comment_count_subquery():
+    return (
+        select(func.count(ForumComment.id))
+        .where(ForumComment.post_id == ForumPost.id, ForumComment.deleted_at.is_(None))
+        .scalar_subquery()
+    )
+
+
+def _post_my_vote_subquery(user_id: uuid.UUID):
+    return (
+        select(ForumPostVote.value)
+        .where(ForumPostVote.post_id == ForumPost.id, ForumPostVote.student_id == user_id)
+        .scalar_subquery()
+    )
+
+
+def _comment_my_vote_subquery(user_id: uuid.UUID):
+    return (
+        select(ForumCommentVote.value)
+        .where(
+            ForumCommentVote.comment_id == ForumComment.id, ForumCommentVote.student_id == user_id
+        )
+        .scalar_subquery()
+    )
+
+
+def _post_comment_count(db: Session, post_id: uuid.UUID) -> int:
+    return (
+        db.scalar(
+            select(func.count(ForumComment.id)).where(
+                ForumComment.post_id == post_id, ForumComment.deleted_at.is_(None)
+            )
+        )
+        or 0
+    )
+
+
+def _post_my_vote(db: Session, post_id: uuid.UUID, user_id: uuid.UUID) -> int | None:
     return db.scalar(
-        select(func.coalesce(func.sum(ForumPostVote.value), 0)).where(
-            ForumPostVote.post_id == post_id
+        select(ForumPostVote.value).where(
+            ForumPostVote.post_id == post_id, ForumPostVote.student_id == user_id
         )
     )
 
 
-def _comment_score(db: Session, comment_id: uuid.UUID) -> int:
+def _comment_my_vote(db: Session, comment_id: uuid.UUID, user_id: uuid.UUID) -> int | None:
     return db.scalar(
-        select(func.coalesce(func.sum(ForumCommentVote.value), 0)).where(
-            ForumCommentVote.comment_id == comment_id
+        select(ForumCommentVote.value).where(
+            ForumCommentVote.comment_id == comment_id, ForumCommentVote.student_id == user_id
         )
     )
 
 
-def _post_out(post: ForumPost, score: int) -> ForumPostOut:
+def _post_vote_counts(db: Session, post_id: uuid.UUID) -> tuple[int, int]:
+    likes = db.scalar(
+        select(func.count(ForumPostVote.id)).where(
+            ForumPostVote.post_id == post_id, ForumPostVote.value == 1
+        )
+    )
+    dislikes = db.scalar(
+        select(func.count(ForumPostVote.id)).where(
+            ForumPostVote.post_id == post_id, ForumPostVote.value == -1
+        )
+    )
+    return likes, dislikes
+
+
+def _comment_vote_counts(db: Session, comment_id: uuid.UUID) -> tuple[int, int]:
+    likes = db.scalar(
+        select(func.count(ForumCommentVote.id)).where(
+            ForumCommentVote.comment_id == comment_id, ForumCommentVote.value == 1
+        )
+    )
+    dislikes = db.scalar(
+        select(func.count(ForumCommentVote.id)).where(
+            ForumCommentVote.comment_id == comment_id, ForumCommentVote.value == -1
+        )
+    )
+    return likes, dislikes
+
+
+def _post_out(
+    post: ForumPost, likes: int, dislikes: int, comment_count: int, my_vote: int | None
+) -> ForumPostOut:
     return ForumPostOut(
         id=post.id,
         author_student_id=post.author_student_id,
         title=post.title,
         body=post.body,
-        score=score,
+        likes=likes,
+        dislikes=dislikes,
+        comment_count=comment_count,
+        my_vote=my_vote,
         created_at=post.created_at,
         updated_at=post.updated_at,
     )
 
 
-def _comment_out(comment: ForumComment, score: int) -> ForumCommentOut:
+def _comment_out(
+    comment: ForumComment, likes: int, dislikes: int, my_vote: int | None
+) -> ForumCommentOut:
     return ForumCommentOut(
         id=comment.id,
         post_id=comment.post_id,
         author_student_id=comment.author_student_id,
         body=comment.body,
-        score=score,
+        likes=likes,
+        dislikes=dislikes,
+        my_vote=my_vote,
         created_at=comment.created_at,
         updated_at=comment.updated_at,
     )
@@ -118,7 +208,7 @@ def create_post(
     )
     db.commit()
     db.refresh(post)
-    return _post_out(post, 0)
+    return _post_out(post, 0, 0, 0, None)
 
 
 @router.get("/forum/posts", response_model=list[ForumPostOut])
@@ -127,11 +217,20 @@ def list_posts(
     db: Session = Depends(get_db),
 ) -> list[ForumPostOut]:
     stmt = (
-        select(ForumPost, _post_score_subquery().label("score"))
+        select(
+            ForumPost,
+            _post_likes_subquery().label("likes"),
+            _post_dislikes_subquery().label("dislikes"),
+            _post_comment_count_subquery().label("comment_count"),
+            _post_my_vote_subquery(current_user.id).label("my_vote"),
+        )
         .where(ForumPost.deleted_at.is_(None))
         .order_by(ForumPost.created_at.desc())
     )
-    return [_post_out(post, score) for post, score in db.execute(stmt).all()]
+    return [
+        _post_out(post, likes, dislikes, comment_count, my_vote)
+        for post, likes, dislikes, comment_count, my_vote in db.execute(stmt).all()
+    ]
 
 
 @router.get("/forum/posts/{post_id}", response_model=ForumPostOut)
@@ -141,7 +240,10 @@ def get_post(
     db: Session = Depends(get_db),
 ) -> ForumPostOut:
     post = _get_active_post(db, post_id)
-    return _post_out(post, _post_score(db, post.id))
+    likes, dislikes = _post_vote_counts(db, post.id)
+    comment_count = _post_comment_count(db, post.id)
+    my_vote = _post_my_vote(db, post.id, current_user.id)
+    return _post_out(post, likes, dislikes, comment_count, my_vote)
 
 
 @router.patch("/forum/posts/{post_id}", response_model=ForumPostOut)
@@ -169,7 +271,10 @@ def update_post(
     )
     db.commit()
     db.refresh(post)
-    return _post_out(post, _post_score(db, post.id))
+    likes, dislikes = _post_vote_counts(db, post.id)
+    comment_count = _post_comment_count(db, post.id)
+    my_vote = _post_my_vote(db, post.id, current_user.id)
+    return _post_out(post, likes, dislikes, comment_count, my_vote)
 
 
 @router.delete("/forum/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -225,7 +330,7 @@ def create_comment(
     )
     db.commit()
     db.refresh(comment)
-    return _comment_out(comment, 0)
+    return _comment_out(comment, 0, 0, None)
 
 
 @router.get("/forum/posts/{post_id}/comments", response_model=list[ForumCommentOut])
@@ -237,11 +342,19 @@ def list_comments(
     _get_active_post(db, post_id)
 
     stmt = (
-        select(ForumComment, _comment_score_subquery().label("score"))
+        select(
+            ForumComment,
+            _comment_likes_subquery().label("likes"),
+            _comment_dislikes_subquery().label("dislikes"),
+            _comment_my_vote_subquery(current_user.id).label("my_vote"),
+        )
         .where(ForumComment.post_id == post_id, ForumComment.deleted_at.is_(None))
         .order_by(ForumComment.created_at.asc())
     )
-    return [_comment_out(comment, score) for comment, score in db.execute(stmt).all()]
+    return [
+        _comment_out(comment, likes, dislikes, my_vote)
+        for comment, likes, dislikes, my_vote in db.execute(stmt).all()
+    ]
 
 
 @router.delete("/forum/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -291,7 +404,9 @@ def vote_on_post(
         vote.value = payload.value
     db.commit()
 
-    return _post_out(post, _post_score(db, post_id))
+    likes, dislikes = _post_vote_counts(db, post_id)
+    comment_count = _post_comment_count(db, post_id)
+    return _post_out(post, likes, dislikes, comment_count, payload.value)
 
 
 @router.delete("/forum/posts/{post_id}/vote", response_model=ForumPostOut)
@@ -311,7 +426,9 @@ def remove_post_vote(
         db.delete(vote)
         db.commit()
 
-    return _post_out(post, _post_score(db, post_id))
+    likes, dislikes = _post_vote_counts(db, post_id)
+    comment_count = _post_comment_count(db, post_id)
+    return _post_out(post, likes, dislikes, comment_count, None)
 
 
 @router.put("/forum/comments/{comment_id}/vote", response_model=ForumCommentOut)
@@ -337,7 +454,8 @@ def vote_on_comment(
         vote.value = payload.value
     db.commit()
 
-    return _comment_out(comment, _comment_score(db, comment_id))
+    likes, dislikes = _comment_vote_counts(db, comment_id)
+    return _comment_out(comment, likes, dislikes, payload.value)
 
 
 @router.delete("/forum/comments/{comment_id}/vote", response_model=ForumCommentOut)
@@ -358,4 +476,5 @@ def remove_comment_vote(
         db.delete(vote)
         db.commit()
 
-    return _comment_out(comment, _comment_score(db, comment_id))
+    likes, dislikes = _comment_vote_counts(db, comment_id)
+    return _comment_out(comment, likes, dislikes, None)

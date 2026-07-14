@@ -18,7 +18,8 @@ def test_student_creates_post(client):
     response = _create_post(client, student_token)
     assert response.status_code == 201
     body = response.json()
-    assert body["score"] == 0
+    assert body["likes"] == 0
+    assert body["dislikes"] == 0
     assert body["title"] == "Title"
 
 
@@ -106,7 +107,8 @@ def test_create_and_list_comments(client):
 
     response = _create_comment(client, other_student_token, post["id"])
     assert response.status_code == 201
-    assert response.json()["score"] == 0
+    assert response.json()["likes"] == 0
+    assert response.json()["dislikes"] == 0
 
     listing = client.get(
         f"/forum/posts/{post['id']}/comments", headers=auth_header(student_token)
@@ -144,7 +146,7 @@ def test_delete_comment_by_non_author_non_admin_forbidden(client):
     assert response.status_code == 403
 
 
-def test_vote_on_post_upsert_changes_score(client):
+def test_vote_on_post_upsert_changes_counts(client):
     student_token = register_and_login(client, "forum-s12@example.com", role="student")
     voter_token = register_and_login(client, "forum-s12b@example.com", role="student")
     post = _create_post(client, student_token).json()
@@ -153,13 +155,15 @@ def test_vote_on_post_upsert_changes_score(client):
         f"/forum/posts/{post['id']}/vote", json={"value": 1}, headers=auth_header(voter_token)
     )
     assert upvote.status_code == 200
-    assert upvote.json()["score"] == 1
+    assert upvote.json()["likes"] == 1
+    assert upvote.json()["dislikes"] == 0
 
     switch_to_downvote = client.put(
         f"/forum/posts/{post['id']}/vote", json={"value": -1}, headers=auth_header(voter_token)
     )
     assert switch_to_downvote.status_code == 200
-    assert switch_to_downvote.json()["score"] == -1
+    assert switch_to_downvote.json()["likes"] == 0
+    assert switch_to_downvote.json()["dislikes"] == 1
 
 
 def test_remove_post_vote(client):
@@ -172,7 +176,8 @@ def test_remove_post_vote(client):
     )
     response = client.delete(f"/forum/posts/{post['id']}/vote", headers=auth_header(voter_token))
     assert response.status_code == 200
-    assert response.json()["score"] == 0
+    assert response.json()["likes"] == 0
+    assert response.json()["dislikes"] == 0
 
 
 def test_vote_on_comment_upsert_and_remove(client):
@@ -187,26 +192,31 @@ def test_vote_on_comment_upsert_and_remove(client):
         headers=auth_header(voter_token),
     )
     assert upvote.status_code == 200
-    assert upvote.json()["score"] == 1
+    assert upvote.json()["likes"] == 1
+    assert upvote.json()["dislikes"] == 0
 
     remove = client.delete(
         f"/forum/comments/{comment['id']}/vote", headers=auth_header(voter_token)
     )
     assert remove.status_code == 200
-    assert remove.json()["score"] == 0
+    assert remove.json()["likes"] == 0
+    assert remove.json()["dislikes"] == 0
 
 
-def test_multiple_voters_aggregate_score(client):
+def test_multiple_voters_aggregate_likes_and_dislikes(client):
     student_token = register_and_login(client, "forum-s15@example.com", role="student")
     voter_a = register_and_login(client, "forum-s15a@example.com", role="student")
     voter_b = register_and_login(client, "forum-s15b@example.com", role="student")
+    voter_c = register_and_login(client, "forum-s15c@example.com", role="student")
     post = _create_post(client, student_token).json()
 
     client.put(f"/forum/posts/{post['id']}/vote", json={"value": 1}, headers=auth_header(voter_a))
+    client.put(f"/forum/posts/{post['id']}/vote", json={"value": 1}, headers=auth_header(voter_b))
     response = client.put(
-        f"/forum/posts/{post['id']}/vote", json={"value": 1}, headers=auth_header(voter_b)
+        f"/forum/posts/{post['id']}/vote", json={"value": -1}, headers=auth_header(voter_c)
     )
-    assert response.json()["score"] == 2
+    assert response.json()["likes"] == 2
+    assert response.json()["dislikes"] == 1
 
 
 def test_invalid_vote_value_rejected(client):
@@ -217,6 +227,60 @@ def test_invalid_vote_value_rejected(client):
         f"/forum/posts/{post['id']}/vote", json={"value": 5}, headers=auth_header(student_token)
     )
     assert response.status_code == 422
+
+
+def test_post_comment_count_reflects_active_comments(client):
+    student_token = register_and_login(client, "forum-s18@example.com", role="student")
+    other_student_token = register_and_login(client, "forum-s18b@example.com", role="student")
+    post = _create_post(client, student_token).json()
+
+    assert (
+        client.get(f"/forum/posts/{post['id']}", headers=auth_header(student_token)).json()[
+            "comment_count"
+        ]
+        == 0
+    )
+
+    comment_a = _create_comment(client, other_student_token, post["id"]).json()
+    _create_comment(client, other_student_token, post["id"])
+    listing = client.get("/forum/posts", headers=auth_header(student_token)).json()
+    assert next(p for p in listing if p["id"] == post["id"])["comment_count"] == 2
+
+    # Deleting one comment drops the count back down.
+    client.delete(f"/forum/comments/{comment_a['id']}", headers=auth_header(other_student_token))
+    detail = client.get(f"/forum/posts/{post['id']}", headers=auth_header(student_token)).json()
+    assert detail["comment_count"] == 1
+
+
+def test_post_and_comment_my_vote_reflects_current_users_own_vote(client):
+    student_token = register_and_login(client, "forum-s19@example.com", role="student")
+    voter_token = register_and_login(client, "forum-s19b@example.com", role="student")
+    post = _create_post(client, student_token).json()
+    comment = _create_comment(client, student_token, post["id"]).json()
+
+    # No vote yet -- my_vote is None for both post and comment.
+    listing = client.get("/forum/posts", headers=auth_header(voter_token)).json()
+    assert next(p for p in listing if p["id"] == post["id"])["my_vote"] is None
+
+    upvote = client.put(
+        f"/forum/posts/{post['id']}/vote", json={"value": 1}, headers=auth_header(voter_token)
+    )
+    assert upvote.json()["my_vote"] == 1
+
+    # A different user's vote doesn't leak into this viewer's my_vote.
+    other_view = client.get(f"/forum/posts/{post['id']}", headers=auth_header(student_token)).json()
+    assert other_view["my_vote"] is None
+
+    client.delete(f"/forum/posts/{post['id']}/vote", headers=auth_header(voter_token))
+    after_remove = client.get(f"/forum/posts/{post['id']}", headers=auth_header(voter_token)).json()
+    assert after_remove["my_vote"] is None
+
+    comment_downvote = client.put(
+        f"/forum/comments/{comment['id']}/vote",
+        json={"value": -1},
+        headers=auth_header(voter_token),
+    )
+    assert comment_downvote.json()["my_vote"] == -1
 
 
 def test_comment_on_missing_post_404(client):

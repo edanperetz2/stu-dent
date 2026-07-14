@@ -68,6 +68,24 @@ def test_mark_notification_read(client, db_session):
     assert again.status_code == 200
 
 
+def test_mark_notification_unread(client, db_session):
+    student_token = register_and_login(client, "notif-s4b@example.com", role="student")
+    user_id = client.get("/users/me", headers=auth_header(student_token)).json()["id"]
+    entry = _notify_user(db_session, uuid.UUID(user_id))
+
+    client.post(f"/notifications/{entry.id}/read", headers=auth_header(student_token))
+    unread_response = client.post(
+        f"/notifications/{entry.id}/unread", headers=auth_header(student_token)
+    )
+    assert unread_response.status_code == 200
+    assert unread_response.json()["read_at"] is None
+
+    # idempotent: marking unread again doesn't error
+    again = client.post(f"/notifications/{entry.id}/unread", headers=auth_header(student_token))
+    assert again.status_code == 200
+    assert again.json()["read_at"] is None
+
+
 def test_unread_only_filter(client, db_session):
     student_token = register_and_login(client, "notif-s5@example.com", role="student")
     user_id = client.get("/users/me", headers=auth_header(student_token)).json()["id"]

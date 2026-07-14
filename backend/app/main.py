@@ -10,7 +10,6 @@ from app.api.routes import (
     appointments,
     attending,
     auth,
-    availability,
     equipment,
     forum,
     messages,
@@ -60,7 +59,6 @@ app.include_router(resources.router)
 app.include_router(students.router)
 app.include_router(equipment.router)
 app.include_router(appointments.router)
-app.include_router(availability.router)
 app.include_router(notifications.router)
 app.include_router(waitlist.router)
 app.include_router(forum.router)

@@ -21,6 +21,8 @@ from app.schemas.messaging import (
     MessageCreate,
     MessageOut,
     ReadReceiptOut,
+    ThreadSummaryOut,
+    UnreadCountOut,
 )
 from app.services.messaging import (
     active_admin_ids,
@@ -33,8 +35,11 @@ from app.services.messaging import (
     list_contacts,
     list_conversation_messages,
     list_participants,
+    list_thread_summaries,
     send_message,
     touch_read,
+    touch_unread,
+    unread_message_count,
 )
 from app.services.patients import require_confirmed_patient
 from app.services.users import active_user_filters
@@ -56,6 +61,25 @@ def get_contacts(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> list[User]:
     return list_contacts(db, current_user)
+
+
+@router.get("/unread-count", response_model=UnreadCountOut)
+def get_unread_count(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> UnreadCountOut:
+    return UnreadCountOut(count=unread_message_count(db, current_user.id))
+
+
+@router.get("/thread-summaries", response_model=list[ThreadSummaryOut])
+def get_thread_summaries(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> list[ThreadSummaryOut]:
+    """One entry per conversation with a target-key, last-message time, and
+    unread flag -- lets the Messages sidebar mark exactly which
+    contact/group/admin row is unread (not just the aggregate nav badge)
+    and sort every row by most-recent-activity.
+    """
+    return [ThreadSummaryOut(**summary) for summary in list_thread_summaries(db, current_user)]
 
 
 # ---- Direct (peer-to-peer) messages ----------------------------------------
@@ -128,6 +152,23 @@ def mark_direct_read(
     return ReadReceiptOut.model_validate(participant)
 
 
+@router.post("/direct/{other_user_id}/unread", response_model=ReadReceiptOut)
+def mark_direct_unread(
+    other_user_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReadReceiptOut:
+    other = _authorized_peer(db, other_user_id, current_user)
+    existing = db.scalar(
+        select(Conversation).where(Conversation.direct_key == direct_key(current_user.id, other.id))
+    )
+    if existing is None:
+        return ReadReceiptOut(last_read_at=None)
+    participant = touch_unread(db, existing, current_user.id)
+    db.commit()
+    return ReadReceiptOut.model_validate(participant)
+
+
 # ---- Admin shared inbox -----------------------------------------------------
 
 
@@ -196,6 +237,24 @@ def mark_own_admin_read(
     return ReadReceiptOut.model_validate(participant)
 
 
+@router.post("/admin/unread", response_model=ReadReceiptOut)
+def mark_own_admin_unread(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> ReadReceiptOut:
+    if current_user.role == RoleEnum.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not applicable to admins"
+        )
+    existing = db.scalar(
+        select(Conversation).where(Conversation.direct_key == admin_key(current_user.id))
+    )
+    if existing is None:
+        return ReadReceiptOut(last_read_at=None)
+    participant = touch_unread(db, existing, current_user.id)
+    db.commit()
+    return ReadReceiptOut.model_validate(participant)
+
+
 @router.get("/admin-inbox/{owner_id}", response_model=list[MessageOut])
 def list_admin_inbox_messages(
     owner_id: uuid.UUID,
@@ -250,6 +309,23 @@ def mark_admin_inbox_read(
     if existing is None:
         return ReadReceiptOut(last_read_at=datetime.now(UTC))
     participant = touch_read(db, existing, current_user.id)
+    db.commit()
+    return ReadReceiptOut.model_validate(participant)
+
+
+@router.post("/admin-inbox/{owner_id}/unread", response_model=ReadReceiptOut)
+def mark_admin_inbox_unread(
+    owner_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReadReceiptOut:
+    if current_user.role != RoleEnum.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only")
+    _get_active_user_or_404(db, owner_id)
+    existing = db.scalar(select(Conversation).where(Conversation.direct_key == admin_key(owner_id)))
+    if existing is None:
+        return ReadReceiptOut(last_read_at=None)
+    participant = touch_unread(db, existing, current_user.id)
     db.commit()
     return ReadReceiptOut.model_validate(participant)
 
@@ -370,5 +446,17 @@ def mark_group_read(
 ) -> ReadReceiptOut:
     conversation = _get_group_or_404(db, conversation_id, current_user)
     participant = touch_read(db, conversation, current_user.id)
+    db.commit()
+    return ReadReceiptOut.model_validate(participant)
+
+
+@router.post("/groups/{conversation_id}/unread", response_model=ReadReceiptOut)
+def mark_group_unread(
+    conversation_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReadReceiptOut:
+    conversation = _get_group_or_404(db, conversation_id, current_user)
+    participant = touch_unread(db, conversation, current_user.id)
     db.commit()
     return ReadReceiptOut.model_validate(participant)

@@ -12,6 +12,7 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { getUnreadCount } from '../api/messages'
 import { listNotifications } from '../api/notifications'
 import { useAuth, type Principal } from '../auth/AuthContext'
 
@@ -24,7 +25,6 @@ const STUDENT_LINKS: NavItem[] = [
   { label: 'Dashboard', to: '/' },
   { label: 'Patients', to: '/patients' },
   { label: 'Appointments', to: '/appointments' },
-  { label: 'Availability', to: '/availability' },
   { label: 'Waitlist', to: '/waitlist' },
   { label: 'Forum', to: '/forum' },
   { label: 'Messages', to: '/messages' },
@@ -84,6 +84,13 @@ export function AppLayout() {
   })
   const unreadCount = unreadNotifications?.length ?? 0
 
+  const { data: unreadMessages } = useQuery({
+    queryKey: ['messages', 'unread-count'],
+    queryFn: () => getUnreadCount(principal!.token),
+    enabled: !!principal,
+  })
+  const unreadMessageCount = unreadMessages?.count ?? 0
+
   return (
     <AppShell
       header={{ height: 72 }}
@@ -127,21 +134,29 @@ export function AppLayout() {
         </Group>
       </AppShell.Header>
       <AppShell.Navbar p="md">
-        {links.map((link) => (
-          <NavLink
-            key={link.to}
-            label={link.label}
-            className="app-nav-link"
-            onClick={() => navigate(link.to)}
-            rightSection={
-              link.to === '/notifications' && unreadCount > 0 ? (
-                <Badge size="sm" circle color="red">
-                  {unreadCount}
-                </Badge>
-              ) : undefined
-            }
-          />
-        ))}
+        {links.map((link) => {
+          const badgeCount =
+            link.to === '/notifications'
+              ? unreadCount
+              : link.to === '/messages'
+                ? unreadMessageCount
+                : 0
+          return (
+            <NavLink
+              key={link.to}
+              label={link.label}
+              className="app-nav-link"
+              onClick={() => navigate(link.to)}
+              rightSection={
+                badgeCount > 0 ? (
+                  <Badge size="sm" circle color="red">
+                    {badgeCount}
+                  </Badge>
+                ) : undefined
+              }
+            />
+          )
+        })}
       </AppShell.Navbar>
       <AppShell.Main>
         <Outlet />

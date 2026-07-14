@@ -1,4 +1,5 @@
 import {
+  Badge,
   Box,
   Button,
   Divider,
@@ -23,13 +24,16 @@ import { listAttendings } from '../../api/attendings'
 import { apiErrorMessage } from '../../api/httpClient'
 import {
   createGroup,
+  getThreadSummaries,
   listContacts,
   listGroups,
   listMessages,
   markRead,
+  markUnread,
   sendMessage,
   targetKey,
   type MessageTarget,
+  type ThreadSummary,
 } from '../../api/messages'
 import { listStudents } from '../../api/students'
 import { useAuth } from '../../auth/AuthContext'
@@ -63,6 +67,16 @@ export function MessagesPage() {
     queryFn: () => listGroups(token),
   })
 
+  const { data: threadSummaries } = useQuery({
+    queryKey: ['messages', 'thread-summaries'],
+    queryFn: () => getThreadSummaries(token),
+  })
+  const summaryByKey = useMemo(() => {
+    const map = new Map<string, ThreadSummary>()
+    for (const summary of threadSummaries ?? []) map.set(summary.target_key, summary)
+    return map
+  }, [threadSummaries])
+
   const { data: messages, isLoading: messagesLoading } = useQuery({
     queryKey: ['messages', 'thread', selectedKey],
     queryFn: () => listMessages(token, selected!.target),
@@ -71,11 +85,38 @@ export function MessagesPage() {
 
   const markReadMutation = useMutation({
     mutationFn: (target: MessageTarget) => markRead(token, target),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages', 'unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['messages', 'thread-summaries'] })
+    },
+    onError: (err) =>
+      notifications.show({
+        message: apiErrorMessage(err, 'Failed to mark thread as read'),
+        color: 'red',
+      }),
+  })
+
+  const markUnreadMutation = useMutation({
+    mutationFn: (target: MessageTarget) => markUnread(token, target),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages', 'unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['messages', 'thread-summaries'] })
+    },
+    onError: (err) =>
+      notifications.show({
+        message: apiErrorMessage(err, 'Failed to mark thread as unread'),
+        color: 'red',
+      }),
   })
 
   useEffect(() => {
-    if (selected) markReadMutation.mutate(selected.target)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the open thread changes
+    if (selected) {
+      markReadMutation.mutate(selected.target)
+    }
+    // Only re-run when the selected conversation itself changes -- not on
+    // every markReadMutation identity change (that would re-fire on its
+    // own success/error callbacks).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey])
 
   const sendMutation = useMutation({
@@ -140,6 +181,30 @@ export function MessagesPage() {
     label: g.title,
   }))
 
+  // Unread threads first, then most-recent-activity first; threads with no
+  // activity yet (e.g. a just-created group with no messages) sort last,
+  // falling back to alphabetical by label so the order stays stable.
+  const sortByActivity = (items: Selection[]): Selection[] =>
+    [...items].sort((a, b) => {
+      const summaryA = summaryByKey.get(targetKey(a.target))
+      const summaryB = summaryByKey.get(targetKey(b.target))
+      const unreadA = summaryA?.has_unread ?? false
+      const unreadB = summaryB?.has_unread ?? false
+      if (unreadA !== unreadB) return unreadA ? -1 : 1
+
+      const timeA = summaryA?.last_message_at ? new Date(summaryA.last_message_at).getTime() : null
+      const timeB = summaryB?.last_message_at ? new Date(summaryB.last_message_at).getTime() : null
+      if (timeA !== null && timeB !== null) return timeB - timeA
+      if (timeA !== null) return -1
+      if (timeB !== null) return 1
+      return a.label.localeCompare(b.label)
+    })
+
+  const sortedContactItems = sortByActivity(
+    isAdmin ? contactItems : [...contactItems, { target: { kind: 'admin' }, label: 'Admin' }],
+  )
+  const sortedGroupItems = sortByActivity(groupItems)
+
   const selectedGroupMembers = useMemo(() => {
     if (!selected || selected.target.kind !== 'group') return undefined
     const conversationId = selected.target.conversationId
@@ -155,23 +220,22 @@ export function MessagesPage() {
               CONTACTS
             </Text>
             {contactsLoading && <LoadingText />}
-            {!contactsLoading && contactItems.length === 0 && <EmptyText>No contacts yet.</EmptyText>}
-            {contactItems.map((item) => (
+            {!contactsLoading && sortedContactItems.length === 0 && (
+              <EmptyText>No contacts yet.</EmptyText>
+            )}
+            {sortedContactItems.map((item) => (
               <NavLink
                 key={targetKey(item.target)}
                 label={item.label}
                 active={targetKey(item.target) === selectedKey}
                 onClick={() => setSelected(item)}
+                rightSection={
+                  summaryByKey.get(targetKey(item.target))?.has_unread ? (
+                    <Badge size="xs" circle color="red" />
+                  ) : undefined
+                }
               />
             ))}
-
-            {!isAdmin && (
-              <NavLink
-                label="Admin"
-                active={selectedKey === targetKey({ kind: 'admin' })}
-                onClick={() => setSelected({ target: { kind: 'admin' }, label: 'Admin' })}
-              />
-            )}
 
             <Divider my="xs" />
             <Group justify="space-between" mt="xs">
@@ -185,13 +249,20 @@ export function MessagesPage() {
               )}
             </Group>
             {groupsLoading && <LoadingText />}
-            {!groupsLoading && groupItems.length === 0 && <EmptyText>No group chats yet.</EmptyText>}
-            {groupItems.map((item) => (
+            {!groupsLoading && sortedGroupItems.length === 0 && (
+              <EmptyText>No group chats yet.</EmptyText>
+            )}
+            {sortedGroupItems.map((item) => (
               <NavLink
                 key={targetKey(item.target)}
                 label={item.label}
                 active={targetKey(item.target) === selectedKey}
                 onClick={() => setSelected(item)}
+                rightSection={
+                  summaryByKey.get(targetKey(item.target))?.has_unread ? (
+                    <Badge size="xs" circle color="red" />
+                  ) : undefined
+                }
               />
             ))}
           </Stack>
@@ -199,14 +270,28 @@ export function MessagesPage() {
       </Box>
 
       <Stack flex={1} h="100%">
-        <Stack gap={0}>
-          <Title order={3}>{selected ? selected.label : 'Messages'}</Title>
-          {selectedGroupMembers && (
-            <Text size="sm" c="dimmed">
-              {selectedGroupMembers.join(', ')}
-            </Text>
+        <Group justify="space-between" align="flex-start">
+          <Stack gap={0}>
+            <Title order={3}>{selected ? selected.label : 'Messages'}</Title>
+            {selectedGroupMembers && (
+              <Text size="sm" c="dimmed">
+                {selectedGroupMembers.join(', ')}
+              </Text>
+            )}
+          </Stack>
+          {selected && (
+            <Group gap="xs">
+              <Button
+                size="xs"
+                variant="subtle"
+                loading={markUnreadMutation.isPending}
+                onClick={() => markUnreadMutation.mutate(selected.target)}
+              >
+                Mark unread
+              </Button>
+            </Group>
           )}
-        </Stack>
+        </Group>
 
         {!selected ? (
           <EmptyText>Select a contact or group chat to start messaging.</EmptyText>

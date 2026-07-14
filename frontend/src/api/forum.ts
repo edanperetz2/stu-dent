@@ -19,10 +19,6 @@ export function listPosts(token: string) {
   return request<ForumPost[]>('/forum/posts', { token })
 }
 
-export function getPost(token: string, postId: string) {
-  return request<ForumPost>(`/forum/posts/${postId}`, { token })
-}
-
 export function createPost(token: string, payload: ForumPostCreateInput) {
   return request<ForumPost>('/forum/posts', { method: 'POST', body: payload, token })
 }

@@ -58,8 +58,32 @@ export function sendMessage(token: string, target: MessageTarget, body: string) 
 }
 
 export function markRead(token: string, target: MessageTarget) {
-  return request<{ last_read_at: string }>(`${targetPath(target)}/read`, {
+  return request<{ last_read_at: string | null }>(`${targetPath(target)}/read`, {
     method: 'POST',
     token,
   })
+}
+
+export function markUnread(token: string, target: MessageTarget) {
+  return request<{ last_read_at: string | null }>(`${targetPath(target)}/unread`, {
+    method: 'POST',
+    token,
+  })
+}
+
+export function getUnreadCount(token: string) {
+  return request<{ count: number }>('/messages/unread-count', { token })
+}
+
+export interface ThreadSummary {
+  target_key: string
+  last_message_at: string | null
+  has_unread: boolean
+}
+
+// One entry per conversation, keyed by target_key (matching targetKey()
+// above) -- lets the sidebar mark exactly which contact/group/admin row is
+// unread (not just the aggregate nav badge) and sort by recent activity.
+export function getThreadSummaries(token: string) {
+  return request<ThreadSummary[]>('/messages/thread-summaries', { token })
 }

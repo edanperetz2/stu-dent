@@ -1,21 +1,22 @@
-import { Badge, Button, Group, Modal, Stack, Table, Textarea, TextInput, Title } from '@mantine/core'
+import { Button, Group, Modal, Stack, Text, Textarea, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { createPost, listPosts, type ForumPostCreateInput } from '../../api/forum'
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { LoadingText } from '../../components/StateText'
+import { ForumPostCard } from './ForumPostCard'
 
 export function ForumListPage() {
   const token = useAuthToken()
   const { principal } = useAuth()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const [opened, { open, close }] = useDisclosure(false)
+  const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
 
   const isStudent = principal?.role === 'student'
 
@@ -53,48 +54,27 @@ export function ForumListPage() {
   )
 
   return (
-    <Stack>
+    <Stack maw={640} mx="auto">
       <Group justify="space-between">
         <Title order={2}>Forum</Title>
         {isStudent && <Button onClick={open}>New Post</Button>}
       </Group>
 
-      {isLoading ? (
-        <LoadingText />
-      ) : (
-        <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Title</Table.Th>
-              <Table.Th>Score</Table.Th>
-              <Table.Th>Posted</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {sortedPosts.map((post) => (
-              <Table.Tr
-                key={post.id}
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/forum/${post.id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    navigate(`/forum/${post.id}`)
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-              >
-                <Table.Td>{post.title}</Table.Td>
-                <Table.Td>
-                  <Badge color={post.score >= 0 ? 'blue' : 'red'}>{post.score}</Badge>
-                </Table.Td>
-                <Table.Td>{new Date(post.created_at).toLocaleString()}</Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      )}
+      {isLoading && <LoadingText />}
+      {!isLoading && sortedPosts.length === 0 && <Text c="dimmed">No posts yet.</Text>}
+
+      <Stack gap={0}>
+        {sortedPosts.map((post) => (
+          <ForumPostCard
+            key={post.id}
+            post={post}
+            expanded={expandedPostId === post.id}
+            onToggleExpand={() =>
+              setExpandedPostId((current) => (current === post.id ? null : post.id))
+            }
+          />
+        ))}
+      </Stack>
 
       <Modal opened={opened} onClose={close} title="New Post">
         <form onSubmit={form.onSubmit((values) => createMutation.mutate(values))}>

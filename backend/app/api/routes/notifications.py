@@ -46,3 +46,24 @@ def mark_notification_read(
         db.commit()
         db.refresh(notification)
     return notification
+
+
+@router.post("/notifications/{notification_id}/unread", response_model=NotificationOut)
+def mark_notification_unread(
+    notification_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Notification:
+    notification = db.scalar(
+        select(Notification).where(
+            Notification.id == notification_id, Notification.recipient_id == current_user.id
+        )
+    )
+    if notification is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+
+    if notification.read_at is not None:
+        notification.read_at = None
+        db.commit()
+        db.refresh(notification)
+    return notification

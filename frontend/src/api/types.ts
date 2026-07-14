@@ -88,13 +88,6 @@ export interface Appointment {
   equipment_name: string | null
 }
 
-export interface AvailabilityWindow {
-  id: string
-  day_of_week: number
-  start_time: string
-  end_time: string
-}
-
 export interface Notification {
   id: string
   notification_type: NotificationType
@@ -122,7 +115,10 @@ export interface ForumPost {
   author_student_id: string
   title: string
   body: string
-  score: number
+  likes: number
+  dislikes: number
+  comment_count: number
+  my_vote: 1 | -1 | null
   created_at: string
   updated_at: string
 }
@@ -132,7 +128,9 @@ export interface ForumComment {
   post_id: string
   author_student_id: string
   body: string
-  score: number
+  likes: number
+  dislikes: number
+  my_vote: 1 | -1 | null
   created_at: string
   updated_at: string
 }

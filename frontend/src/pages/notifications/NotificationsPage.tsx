@@ -1,8 +1,12 @@
-import { Badge, Group, Paper, Stack, Switch, Text, Title } from '@mantine/core'
+import { Badge, Button, Group, Paper, Stack, Switch, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { listNotifications, markNotificationRead } from '../../api/notifications'
+import {
+  listNotifications,
+  markNotificationRead,
+  markNotificationUnread,
+} from '../../api/notifications'
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { EmptyText, LoadingText } from '../../components/StateText'
@@ -37,6 +41,19 @@ export function NotificationsPage() {
     },
   })
 
+  const markUnreadMutation = useMutation({
+    mutationFn: (notificationId: string) => markNotificationUnread(token, notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+    onError: (err) => {
+      notifications.show({
+        message: apiErrorMessage(err, 'Failed to mark notification as unread'),
+        color: 'red',
+      })
+    },
+  })
+
   return (
     <Stack>
       <Group justify="space-between">
@@ -59,30 +76,39 @@ export function NotificationsPage() {
               key={item.id}
               withBorder
               p="sm"
-              style={{ cursor: item.read_at ? 'default' : 'pointer' }}
-              onClick={() => {
-                if (!item.read_at) markReadMutation.mutate(item.id)
-              }}
-              onKeyDown={(e) => {
-                if ((e.key === 'Enter' || e.key === ' ') && !item.read_at) {
-                  e.preventDefault()
-                  markReadMutation.mutate(item.id)
-                }
-              }}
-              tabIndex={item.read_at ? undefined : 0}
-              role={item.read_at ? undefined : 'button'}
               bg={item.read_at ? undefined : 'var(--mantine-color-blue-0)'}
             >
-              <Group justify="space-between" wrap="nowrap">
+              <Group justify="space-between" wrap="nowrap" align="flex-start">
                 <Stack gap={2}>
                   <Badge size="sm" color={item.read_at ? 'gray' : 'blue'}>
                     {formatType(item.notification_type)}
                   </Badge>
                   <Text size="sm">{item.message}</Text>
                 </Stack>
-                <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                  {new Date(item.created_at).toLocaleString()}
-                </Text>
+                <Stack gap={4} align="flex-end">
+                  <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                    {new Date(item.created_at).toLocaleString()}
+                  </Text>
+                  {item.read_at ? (
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      loading={markUnreadMutation.isPending}
+                      onClick={() => markUnreadMutation.mutate(item.id)}
+                    >
+                      Mark unread
+                    </Button>
+                  ) : (
+                    <Button
+                      size="compact-xs"
+                      variant="light"
+                      loading={markReadMutation.isPending}
+                      onClick={() => markReadMutation.mutate(item.id)}
+                    >
+                      Mark read
+                    </Button>
+                  )}
+                </Stack>
               </Group>
             </Paper>
           ))}

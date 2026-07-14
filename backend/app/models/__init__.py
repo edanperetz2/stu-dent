@@ -9,7 +9,6 @@ from app.models.forum_post_vote import ForumPostVote
 from app.models.notification import Notification, NotificationType
 from app.models.report import Report, ReportPeriodType
 from app.models.room import Room
-from app.models.student_availability import StudentAvailability
 from app.models.user import PreferredTimeOfDay, RoleEnum, User
 from app.models.waitlist_entry import WaitlistEntry, WaitlistStatus
 
@@ -33,7 +32,6 @@ __all__ = [
     "ReportPeriodType",
     "Room",
     "RoleEnum",
-    "StudentAvailability",
     "User",
     "WaitlistEntry",
     "WaitlistStatus",
