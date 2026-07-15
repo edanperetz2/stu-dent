@@ -22,6 +22,7 @@ import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
 import { LoadingText } from '../../components/StateText'
 import { VoteButtons } from '../../components/VoteButtons'
+import { formatDateTime } from '../../utils/dates'
 
 interface ForumPostCardProps {
   post: ForumPost
@@ -172,7 +173,7 @@ export function ForumPostCard({ post, expanded, onToggleExpand }: ForumPostCardP
               </Group>
             </Group>
             <Text size="xs" c="dimmed">
-              {new Date(post.created_at).toLocaleString()}
+              {formatDateTime(post.created_at)}
             </Text>
           </Group>
         </Stack>

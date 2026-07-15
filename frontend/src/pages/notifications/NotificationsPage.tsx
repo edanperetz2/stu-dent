@@ -10,6 +10,7 @@ import {
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { EmptyText, LoadingText } from '../../components/StateText'
+import { formatDateTime } from '../../utils/dates'
 
 function formatType(notificationType: string): string {
   return notificationType
@@ -87,7 +88,7 @@ export function NotificationsPage() {
                 </Stack>
                 <Stack gap={4} align="flex-end">
                   <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                    {new Date(item.created_at).toLocaleString()}
+                    {formatDateTime(item.created_at)}
                   </Text>
                   {item.read_at ? (
                     <Button

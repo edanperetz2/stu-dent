@@ -14,7 +14,7 @@ import {
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { LoadingText } from '../../components/StateText'
-import { mantineDateTimeToIso } from '../../utils/dates'
+import { formatDateTime, mantineDateTimeToIso } from '../../utils/dates'
 
 export function EquipmentPage() {
   const token = useAuthToken()
@@ -120,7 +120,7 @@ export function EquipmentPage() {
                   </Badge>
                   {!item.is_active && item.inactive_until && (
                     <Text size="xs" c="dimmed">
-                      Reactivates {new Date(item.inactive_until).toLocaleString()}
+                      Reactivates {formatDateTime(item.inactive_until)}
                     </Text>
                   )}
                 </Table.Td>

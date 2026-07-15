@@ -1,3 +1,5 @@
+import dayjs from 'dayjs'
+
 /**
  * Mantine's DateTimePicker onChange always emits a "YYYY-MM-DD HH:mm:ss"
  * local-time string (DatePickerValue<Type, DateStringValue> in
@@ -19,6 +21,13 @@ export function isoToMantineDateTime(iso: string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
     date.getHours(),
   )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+/** dd/mm/yy HH:mm, no seconds, no timezone -- the one display format used
+ * everywhere in the app (Israel-based, so day-first + 24-hour, not the
+ * browser-locale-dependent `.toLocaleString()` this replaces). */
+export function formatDateTime(iso: string | Date): string {
+  return dayjs(iso).format('DD/MM/YY HH:mm')
 }
 
 /** "HH:mm" options every 30 minutes from startHour:startMinute through

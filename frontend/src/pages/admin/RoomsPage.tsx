@@ -9,7 +9,7 @@ import { apiErrorMessage } from '../../api/httpClient'
 import { createRoom, listAllRooms, updateRoom, type RoomCreateInput } from '../../api/rooms'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { LoadingText } from '../../components/StateText'
-import { mantineDateTimeToIso } from '../../utils/dates'
+import { formatDateTime, mantineDateTimeToIso } from '../../utils/dates'
 
 export function RoomsPage() {
   const token = useAuthToken()
@@ -151,7 +151,7 @@ export function RoomsPage() {
                   </Badge>
                   {!room.is_active && room.inactive_until && (
                     <Text size="xs" c="dimmed">
-                      Reactivates {new Date(room.inactive_until).toLocaleString()}
+                      Reactivates {formatDateTime(room.inactive_until)}
                     </Text>
                   )}
                 </Table.Td>

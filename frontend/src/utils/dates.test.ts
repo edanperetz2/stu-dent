@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isoToMantineDateTime, mantineDateTimeToIso } from './dates'
+import { formatDateTime, isoToMantineDateTime, mantineDateTimeToIso } from './dates'
 
 describe('mantineDateTimeToIso', () => {
   it('converts a Mantine local-time string into a valid ISO string', () => {
@@ -22,5 +22,25 @@ describe('isoToMantineDateTime', () => {
   it('formats an ISO string from the backend into the expected Mantine shape', () => {
     const local = isoToMantineDateTime(new Date(2026, 0, 5, 8, 5, 0).toISOString())
     expect(local).toBe('2026-01-05 08:05:00')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('formats a date as dd/mm/yy HH:mm, day-first and 24-hour, no seconds or timezone', () => {
+    // 2026-08-05, 14:05 local time -- if this were rendered with the
+    // browser-locale-dependent .toLocaleString() it replaces, a US-locale
+    // browser would show "8/5/2026, 2:05:00 PM" instead.
+    const formatted = formatDateTime(new Date(2026, 7, 5, 14, 5, 0).toISOString())
+    expect(formatted).toBe('05/08/26 14:05')
+  })
+
+  it('pads single-digit hours to 24-hour format instead of using AM/PM', () => {
+    const formatted = formatDateTime(new Date(2026, 0, 1, 9, 0, 0).toISOString())
+    expect(formatted).toBe('01/01/26 09:00')
+  })
+
+  it('accepts a plain Date object as well as an ISO string', () => {
+    const date = new Date(2026, 11, 31, 23, 59, 0)
+    expect(formatDateTime(date)).toBe('31/12/26 23:59')
   })
 })

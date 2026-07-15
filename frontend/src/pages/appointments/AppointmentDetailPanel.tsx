@@ -26,6 +26,7 @@ import { ConflictResolutionModal } from '../../components/ConflictResolutionModa
 import {
   APPOINTMENT_END_TIME_OPTIONS,
   APPOINTMENT_START_TIME_OPTIONS,
+  formatDateTime,
   isoToMantineDateTime,
   mantineDateTimeToIso,
 } from '../../utils/dates'
@@ -291,8 +292,8 @@ export function AppointmentDetailPanel({
         <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
       </Group>
 
-      <Text>Start: {new Date(appointment.start_time).toLocaleString()}</Text>
-      <Text>End: {new Date(appointment.end_time).toLocaleString()}</Text>
+      <Text>Start: {formatDateTime(appointment.start_time)}</Text>
+      <Text>End: {formatDateTime(appointment.end_time)}</Text>
       <Text>Student: {appointment.student_name}</Text>
       <Text>Patient: {appointment.patient_name}</Text>
       <Text>Attending: {appointment.attending_name ?? '—'}</Text>

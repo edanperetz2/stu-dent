@@ -7,6 +7,7 @@ import { apiErrorMessage } from '../../api/httpClient'
 import type { ReportPeriodType } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { EmptyText, LoadingText } from '../../components/StateText'
+import { formatDateTime } from '../../utils/dates'
 
 const PERIOD_COLORS: Record<ReportPeriodType, string> = {
   weekly: 'blue',
@@ -101,7 +102,7 @@ export function ReportsPage() {
                     {periodLabel(report.period_type)}
                   </Badge>
                   <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                    {new Date(report.created_at).toLocaleString()}
+                    {formatDateTime(report.created_at)}
                   </Text>
                 </Group>
                 <Text fw={600}>{report.title}</Text>

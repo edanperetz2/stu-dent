@@ -18,7 +18,7 @@ import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Calendar, dayjsLocalizer, type SlotInfo, type View } from 'react-big-calendar'
+import { Calendar, dayjsLocalizer, type Formats, type SlotInfo, type View } from 'react-big-calendar'
 import { useSearchParams } from 'react-router-dom'
 import {
   createAppointment,
@@ -43,6 +43,7 @@ import { AppointmentDetailPanel } from './AppointmentDetailPanel'
 import {
   APPOINTMENT_END_TIME_OPTIONS,
   APPOINTMENT_START_TIME_OPTIONS,
+  formatDateTime,
   isoToMantineDateTime,
   mantineDateTimeToIso,
 } from '../../utils/dates'
@@ -70,6 +71,23 @@ const STATUS_CSS_COLORS: Record<AppointmentStatus, string> = {
 }
 
 const localizer = dayjsLocalizer(dayjs)
+
+// dayjsLocalizer's own defaults use dayjs's localized-time token ('LT'),
+// which in the default English locale is 12-hour with AM/PM -- override
+// with plain dd/mm + 24h tokens instead (Israel-based app). Agenda-view
+// format keys are intentionally left at their defaults since Agenda isn't
+// one of this calendar's enabled `views` below.
+const CALENDAR_FORMATS: Formats = {
+  timeGutterFormat: 'HH:mm',
+  dayFormat: 'ddd DD/MM',
+  dayHeaderFormat: 'dddd DD/MM/YYYY',
+  dayRangeHeaderFormat: ({ start, end }, culture, localizer) =>
+    `${localizer!.format(start, 'DD/MM', culture)} – ${localizer!.format(end, 'DD/MM', culture)}`,
+  eventTimeRangeFormat: ({ start, end }, culture, localizer) =>
+    `${localizer!.format(start, 'HH:mm', culture)} – ${localizer!.format(end, 'HH:mm', culture)}`,
+  selectRangeFormat: ({ start, end }, culture, localizer) =>
+    `${localizer!.format(start, 'HH:mm', culture)} – ${localizer!.format(end, 'HH:mm', culture)}`,
+}
 
 // What the calendar/list view is currently showing: the signed-in user's own
 // appointments (default, status-colored), or a clinic-wide resource view --
@@ -393,9 +411,14 @@ export function AppointmentsListPage() {
   // longer actionable, so it's dropped from the list/calendar entirely
   // rather than cluttering either view. Still reachable directly (e.g. via
   // a notification link) at /appointments/{id}, which shows its true
-  // status unfiltered.
+  // status unfiltered. Sorted ascending by start_time (soonest first) --
+  // feeds both the Personal-lens table directly and, for admin, the
+  // Resources-lens table via resourceCalendarEvents below.
   const visibleAppointments = useMemo(
-    () => (appointments ?? []).filter((appointment) => appointment.status !== 'cancelled'),
+    () =>
+      (appointments ?? [])
+        .filter((appointment) => appointment.status !== 'cancelled')
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()),
     [appointments],
   )
 
@@ -459,17 +482,19 @@ export function AppointmentsListPage() {
     // detail shown by default -- the booking student's name is only
     // revealed on click (Calendar) or as its own column (List), see
     // handleSelectEvent and the Resources list table below.
-    return (resourcesSchedule ?? []).map((booking, index) => ({
-      id: `resource-busy-${index}`,
-      title: '',
-      start: new Date(booking.start_time),
-      end: new Date(booking.end_time),
-      resourceId: `${booking.resource_kind}:${booking.resource_id}`,
-      resourceName: booking.resource_name,
-      resourceKind: booking.resource_kind,
-      resource: null,
-      studentName: booking.student_name,
-    }))
+    return [...(resourcesSchedule ?? [])]
+      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+      .map((booking, index) => ({
+        id: `resource-busy-${index}`,
+        title: '',
+        start: new Date(booking.start_time),
+        end: new Date(booking.end_time),
+        resourceId: `${booking.resource_kind}:${booking.resource_id}`,
+        resourceName: booking.resource_name,
+        resourceKind: booking.resource_kind,
+        resource: null,
+        studentName: booking.student_name,
+      }))
   }, [isAdmin, visibleAppointments, resourcesSchedule])
 
   // Every currently-active room/equipment, plus any resource that's
@@ -612,8 +637,8 @@ export function AppointmentsListPage() {
                     role="button"
                     aria-expanded={expanded}
                   >
-                    <Table.Td>{new Date(appointment.start_time).toLocaleString()}</Table.Td>
-                    <Table.Td>{new Date(appointment.end_time).toLocaleString()}</Table.Td>
+                    <Table.Td>{formatDateTime(appointment.start_time)}</Table.Td>
+                    <Table.Td>{formatDateTime(appointment.end_time)}</Table.Td>
                     <Table.Td>
                       <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
                     </Table.Td>
@@ -696,8 +721,8 @@ export function AppointmentsListPage() {
                   >
                     <Table.Td>{event.resourceName}</Table.Td>
                     <Table.Td>{event.resourceKind === 'room' ? 'Room' : 'Equipment'}</Table.Td>
-                    <Table.Td>{event.start.toLocaleString()}</Table.Td>
-                    <Table.Td>{event.end.toLocaleString()}</Table.Td>
+                    <Table.Td>{formatDateTime(event.start)}</Table.Td>
+                    <Table.Td>{formatDateTime(event.end)}</Table.Td>
                     {isAdmin ? (
                       <>
                         <Table.Td>{event.resource?.student_name}</Table.Td>
@@ -739,6 +764,7 @@ export function AppointmentsListPage() {
         <div style={{ height: 700 }}>
           <Calendar
             localizer={localizer}
+            formats={CALENDAR_FORMATS}
             events={visibleEvents}
             views={['month', 'week', 'day']}
             view={calendarView}

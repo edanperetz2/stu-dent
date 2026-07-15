@@ -9,6 +9,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
 import { LoadingText } from '../../components/StateText'
+import { formatDateTime } from '../../utils/dates'
 
 const STATUS_COLORS: Record<WaitlistStatus, string> = {
   active: 'blue',
@@ -53,8 +54,10 @@ export function WaitlistPage() {
     },
   })
 
+  // Ascending -- soonest-requested time first, matching the appointments
+  // lists' sort order.
   const sortedEntries = [...(entries ?? [])].sort(
-    (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
   )
 
   return (
@@ -85,8 +88,8 @@ export function WaitlistPage() {
             {sortedEntries.map((entry) => (
               <Table.Tr key={entry.id}>
                 <Table.Td>
-                  {new Date(entry.start_time).toLocaleString()} &ndash;{' '}
-                  {new Date(entry.end_time).toLocaleString()}
+                  {formatDateTime(entry.start_time)} &ndash;{' '}
+                  {formatDateTime(entry.end_time)}
                 </Table.Td>
                 <Table.Td>
                   {[entry.attending_name, entry.room_name, entry.equipment_name]

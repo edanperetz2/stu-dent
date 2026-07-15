@@ -39,6 +39,7 @@ import { listStudents } from '../../api/students'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { EmptyText, LoadingText } from '../../components/StateText'
+import { formatDateTime } from '../../utils/dates'
 
 interface Selection {
   target: MessageTarget
@@ -319,7 +320,7 @@ export function MessagesPage() {
                       </Text>
                       <Text size="sm">{message.body}</Text>
                       <Text size="xs" c="dimmed">
-                        {new Date(message.created_at).toLocaleString()}
+                        {formatDateTime(message.created_at)}
                       </Text>
                     </Paper>
                   )
