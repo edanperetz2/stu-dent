@@ -6,7 +6,7 @@ export function AuthLayout() {
   const { principal, isLoading } = useAuth()
 
   if (isLoading) return null
-  if (principal) return <Navigate to="/" replace />
+  if (principal) return <Navigate to="/appointments" replace />
 
   return (
     <Center mih="100vh" bg="var(--mantine-color-gray-0)">

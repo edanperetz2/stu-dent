@@ -39,7 +39,7 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       await login(values.email, values.password, values.role || undefined)
-      navigate('/')
+      navigate('/appointments')
     } catch (err) {
       setError(apiErrorMessage(err, 'Login failed'))
     } finally {

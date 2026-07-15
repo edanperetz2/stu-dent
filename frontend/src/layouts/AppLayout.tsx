@@ -22,9 +22,8 @@ interface NavItem {
 }
 
 const STUDENT_LINKS: NavItem[] = [
-  { label: 'Dashboard', to: '/' },
-  { label: 'Patients', to: '/patients' },
   { label: 'Appointments', to: '/appointments' },
+  { label: 'Patients', to: '/patients' },
   { label: 'Waitlist', to: '/waitlist' },
   { label: 'Forum', to: '/forum' },
   { label: 'Messages', to: '/messages' },
@@ -33,7 +32,6 @@ const STUDENT_LINKS: NavItem[] = [
 ]
 
 const ATTENDING_LINKS: NavItem[] = [
-  { label: 'Dashboard', to: '/' },
   { label: 'Appointments', to: '/appointments' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
@@ -41,10 +39,10 @@ const ATTENDING_LINKS: NavItem[] = [
 ]
 
 const ADMIN_LINKS: NavItem[] = [
+  { label: 'Appointments', to: '/appointments' },
   { label: 'Users', to: '/admin/users' },
   { label: 'Rooms', to: '/admin/rooms' },
   { label: 'Equipment', to: '/admin/equipment' },
-  { label: 'Appointments', to: '/appointments' },
   { label: 'Forum', to: '/forum' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },

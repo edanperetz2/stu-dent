@@ -43,9 +43,6 @@ const NotificationsPage = lazy(() =>
 const PatientsListPage = lazy(() =>
   import('../pages/patients/PatientsListPage').then((m) => ({ default: m.PatientsListPage })),
 )
-const PlaceholderPage = lazy(() =>
-  import('../pages/PlaceholderPage').then((m) => ({ default: m.PlaceholderPage })),
-)
 const PreferencesPage = lazy(() =>
   import('../pages/preferences/PreferencesPage').then((m) => ({ default: m.PreferencesPage })),
 )
@@ -76,7 +73,7 @@ export function AppRouter() {
 
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
-              <Route path="/" element={<PlaceholderPage title="Dashboard" />} />
+              <Route path="/" element={<Navigate to="/appointments" replace />} />
               <Route path="/patients" element={<PatientsListPage />} />
               <Route path="/appointments" element={<AppointmentsListPage />} />
               <Route path="/waitlist" element={<WaitlistPage />} />
@@ -100,7 +97,7 @@ export function AppRouter() {
             </Route>
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/appointments" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

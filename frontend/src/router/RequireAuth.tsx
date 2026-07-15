@@ -14,7 +14,7 @@ export function RequireAuth({ roles }: RequireAuthProps) {
 
   if (!principal) return <Navigate to="/login" replace />
 
-  if (roles && !roles.includes(principal.role)) return <Navigate to="/" replace />
+  if (roles && !roles.includes(principal.role)) return <Navigate to="/appointments" replace />
 
   return <Outlet />
 }

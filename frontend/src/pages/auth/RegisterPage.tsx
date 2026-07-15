@@ -61,7 +61,7 @@ export function RegisterPage() {
       if (values.role === 'patient') {
         setPendingConfirmation(true)
       } else {
-        navigate('/')
+        navigate('/appointments')
       }
     } catch (err) {
       setError(apiErrorMessage(err, 'Registration failed'))
