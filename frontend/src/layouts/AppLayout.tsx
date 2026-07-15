@@ -12,6 +12,7 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { listPendingFeedback } from '../api/feedback'
 import { getUnreadCount } from '../api/messages'
 import { listNotifications } from '../api/notifications'
 import { useAuth, type Principal } from '../auth/AuthContext'
@@ -28,6 +29,7 @@ const STUDENT_LINKS: NavItem[] = [
   { label: 'Forum', to: '/forum' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
+  { label: 'Feedback', to: '/feedback' },
   { label: 'Reports', to: '/reports' },
 ]
 
@@ -35,6 +37,7 @@ const ATTENDING_LINKS: NavItem[] = [
   { label: 'Appointments', to: '/appointments' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
+  { label: 'Feedback', to: '/feedback' },
   { label: 'Reports', to: '/reports' },
 ]
 
@@ -53,6 +56,7 @@ const PATIENT_LINKS: NavItem[] = [
   { label: 'Waitlist', to: '/waitlist' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
+  { label: 'Feedback', to: '/feedback' },
   { label: 'Preferences', to: '/preferences' },
 ]
 
@@ -89,6 +93,15 @@ export function AppLayout() {
     enabled: !!principal,
   })
   const unreadMessageCount = unreadMessages?.count ?? 0
+
+  // Only a patient/attending has anything actionable on the Feedback page --
+  // a student only ever receives, so no badge for them.
+  const { data: pendingFeedback } = useQuery({
+    queryKey: ['feedback', 'pending'],
+    queryFn: () => listPendingFeedback(principal!.token),
+    enabled: !!principal && (principal.role === 'patient' || principal.role === 'attending'),
+  })
+  const pendingFeedbackCount = pendingFeedback?.length ?? 0
 
   return (
     <AppShell
@@ -139,7 +152,9 @@ export function AppLayout() {
               ? unreadCount
               : link.to === '/messages'
                 ? unreadMessageCount
-                : 0
+                : link.to === '/feedback'
+                  ? pendingFeedbackCount
+                  : 0
           return (
             <NavLink
               key={link.to}

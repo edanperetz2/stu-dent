@@ -26,6 +26,7 @@ export type NotificationType =
   | 'patient_registration_request'
   | 'resource_deactivated'
   | 'appointment_needs_resolution'
+  | 'feedback_reminder'
 
 export type PreferredTimeOfDay = 'morning' | 'afternoon' | 'evening'
 
@@ -130,6 +131,34 @@ export interface WaitlistEntry {
   attending_name: string | null
   room_name: string | null
   equipment_name: string | null
+}
+
+export type FeedbackAuthorRole = 'patient' | 'attending'
+
+export interface Feedback {
+  id: string
+  appointment_id: string
+  student_id: string
+  author_id: string
+  author_role: FeedbackAuthorRole
+  went_well: string
+  could_improve: string
+  additional_comments: string | null
+  created_at: string
+  student_name: string
+  author_name: string
+  patient_id: string
+  patient_name: string
+  appointment_start_time: string
+}
+
+export interface PendingFeedback {
+  appointment_id: string
+  appointment_start_time: string
+  student_id: string
+  student_name: string
+  patient_id: string
+  patient_name: string
 }
 
 export interface ForumPost {

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     reminder_lead_hours: int = 24
     job_poll_interval_seconds: int = 300
     unresolved_appointment_grace_hours: int = 24
+    feedback_reminder_grace_hours: int = 24
 
     frontend_origins: str = "http://localhost:5173"
 

@@ -4,6 +4,7 @@ import time
 from app.config import settings
 from app.database import SessionLocal
 from app.jobs.expiry import expire_stale_appointments
+from app.jobs.feedback_reminders import notify_pending_feedback
 from app.jobs.reactivation import reactivate_expired_deactivations
 from app.jobs.reminders import send_appointment_reminders
 from app.jobs.reports import generate_scheduled_reports
@@ -20,16 +21,18 @@ def run_once() -> None:
         reports = generate_scheduled_reports(db)
         reactivated = reactivate_expired_deactivations(db)
         unresolved_nagged = notify_unresolved_past_appointments(db)
-        if sent or expired or reports or reactivated or unresolved_nagged:
+        feedback_nagged = notify_pending_feedback(db)
+        if sent or expired or reports or reactivated or unresolved_nagged or feedback_nagged:
             logger.info(
                 "worker pass: %d reminder(s) sent, %d appointment(s) expired, "
                 "%d report(s) generated, %d resource(s) reactivated, "
-                "%d unresolved-appointment nag(s) sent",
+                "%d unresolved-appointment nag(s) sent, %d feedback nag(s) sent",
                 sent,
                 expired,
                 reports,
                 reactivated,
                 unresolved_nagged,
+                feedback_nagged,
             )
 
 

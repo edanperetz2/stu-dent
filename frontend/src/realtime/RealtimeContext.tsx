@@ -65,6 +65,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: ['appointments'] })
           queryClient.invalidateQueries({ queryKey: ['waitlist'] })
           queryClient.invalidateQueries({ queryKey: ['resources'] })
+          // A feedback_reminder notification means a completed appointment
+          // just became pending-feedback -- keep the nav badge and Feedback
+          // page's pending list fresh without a manual refresh.
+          queryClient.invalidateQueries({ queryKey: ['feedback'] })
         } else if (data.event === 'message') {
           // Broad prefix match: also refreshes the contacts/groups sidebar
           // lists, not just the open thread, since a new message can be the

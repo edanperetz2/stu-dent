@@ -2,6 +2,7 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.audit_log import AuditLog
 from app.models.conversation import Conversation, ConversationKind, ConversationParticipant, Message
 from app.models.equipment import Equipment
+from app.models.feedback import Feedback, FeedbackAuthorRole
 from app.models.forum_comment import ForumComment
 from app.models.forum_comment_vote import ForumCommentVote
 from app.models.forum_post import ForumPost
@@ -20,6 +21,8 @@ __all__ = [
     "ConversationKind",
     "ConversationParticipant",
     "Equipment",
+    "Feedback",
+    "FeedbackAuthorRole",
     "ForumComment",
     "ForumCommentVote",
     "ForumPost",

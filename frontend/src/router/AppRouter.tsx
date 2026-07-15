@@ -29,6 +29,9 @@ const LoginPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import('../pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })),
 )
+const FeedbackPage = lazy(() =>
+  import('../pages/feedback/FeedbackPage').then((m) => ({ default: m.FeedbackPage })),
+)
 const ForumListPage = lazy(() =>
   import('../pages/forum/ForumListPage').then((m) => ({ default: m.ForumListPage })),
 )
@@ -87,6 +90,10 @@ export function AppRouter() {
 
               <Route element={<RequireAuth roles={['student', 'attending']} />}>
                 <Route path="/reports" element={<ReportsPage />} />
+              </Route>
+
+              <Route element={<RequireAuth roles={['student', 'attending', 'patient']} />}>
+                <Route path="/feedback" element={<FeedbackPage />} />
               </Route>
 
               <Route element={<RequireAuth roles={['admin']} />}>

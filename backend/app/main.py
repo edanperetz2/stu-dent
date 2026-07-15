@@ -12,6 +12,7 @@ from app.api.routes import (
     attending,
     auth,
     equipment,
+    feedback,
     forum,
     messages,
     notifications,
@@ -63,6 +64,7 @@ app.include_router(equipment.router)
 app.include_router(appointments.router)
 app.include_router(notifications.router)
 app.include_router(waitlist.router)
+app.include_router(feedback.router)
 app.include_router(forum.router)
 app.include_router(messages.router)
 app.include_router(scheduling_assistant.router)

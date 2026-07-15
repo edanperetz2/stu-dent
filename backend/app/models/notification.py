@@ -25,6 +25,7 @@ class NotificationType(enum.StrEnum):
     patient_registration_request = "patient_registration_request"
     resource_deactivated = "resource_deactivated"
     appointment_needs_resolution = "appointment_needs_resolution"
+    feedback_reminder = "feedback_reminder"
 
 
 class Notification(TimestampMixin, Base):
