@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'c9249d86cf88'
@@ -27,6 +28,17 @@ def upgrade() -> None:
     op.drop_table('waitlist_entries')
     op.execute('DROP TYPE IF EXISTS waitlist_status_enum')
 
+    # op.create_table()'s CreateTable DDL does not fire the Enum type's
+    # own before_create event (that only happens via Table.create()/
+    # MetaData.create_all()), so the enum must be created explicitly
+    # first -- otherwise this only works on a DB that already happens to
+    # have the type from a previous run (masked locally, but fails clean
+    # on a fresh DB, e.g. in CI).
+    waitlist_status_enum = postgresql.ENUM(
+        'active', 'booked', 'cancelled', name='waitlist_status_enum'
+    )
+    waitlist_status_enum.create(op.get_bind(), checkfirst=True)
+
     op.create_table(
         'waitlist_entries',
         sa.Column('id', sa.Uuid(), nullable=False),
@@ -42,7 +54,9 @@ def upgrade() -> None:
         sa.Column('conflict_resource_types', sa.ARRAY(sa.Text()), nullable=False),
         sa.Column(
             'status',
-            sa.Enum('active', 'booked', 'cancelled', name='waitlist_status_enum'),
+            postgresql.ENUM(
+                'active', 'booked', 'cancelled', name='waitlist_status_enum', create_type=False
+            ),
             nullable=False,
         ),
         sa.Column('resolved_at', sa.DateTime(timezone=True), nullable=True),
@@ -69,6 +83,11 @@ def downgrade() -> None:
     op.drop_table('waitlist_entries')
     op.execute('DROP TYPE IF EXISTS waitlist_status_enum')
 
+    waitlist_status_enum = postgresql.ENUM(
+        'active', 'notified', 'cancelled', name='waitlist_status_enum'
+    )
+    waitlist_status_enum.create(op.get_bind(), checkfirst=True)
+
     op.create_table(
         'waitlist_entries',
         sa.Column('id', sa.Uuid(), nullable=False),
@@ -81,7 +100,9 @@ def downgrade() -> None:
         sa.Column('end_time', sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             'status',
-            sa.Enum('active', 'notified', 'cancelled', name='waitlist_status_enum'),
+            postgresql.ENUM(
+                'active', 'notified', 'cancelled', name='waitlist_status_enum', create_type=False
+            ),
             nullable=False,
         ),
         sa.Column('notified_at', sa.DateTime(timezone=True), nullable=True),
