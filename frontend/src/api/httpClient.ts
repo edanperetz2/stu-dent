@@ -1,14 +1,20 @@
+import type { ConflictReason } from './types'
+
 // Inlined by Vite at build time (see Dockerfile.prod) -- changing this env
 // var after the image is built has no effect; a new image must be built.
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 export class ApiError extends Error {
   status: number
+  // Present only on a scheduling-conflict 409 -- a plain sibling of the
+  // string `detail`, populated below when the backend includes it.
+  conflicts?: ConflictReason[]
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, conflicts?: ConflictReason[]) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.conflicts = conflicts
   }
 }
 
@@ -46,6 +52,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   if (!response.ok) {
     let detail = response.statusText
+    let conflicts: ConflictReason[] | undefined
     try {
       const data = await response.json()
       if (typeof data.detail === 'string') {
@@ -63,10 +70,13 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
           .filter(Boolean)
           .join('; ')
       }
+      if (Array.isArray(data.conflicts)) {
+        conflicts = data.conflicts
+      }
     } catch {
       // response body wasn't JSON; keep statusText
     }
-    throw new ApiError(response.status, detail)
+    throw new ApiError(response.status, detail, conflicts)
   }
 
   if (response.status === 204) {

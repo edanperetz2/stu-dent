@@ -1,5 +1,4 @@
 import { Badge, Button, Group, Modal, Select, Stack, Text, Textarea, Title } from '@mantine/core'
-import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
@@ -15,17 +14,26 @@ import {
   markNoShow,
   rejectAppointment,
   updateAppointment,
+  type AppointmentCreateInput,
   type AppointmentUpdateInput,
 } from '../../api/appointments'
 import { listAttendings } from '../../api/attendings'
 import { listActiveEquipment } from '../../api/equipment'
-import { apiErrorMessage } from '../../api/httpClient'
+import { apiErrorMessage, ApiError } from '../../api/httpClient'
 import { listActiveRooms } from '../../api/rooms'
-import type { Appointment, AppointmentStatus } from '../../api/types'
+import type { Appointment, AppointmentStatus, ConflictReason } from '../../api/types'
+import { joinWaitlist } from '../../api/waitlist'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
+import { ConflictResolutionModal } from '../../components/ConflictResolutionModal'
 import { LoadingText } from '../../components/StateText'
-import { isoToMantineDateTime, mantineDateTimeToIso } from '../../utils/dates'
+import {
+  APPOINTMENT_END_TIME_OPTIONS,
+  APPOINTMENT_START_TIME_OPTIONS,
+  isoToMantineDateTime,
+  mantineDateTimeToIso,
+} from '../../utils/dates'
 import { getAvailableActions, type AppointmentActionName } from './appointmentActions'
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
@@ -70,6 +78,10 @@ export function AppointmentDetailPage() {
   const [editOpened, { open: openEdit, close: closeEdit }] = useDisclosure(false)
   const [acceptOpened, { open: openAccept, close: closeAccept }] = useDisclosure(false)
   const [acceptRoomId, setAcceptRoomId] = useState<string | null>(null)
+  const [conflictState, setConflictState] = useState<{
+    payload: AppointmentCreateInput
+    conflicts: ConflictReason[]
+  } | null>(null)
 
   const { data: appointment, isLoading } = useQuery({
     queryKey: ['appointments', appointmentId],
@@ -123,7 +135,22 @@ export function AppointmentDetailPage() {
       notifications.show({ message: 'Appointment updated', color: 'green' })
       closeAccept()
     },
-    onError: (err) => {
+    onError: (err, roomId) => {
+      if (err instanceof ApiError && err.status === 409 && err.conflicts?.length) {
+        setConflictState({
+          payload: {
+            patient_id: appointment!.patient_id,
+            attending_id: appointment!.attending_id ?? undefined,
+            room_id: roomId ?? appointment!.room_id ?? undefined,
+            equipment_id: appointment!.equipment_id ?? undefined,
+            start_time: appointment!.start_time,
+            end_time: appointment!.end_time,
+            notes: appointment!.notes ?? undefined,
+          },
+          conflicts: err.conflicts,
+        })
+        return
+      }
       notifications.show({
         message: apiErrorMessage(err, 'Action failed'),
         color: 'red',
@@ -154,9 +181,68 @@ export function AppointmentDetailPage() {
       notifications.show({ message: 'Appointment updated', color: 'green' })
       closeEdit()
     },
-    onError: (err) => {
+    onError: (err, payload) => {
+      // The edit form always submits every field (pre-filled from the
+      // current appointment, then edited) -- payload is already the full
+      // attempted request, not a sparse patch, so no merge with
+      // `appointment` is needed here.
+      if (err instanceof ApiError && err.status === 409 && err.conflicts?.length) {
+        setConflictState({
+          payload: {
+            patient_id: appointment!.patient_id,
+            attending_id: payload.attending_id ?? undefined,
+            room_id: payload.room_id ?? undefined,
+            equipment_id: payload.equipment_id ?? undefined,
+            start_time: payload.start_time!,
+            end_time: payload.end_time!,
+            notes: payload.notes ?? undefined,
+          },
+          conflicts: err.conflicts,
+        })
+        return
+      }
       notifications.show({
         message: apiErrorMessage(err, 'Failed to update appointment'),
+        color: 'red',
+      })
+    },
+  })
+
+  const joinWaitlistMutation = useMutation({
+    mutationFn: (payload: AppointmentCreateInput) => joinWaitlist(token, payload),
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ['waitlist'] })
+      setConflictState(null)
+      closeEdit()
+      closeAccept()
+      // This conflict came from editing/accepting an *existing*
+      // appointment, not a fresh create -- joining the waitlist means
+      // moving away from it, so cancel it now rather than leaving the
+      // user holding both an active appointment and a pending waitlist
+      // entry for the same intent. The join already succeeded by this
+      // point, so a failure here is reported separately, not as "the
+      // waitlist join failed" (it didn't).
+      try {
+        await cancelAppointment(token, appointmentId!)
+        queryClient.invalidateQueries({ queryKey: ['appointments'] })
+        notifications.show({
+          message: 'Added to the waitlist and cancelled this appointment',
+          color: 'green',
+        })
+      } catch (err) {
+        queryClient.invalidateQueries({ queryKey: ['appointments'] })
+        notifications.show({
+          message: apiErrorMessage(
+            err,
+            'Added to the waitlist, but failed to cancel this appointment -- please cancel it manually',
+          ),
+          color: 'orange',
+        })
+      }
+    },
+    onError: (err) => {
+      notifications.show({
+        message: apiErrorMessage(err, 'Failed to join the waitlist'),
         color: 'red',
       })
     },
@@ -250,8 +336,16 @@ export function AppointmentDetailPage() {
           )}
         >
           <Stack>
-            <DateTimePicker label="Start time" {...editForm.getInputProps('start_time')} />
-            <DateTimePicker label="End time" {...editForm.getInputProps('end_time')} />
+            <AppointmentDateTimeInput
+              label="Start time"
+              timeOptions={APPOINTMENT_START_TIME_OPTIONS}
+              {...editForm.getInputProps('start_time')}
+            />
+            <AppointmentDateTimeInput
+              label="End time"
+              timeOptions={APPOINTMENT_END_TIME_OPTIONS}
+              {...editForm.getInputProps('end_time')}
+            />
             <Select
               label="Attending"
               data={(attendings ?? []).map((a) => ({ value: a.id, label: a.full_name }))}
@@ -294,6 +388,17 @@ export function AppointmentDetailPage() {
           </Button>
         </Stack>
       </Modal>
+
+      {conflictState && (
+        <ConflictResolutionModal
+          opened
+          onClose={() => setConflictState(null)}
+          conflicts={conflictState.conflicts}
+          joining={joinWaitlistMutation.isPending}
+          onJoinWaitlist={() => joinWaitlistMutation.mutate(conflictState.payload)}
+          cancelsExistingAppointment
+        />
+      )}
     </Stack>
   )
 }

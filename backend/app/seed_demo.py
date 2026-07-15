@@ -284,14 +284,19 @@ def _seed_appointments(
     return appointments
 
 
-def _seed_waitlist(db: Session, students: list[User], patients: list[User]) -> list[WaitlistEntry]:
+def _seed_waitlist(
+    db: Session, students: list[User], patients: list[User], attendings: list[User]
+) -> list[WaitlistEntry]:
     now = datetime.now(UTC)
     entries = [
         WaitlistEntry(
             student_id=students[0].id,
             patient_id=patients[0].id,
+            attending_id=attendings[0].id,
             start_time=now + timedelta(days=3, hours=2),
             end_time=now + timedelta(days=3, hours=3),
+            student_confirmed_at=now,
+            conflict_resource_types=["attending"],
             status=WaitlistStatus.active,
         ),
         WaitlistEntry(
@@ -299,6 +304,8 @@ def _seed_waitlist(db: Session, students: list[User], patients: list[User]) -> l
             patient_id=patients[2].id,
             start_time=now + timedelta(days=7),
             end_time=now + timedelta(days=7, hours=1),
+            student_confirmed_at=now,
+            conflict_resource_types=["patient"],
             status=WaitlistStatus.active,
         ),
     ]
@@ -562,7 +569,7 @@ def main() -> None:
         rooms, equipment = _seed_rooms_and_equipment(db)
         patients = _seed_patients(db, students)
         appointments = _seed_appointments(db, students, patients, attendings, rooms, equipment)
-        _seed_waitlist(db, students, patients)
+        _seed_waitlist(db, students, patients, attendings)
         _seed_notifications(db, students, patients, appointments)
         _seed_forum(db, students)
         _seed_messages(db, students, attendings, patients, admin)

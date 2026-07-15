@@ -20,3 +20,33 @@ export function isoToMantineDateTime(iso: string): string {
     date.getHours(),
   )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
+
+/** "HH:mm" options every 30 minutes from startHour:startMinute through
+ * endHour:endMinute inclusive -- backs the fixed time-of-day Select used by
+ * AppointmentDateTimeInput, since free-typing an hour/minute into
+ * DateTimePicker's spinner proved error-prone. */
+function generateHalfHourOptions(
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number,
+): string[] {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const options: string[] = []
+  let hour = startHour
+  let minute = startMinute
+  while (hour < endHour || (hour === endHour && minute <= endMinute)) {
+    options.push(`${pad(hour)}:${pad(minute)}`)
+    minute += 30
+    if (minute >= 60) {
+      minute -= 60
+      hour += 1
+    }
+  }
+  return options
+}
+
+/** 08:00, 08:30, ..., 21:00 -- appointment start-time options. */
+export const APPOINTMENT_START_TIME_OPTIONS = generateHalfHourOptions(8, 0, 21, 0)
+/** 08:30, 09:00, ..., 21:30 -- appointment end-time options. */
+export const APPOINTMENT_END_TIME_OPTIONS = generateHalfHourOptions(8, 30, 21, 30)

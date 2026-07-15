@@ -147,7 +147,7 @@ def test_expire_cancels_past_due_unconfirmed_appointment(client, db_session):
     assert any(n["notification_type"] == "appointment_expired" for n in notifications)
 
 
-def test_expire_triggers_waitlist_match(client, db_session):
+def test_expire_triggers_waitlist_promotion(client, db_session):
     student_token = register_and_login(client, "job-s8@example.com", role="student")
     attending_token = register_and_login(client, "job-a8@example.com", role="attending")
     attending_id = client.get("/users/me", headers=auth_header(attending_token)).json()["id"]
@@ -160,6 +160,18 @@ def test_expire_triggers_waitlist_match(client, db_session):
     start = now - timedelta(hours=2)
     end = now - timedelta(hours=1)
 
+    appointment = _book(
+        client,
+        student_token,
+        patient_id=patient_id,
+        attending_id=attending_id,
+        start_time=_iso(start),
+        end_time=_iso(end),
+    ).json()
+    assert appointment["status"] == "awaiting_confirmation"
+
+    # Only joinable once the attending is genuinely busy -- i.e. after the
+    # conflicting appointment above already exists.
     waitlist_entry = client.post(
         "/waitlist",
         json={
@@ -170,16 +182,7 @@ def test_expire_triggers_waitlist_match(client, db_session):
         },
         headers=auth_header(other_student_token),
     ).json()
-
-    appointment = _book(
-        client,
-        student_token,
-        patient_id=patient_id,
-        attending_id=attending_id,
-        start_time=_iso(start),
-        end_time=_iso(end),
-    ).json()
-    assert appointment["status"] == "awaiting_confirmation"
+    assert waitlist_entry["status"] == "active"
 
     row = db_session.get(Appointment, appointment["id"])
     row.status = AppointmentStatus.proposed
@@ -191,7 +194,8 @@ def test_expire_triggers_waitlist_match(client, db_session):
     updated_entry = client.get(
         f"/waitlist/{waitlist_entry['id']}", headers=auth_header(other_student_token)
     ).json()
-    assert updated_entry["status"] == "notified"
+    assert updated_entry["status"] == "booked"
+    assert updated_entry["resulting_appointment_id"] is not None
 
 
 def test_expire_does_not_touch_confirmed_or_terminal_appointments(client, db_session):

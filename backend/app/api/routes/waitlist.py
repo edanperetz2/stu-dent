@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -8,12 +9,68 @@ from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.user import RoleEnum, User
 from app.models.waitlist_entry import WaitlistEntry, WaitlistStatus
-from app.schemas.waitlist import WaitlistEntryCreate, WaitlistEntryOut
+from app.schemas.appointment import AppointmentCreate
+from app.schemas.scheduling import ConflictReason
+from app.schemas.waitlist import WaitlistEntryOut
 from app.services.audit import record_audit_log
-from app.services.patients import require_confirmed_patient
-from app.services.scheduling import is_visible_to_participant, validate_participants
+from app.services.scheduling import (
+    find_conflicts,
+    is_visible_to_participant,
+    redact_conflicts_for_patient,
+    resolve_appointment_requester,
+    validate_participants,
+)
 
 router = APIRouter(tags=["waitlist"])
+
+_RESOURCE_FIELDS: dict[str, tuple[str, str]] = {
+    "student": ("student_id", "student_name"),
+    "patient": ("patient_id", "patient_name"),
+    "attending": ("attending_id", "attending_name"),
+    "room": ("room_id", "room_name"),
+    "equipment": ("equipment_id", "equipment_name"),
+}
+
+
+def _entry_out(entry: WaitlistEntry, current_user: User) -> WaitlistEntryOut:
+    conflicts = [
+        ConflictReason(
+            resource_type=resource_type,  # type: ignore[arg-type]
+            resource_id=getattr(entry, _RESOURCE_FIELDS[resource_type][0]),
+            resource_name=getattr(entry, _RESOURCE_FIELDS[resource_type][1]),
+        )
+        for resource_type in entry.conflict_resource_types
+    ]
+    # The stored causes stay precise (needed for correct re-check logic on
+    # every cancellation) -- only redacted for a patient viewing their own
+    # entry, same reasoning as create_appointment's 409 response.
+    if current_user.role == RoleEnum.patient:
+        conflicts = redact_conflicts_for_patient(
+            conflicts, patient_id=current_user.id, patient_name=current_user.full_name
+        )
+    return WaitlistEntryOut(
+        id=entry.id,
+        student_id=entry.student_id,
+        patient_id=entry.patient_id,
+        attending_id=entry.attending_id,
+        room_id=entry.room_id,
+        equipment_id=entry.equipment_id,
+        start_time=entry.start_time,
+        end_time=entry.end_time,
+        notes=entry.notes,
+        status=entry.status,
+        resolved_at=entry.resolved_at,
+        resulting_appointment_id=entry.resulting_appointment_id,
+        resulting_appointment_status=(
+            entry.resulting_appointment.status if entry.resulting_appointment else None
+        ),
+        conflicts=conflicts,
+        student_name=entry.student_name,
+        patient_name=entry.patient_name,
+        attending_name=entry.attending_name,
+        room_name=entry.room_name,
+        equipment_name=entry.equipment_name,
+    )
 
 
 def _get_visible_entry(db: Session, entry_id: uuid.UUID, current_user: User) -> WaitlistEntry:
@@ -27,27 +84,14 @@ def _get_visible_entry(db: Session, entry_id: uuid.UUID, current_user: User) -> 
 
 @router.post("/waitlist", response_model=WaitlistEntryOut, status_code=status.HTTP_201_CREATED)
 def create_waitlist_entry(
-    payload: WaitlistEntryCreate,
+    payload: AppointmentCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> WaitlistEntry:
+) -> WaitlistEntryOut:
     if payload.end_time <= payload.start_time:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
 
-    if current_user.role == RoleEnum.patient:
-        require_confirmed_patient(current_user)
-        student_id = current_user.owner_student_id
-        patient_id = current_user.id
-    elif current_user.role == RoleEnum.student:
-        if payload.patient_id is None:
-            raise HTTPException(status_code=422, detail="patient_id is required")
-        student_id = current_user.id
-        patient_id = payload.patient_id
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only students or patients can create waitlist entries",
-        )
+    student_id, patient_id = resolve_appointment_requester(current_user, payload)
 
     validate_participants(
         db,
@@ -58,6 +102,25 @@ def create_waitlist_entry(
         equipment_id=payload.equipment_id,
     )
 
+    # Never trust a client-supplied reason -- re-derive it independently,
+    # exactly like the real create/update/accept routes do.
+    conflicts = find_conflicts(
+        db,
+        student_id=student_id,
+        patient_id=patient_id,
+        attending_id=payload.attending_id,
+        room_id=payload.room_id,
+        equipment_id=payload.equipment_id,
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+    )
+    if not conflicts:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No conflict exists for this request -- book it directly instead of joining "
+            "the waitlist.",
+        )
+
     entry = WaitlistEntry(
         student_id=student_id,
         patient_id=patient_id,
@@ -66,6 +129,9 @@ def create_waitlist_entry(
         equipment_id=payload.equipment_id,
         start_time=payload.start_time,
         end_time=payload.end_time,
+        notes=payload.notes,
+        student_confirmed_at=datetime.now(UTC) if current_user.role == RoleEnum.student else None,
+        conflict_resource_types=[c.resource_type for c in conflicts],
     )
     db.add(entry)
     db.flush()
@@ -79,14 +145,14 @@ def create_waitlist_entry(
     )
     db.commit()
     db.refresh(entry)
-    return entry
+    return _entry_out(entry, current_user)
 
 
 @router.get("/waitlist", response_model=list[WaitlistEntryOut])
 def list_waitlist_entries(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[WaitlistEntry]:
+) -> list[WaitlistEntryOut]:
     stmt = select(WaitlistEntry)
     if current_user.role == RoleEnum.patient:
         stmt = stmt.where(WaitlistEntry.patient_id == current_user.id)
@@ -94,7 +160,7 @@ def list_waitlist_entries(
         stmt = stmt.where(WaitlistEntry.student_id == current_user.id)
     elif current_user.role == RoleEnum.attending:
         stmt = stmt.where(WaitlistEntry.attending_id == current_user.id)
-    return list(db.scalars(stmt))
+    return [_entry_out(entry, current_user) for entry in db.scalars(stmt)]
 
 
 @router.get("/waitlist/{entry_id}", response_model=WaitlistEntryOut)
@@ -102,8 +168,8 @@ def get_waitlist_entry(
     entry_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> WaitlistEntry:
-    return _get_visible_entry(db, entry_id, current_user)
+) -> WaitlistEntryOut:
+    return _entry_out(_get_visible_entry(db, entry_id, current_user), current_user)
 
 
 @router.post("/waitlist/{entry_id}/cancel", response_model=WaitlistEntryOut)
@@ -111,7 +177,7 @@ def cancel_waitlist_entry(
     entry_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> WaitlistEntry:
+) -> WaitlistEntryOut:
     entry = _get_visible_entry(db, entry_id, current_user)
 
     is_owning_student = (
@@ -124,8 +190,10 @@ def cancel_waitlist_entry(
             detail="Not authorized to cancel this waitlist entry",
         )
 
-    if entry.status == WaitlistStatus.cancelled:
-        raise HTTPException(status_code=409, detail="Waitlist entry is already cancelled")
+    if entry.status != WaitlistStatus.active:
+        raise HTTPException(
+            status_code=409, detail="Only an active waitlist entry can be cancelled"
+        )
 
     entry.status = WaitlistStatus.cancelled
     db.flush()
@@ -139,4 +207,4 @@ def cancel_waitlist_entry(
     )
     db.commit()
     db.refresh(entry)
-    return entry
+    return _entry_out(entry, current_user)

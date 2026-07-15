@@ -9,6 +9,7 @@ from app.models.user import RoleEnum, User
 from tests.conftest import engine
 from tests.helpers import (
     auth_header,
+    create_and_login_patient,
     create_default_room,
     create_equipment,
     create_patient,
@@ -64,6 +65,8 @@ def test_overlapping_student_booking_conflicts(client):
         end_time=OVERLAP_END,
     )
     assert second.status_code == 409
+    conflicts = second.json()["conflicts"]
+    assert [c["resource_type"] for c in conflicts] == ["student"]
 
 
 def test_overlapping_patient_booking_conflicts(client):
@@ -81,6 +84,8 @@ def test_overlapping_patient_booking_conflicts(client):
         end_time=OVERLAP_END,
     )
     assert second.status_code == 409
+    conflicts = second.json()["conflicts"]
+    assert sorted(c["resource_type"] for c in conflicts) == ["patient", "student"]
 
 
 def test_overlapping_attending_booking_conflicts(client):
@@ -103,6 +108,9 @@ def test_overlapping_attending_booking_conflicts(client):
         end_time=OVERLAP_END,
     )
     assert second.status_code == 409
+    conflicts = second.json()["conflicts"]
+    assert [c["resource_type"] for c in conflicts] == ["attending"]
+    assert conflicts[0]["resource_id"] == attending_id
 
 
 def test_overlapping_room_booking_conflicts(client):
@@ -125,6 +133,9 @@ def test_overlapping_room_booking_conflicts(client):
         end_time=OVERLAP_END,
     )
     assert second.status_code == 409
+    conflicts = second.json()["conflicts"]
+    assert [c["resource_type"] for c in conflicts] == ["room"]
+    assert conflicts[0]["resource_id"] == room_id
 
 
 def test_overlapping_equipment_booking_conflicts(client):
@@ -147,6 +158,82 @@ def test_overlapping_equipment_booking_conflicts(client):
         end_time=OVERLAP_END,
     )
     assert second.status_code == 409
+    conflicts = second.json()["conflicts"]
+    assert [c["resource_type"] for c in conflicts] == ["equipment"]
+    assert conflicts[0]["resource_id"] == equipment_id
+
+
+def test_multiple_simultaneous_conflicts_are_all_reported(client):
+    student_a = register_and_login(client, "conf-s5c@example.com", role="student")
+    student_b = register_and_login(client, "conf-s5d@example.com", role="student")
+    attending_token = register_and_login(client, "conf-a5c@example.com", role="attending")
+    attending_id = client.get("/users/me", headers=auth_header(attending_token)).json()["id"]
+    admin_token = register_and_login(client, "conf-admin5c@example.com", role="admin")
+    room_id = create_room(client, admin_token, "Conflict Room Multi")
+    patient_a = create_patient(client, student_a)
+    patient_b = create_patient(client, student_b)
+
+    first = _book(
+        client, student_a, patient_id=patient_a, attending_id=attending_id, room_id=room_id
+    )
+    assert first.status_code == 201
+
+    second = _book(
+        client,
+        student_b,
+        patient_id=patient_b,
+        attending_id=attending_id,
+        room_id=room_id,
+        start_time=OVERLAP_START,
+        end_time=OVERLAP_END,
+    )
+    assert second.status_code == 409
+    conflicts = second.json()["conflicts"]
+    assert sorted(c["resource_type"] for c in conflicts) == ["attending", "room"]
+
+
+def test_patient_never_learns_their_student_is_busy_with_someone_else(client):
+    """A patient-originated request can conflict on "student" -- their
+    treating student has some other overlapping appointment, possibly with
+    a completely different patient. The patient must never see that: no
+    "student" resource_type, no student id/name, nothing that lets them
+    infer their student's other patients' schedules. It should present
+    identically to a genuine self-conflict.
+    """
+    student_token = register_and_login(client, "conf-s7@example.com", role="student")
+    other_patient = create_patient(client, student_token, full_name="Other Patient")
+    _, requesting_patient_token = create_and_login_patient(
+        client, student_token, "conf-p7@example.com", full_name="Requesting Patient"
+    )
+
+    # The student's own booking with a *different* patient occupies the
+    # shared treating student at this time.
+    occupied = _book(client, student_token, patient_id=other_patient)
+    assert occupied.status_code == 201
+
+    # The requesting patient's own overlapping request conflicts on
+    # "student" underneath, but must be redacted before it leaves the API.
+    response = client.post(
+        "/appointments",
+        json={"start_time": START, "end_time": END},
+        headers=auth_header(requesting_patient_token),
+    )
+    assert response.status_code == 409
+    conflicts = response.json()["conflicts"]
+
+    assert [c["resource_type"] for c in conflicts] == ["patient"]
+    requesting_patient_id = client.get(
+        "/users/me", headers=auth_header(requesting_patient_token)
+    ).json()["id"]
+    assert conflicts[0]["resource_id"] == requesting_patient_id
+    assert conflicts[0]["resource_name"] == "Requesting Patient"
+
+    # Nothing about the student or the other patient leaks anywhere in the
+    # response body.
+    student_id = client.get("/users/me", headers=auth_header(student_token)).json()["id"]
+    body_text = response.text
+    assert "Other Patient" not in body_text
+    assert student_id not in body_text
 
 
 def test_non_overlapping_bookings_do_not_conflict(client):
@@ -176,6 +263,78 @@ def test_cancelled_appointment_frees_the_slot(client):
 
     second = _book(client, student_token, patient_id=patient_b)
     assert second.status_code == 201
+
+
+def test_update_into_conflicting_room_rejected(client):
+    occupier_token = register_and_login(client, "conf-s8-occ@example.com", role="student")
+    admin_token = register_and_login(client, "conf-admin8@example.com", role="admin")
+    room_id = create_room(client, admin_token, "Update Conflict Room")
+    occupier_patient_id = create_patient(client, occupier_token)
+    occupied = _book(client, occupier_token, patient_id=occupier_patient_id, room_id=room_id)
+    assert occupied.status_code == 201
+
+    student_token = register_and_login(client, "conf-s8@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    other_room_id = create_default_room(client)
+    movable = _book(
+        client,
+        student_token,
+        patient_id=patient_id,
+        room_id=other_room_id,
+        start_time=OVERLAP_START,
+        end_time=OVERLAP_END,
+    ).json()
+
+    response = client.patch(
+        f"/appointments/{movable['id']}",
+        json={"room_id": room_id, "start_time": START, "end_time": END},
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 409
+    conflicts = response.json()["conflicts"]
+    assert [c["resource_type"] for c in conflicts] == ["room"]
+
+    # The appointment must be left untouched -- the conflict was checked
+    # before any field was mutated.
+    unchanged = client.get(
+        f"/appointments/{movable['id']}", headers=auth_header(student_token)
+    ).json()
+    assert unchanged["room_id"] == other_room_id
+    assert datetime.fromisoformat(unchanged["start_time"]) == datetime.fromisoformat(OVERLAP_START)
+
+
+def test_accept_with_conflicting_room_rejected(client):
+    occupier_token = register_and_login(client, "conf-s9-occ@example.com", role="student")
+    admin_token = register_and_login(client, "conf-admin9@example.com", role="admin")
+    room_id = create_room(client, admin_token, "Accept Conflict Room")
+    occupier_patient_id = create_patient(client, occupier_token)
+    occupied = _book(
+        client,
+        occupier_token,
+        patient_id=occupier_patient_id,
+        room_id=room_id,
+        start_time=START,
+        end_time=END,
+    )
+    assert occupied.status_code == 201
+
+    student_token = register_and_login(client, "conf-s9@example.com", role="student")
+    _, patient_token = create_and_login_patient(client, student_token, "conf-p9@example.com")
+    proposed = client.post(
+        "/appointments",
+        json={"start_time": START, "end_time": END},
+        headers=auth_header(patient_token),
+    ).json()
+    assert proposed["status"] == "proposed"
+
+    response = client.post(
+        f"/appointments/{proposed['id']}/accept",
+        json={"room_id": room_id},
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 409
+    conflicts = response.json()["conflicts"]
+    assert [c["resource_type"] for c in conflicts] == ["room"]
 
 
 def test_concurrent_overlapping_bookings_only_one_commits():

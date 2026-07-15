@@ -92,12 +92,14 @@ Terminal, run live:
 ```
 docker compose exec api pytest -v
 ```
-Let it scroll briefly, then cut to the summary line (180 passed). Then:
+Let it scroll briefly, then cut to the summary line (all passed — the
+exact count drifts as tests are added, so read whatever's on screen
+rather than a number written here). Then:
 ```
 docker compose exec frontend npm run test
 docker compose exec frontend npm run build
 ```
-Narrate the numbers (180 backend / 27 frontend tests) and mention the
+Narrate the numbers on screen (backend and frontend test counts) and mention the
 testing philosophy briefly: real Postgres exclusion constraints under
 test, Ollama calls mocked for determinism, a few tests that need genuine
 cross-connection commit visibility bypass the usual rollback-per-test
@@ -122,7 +124,9 @@ public URL instead of the local rehearsal.
 
 ## 11. Wrap-up (~30s)
 
-Quick recap slide/voiceover: 7 phases built, ~200 automated tests, real
+Quick recap slide/voiceover: 7 phases built plus ongoing post-submission
+feature work, a large automated test suite (see the counts from section
+8), real
 AI trust-boundary design (interpret-only, never decide), fully
 Dockerized, CI green, deployment-ready. Mention `docs/final_report.md`
 for the full written writeup.

@@ -322,3 +322,103 @@ docker compose exec frontend npm run lint
   auth-test `beforeEach` reset into `test/resetAuthTestState.ts`. All 4
   batches' full regressions (backend pytest/ruff/black; frontend tsc/
   oxlint/vitest/build) passed and all 4 pushes are green on GitHub Actions.
+- **Post-submission feature work (cross-phase, ongoing)**: the report and
+  video script above are frozen as of course submission; real work
+  continued afterward and is tracked here instead of by editing those
+  submission artifacts. In rough order: patient preferences show the
+  in-charge student's name (`85adeb1`, `owner_student_name` resolved only
+  on `GET/PATCH /users/me`); messaging was redesigned twice — first
+  (`a945ef7`) from an implicit patient-keyed `direct_messages` table to a
+  real `conversations`/`conversation_participants`/`messages` model
+  supporting student↔attending, a shared admin inbox, and student/
+  attending group chats (destructive migration, dev data only), then
+  again (`e9beb14`) adding per-conversation unread badges with
+  unread-first/most-recent sort and auto-mark-read-on-open, a tweet-style
+  forum feed replacing the table listing (inline expand, combined toggle
+  like/dislike counters), and removing the never-really-used weekly
+  student-availability feature end-to-end; a day/week/month appointment
+  calendar was added alongside the existing table
+  (`dd9fd32`, react-big-calendar) with click-empty-slot-to-create and
+  click-event-to-edit; room became mandatory on every appointment
+  (`ab81a5d`) with patient-initiated (room-less) requests requiring the
+  accepting student to assign one, plus an admin room-as-resource
+  calendar and scheduled (date-limited) room/equipment deactivation
+  auto-reactivated by `jobs/reactivation.py`; equipment gained the same
+  double-booking/deactivation parity rooms already had, plus a
+  clinic-wide anonymized "Resources" list/calendar view
+  (`0b4db58`, `GET /resources/schedule`) for students/attendings (full
+  detail for admin, personal-only for patients); a logo and assorted UI
+  polish were added (`78343ba`); `.gitattributes` now pins `*.sh` to LF
+  (`15b29b8`) after a Windows `core.autocrlf` checkout corrupted
+  `backend/entrypoint.sh`'s shebang and crashed the `api`/`worker`
+  containers.
+  **Waitlist redesign** (this session, largest single change in this
+  arc): replaced the old near-duplicate-of-`Appointment`,
+  manually-filled waitlist with one that only exists in reaction to a
+  real, explained booking failure. New `services/scheduling.py::
+  find_conflicts` runs a targeted per-resource-type query (student,
+  patient, and — when supplied — attending/room/equipment) instead of
+  relying on a generic Postgres exclusion-constraint error with no way
+  to know which of the 5 constraints fired; `create_appointment`,
+  `update_appointment`, and `accept_appointment`'s room-change path all
+  call it pre-emptively and raise a new `AppointmentConflictError` (409
+  + a `conflicts: ConflictReason[]` array naming the exact blocking
+  resource) instead of relying solely on the DB-level `flush_or_409`
+  safety net (still in place for genuine races).
+  `WaitlistEntry` gained `conflict_resource_types` (why this entry
+  exists), `notes`, `student_confirmed_at` (so auto-promotion can hand
+  off to the same `recompute_status` real bookings use instead of
+  fabricating a confirmation), and a monotonic `sequence` column
+  (`Identity()`, same fix as `Message.sequence` — Postgres freezes
+  `func.now()` within one transaction, so `created_at` alone can tie).
+  `services/waitlist.py::recheck_waitlist_after_cancellation` re-runs
+  `find_conflicts` per candidate ordered by `sequence` (first-come-
+  first-served; a losing entry keeps its place ahead of newer ones for
+  the next opportunity) and promotes a fully-cleared entry into a real
+  `Appointment` inside a `db.begin_nested()` savepoint (not a bare
+  flush — the caller's own pending cancellation must survive a losing
+  race). Frontend gained a shared `ConflictResolutionModal` (used from
+  the create, edit, and accept flows) offering "adjust and retry" or
+  "join the waitlist with this exact request"; `WaitlistPage` is now a
+  log of real attempts (cause badges, status, link to the resulting
+  appointment) rather than a manual creation form.
+  Four gaps were found and fixed before commit via explicit user
+  pre-commit review: (1) the attending (not just student/patient) now
+  gets notified when their waitlist entry auto-promotes; (2) promotion
+  ordering was non-deterministic under a full-suite pytest run because
+  same-transaction rows tied on `created_at` — fixed by the `sequence`
+  column above; (3) a real medical-confidentiality gap — a patient
+  requesting a slot could see their conflict was caused by "student"
+  busy, revealing their own student was occupied by a *different*
+  patient's care — fixed by `redact_conflicts_for_patient`, which
+  collapses `student`/`patient` causes into one generic self-referential
+  `patient` cause for a patient viewer only (student/attending/admin
+  viewers of the identical data still see the real cause; confirmed with
+  the user that attending/room/equipment names should stay specific,
+  not generalized further); (4) realtime WebSocket notifications now
+  also invalidate the `appointments`/`waitlist`/`resources` query caches
+  (previously only `notifications`), so an auto-promoted appointment
+  appears without a manual refresh.
+  A follow-up gap surfaced by live user testing after the above: editing
+  an existing appointment into a conflicting slot and choosing to join
+  the waitlist left the *original* appointment still active — the user
+  chose (over the safer "cancel once the waitlist resolves" option) to
+  cancel it immediately on joining, so `ConflictResolutionModal` gained
+  a `cancelsExistingAppointment` prop (red "Cancel & join waitlist"
+  button + explicit warning, used from the edit/accept flows only, not
+  plain create) and `AppointmentDetailPage`'s join-waitlist mutation now
+  chains an immediate `cancelAppointment` call on success.
+  Same session, three smaller fixes: cancelled appointments no longer
+  appear in the appointments list or calendar (filtered client-side in
+  `AppointmentsListPage`; still reachable directly by ID, e.g. from a
+  notification link) — DB rows are kept, not hard-deleted, per this
+  file's soft-delete convention; verified editing an appointment into a
+  *free* slot updates the same row in place (same ID, same total count),
+  not a new one; and the appointment start/end `DateTimePicker`s (whose
+  free-typed hour/minute spinner was hard to drive correctly) were
+  replaced by a new shared `components/AppointmentDateTimeInput.tsx` —
+  a plain date-picker plus a fixed half-hour `Select`
+  (`APPOINTMENT_START_TIME_OPTIONS`/`_END_TIME_OPTIONS` in
+  `utils/dates.ts`: 08:00–21:00 / 08:30–21:30) — tracking date and time
+  in separate local state so picking one doesn't discard the other
+  before both are set.

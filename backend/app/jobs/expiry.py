@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.notification import NotificationType
 from app.services.notifications import notify
-from app.services.waitlist import check_and_notify_waitlist
+from app.services.waitlist import recheck_waitlist_after_cancellation
 
 _EXPIRABLE_STATUSES = (
     AppointmentStatus.proposed,
@@ -37,7 +37,7 @@ def expire_stale_appointments(db: Session) -> int:
     expired = 0
     for appointment in candidates:
         appointment.status = AppointmentStatus.cancelled
-        check_and_notify_waitlist(db, appointment)
+        recheck_waitlist_after_cancellation(db, appointment)
 
         message = (
             f"Your appointment request for {appointment.start_time.isoformat()} "

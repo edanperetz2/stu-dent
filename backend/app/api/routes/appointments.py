@@ -16,15 +16,18 @@ from app.schemas.appointment import (
     AppointmentUpdate,
 )
 from app.services.audit import record_audit_log
-from app.services.patients import require_confirmed_patient
 from app.services.scheduling import (
     TERMINAL_STATUSES,
+    AppointmentConflictError,
+    find_conflicts,
     flush_or_409,
     is_visible_to_participant,
     recompute_status,
+    redact_conflicts_for_patient,
+    resolve_appointment_requester,
     validate_participants,
 )
-from app.services.waitlist import check_and_notify_waitlist
+from app.services.waitlist import recheck_waitlist_after_cancellation
 
 router = APIRouter(tags=["appointments"])
 
@@ -52,29 +55,13 @@ def create_appointment(
     if payload.end_time <= payload.start_time:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
 
-    if current_user.role == RoleEnum.patient:
-        require_confirmed_patient(current_user)
-        if payload.attending_id or payload.room_id or payload.equipment_id:
-            raise HTTPException(
-                status_code=422,
-                detail="Patients cannot set attending, room, or equipment when requesting",
-            )
-        student_id = current_user.owner_student_id
-        patient_id = current_user.id
-        student_confirmed_at = None
-    elif current_user.role == RoleEnum.student:
-        if payload.patient_id is None:
-            raise HTTPException(status_code=422, detail="patient_id is required")
+    student_id, patient_id = resolve_appointment_requester(current_user, payload)
+    if current_user.role == RoleEnum.student:
         if payload.room_id is None:
             raise HTTPException(status_code=422, detail="room_id is required")
-        student_id = current_user.id
-        patient_id = payload.patient_id
         student_confirmed_at = datetime.now(UTC)
     else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only students or patients can request appointments",
-        )
+        student_confirmed_at = None
 
     validate_participants(
         db,
@@ -84,6 +71,27 @@ def create_appointment(
         room_id=payload.room_id,
         equipment_id=payload.equipment_id,
     )
+
+    conflicts = find_conflicts(
+        db,
+        student_id=student_id,
+        patient_id=patient_id,
+        attending_id=payload.attending_id,
+        room_id=payload.room_id,
+        equipment_id=payload.equipment_id,
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+    )
+    if conflicts:
+        # A patient must never learn that their student is busy with
+        # someone else's care -- see redact_conflicts_for_patient.
+        if current_user.role == RoleEnum.patient:
+            conflicts = redact_conflicts_for_patient(
+                conflicts, patient_id=current_user.id, patient_name=current_user.full_name
+            )
+        raise AppointmentConflictError(
+            "Requested time conflicts with an existing booking", conflicts
+        )
 
     appointment = Appointment(
         student_id=student_id,
@@ -159,10 +167,42 @@ def update_appointment(
     if new_end <= new_start:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
 
+    new_attending_id = fields.get("attending_id", appointment.attending_id)
+    new_room_id = fields.get("room_id", appointment.room_id)
+    new_equipment_id = fields.get("equipment_id", appointment.equipment_id)
+
     time_changed = "start_time" in fields or "end_time" in fields
     attending_changed = (
         "attending_id" in fields and fields["attending_id"] != appointment.attending_id
     )
+
+    validate_participants(
+        db,
+        student_id=appointment.student_id,
+        patient_id=appointment.patient_id,
+        attending_id=new_attending_id,
+        room_id=new_room_id,
+        equipment_id=new_equipment_id,
+    )
+
+    # Checked before any field is mutated -- excludes this appointment's own
+    # (not-yet-updated) row so it never conflicts with itself, and lets a
+    # conflict bail out before the ORM object is touched at all.
+    conflicts = find_conflicts(
+        db,
+        student_id=appointment.student_id,
+        patient_id=appointment.patient_id,
+        attending_id=new_attending_id,
+        room_id=new_room_id,
+        equipment_id=new_equipment_id,
+        start_time=new_start,
+        end_time=new_end,
+        exclude_appointment_id=appointment.id,
+    )
+    if conflicts:
+        raise AppointmentConflictError(
+            "Requested change conflicts with an existing booking", conflicts
+        )
 
     if "start_time" in fields:
         appointment.start_time = fields["start_time"]
@@ -176,15 +216,6 @@ def update_appointment(
         appointment.attending_id = fields["attending_id"]
     if "notes" in fields:
         appointment.notes = fields["notes"]
-
-    validate_participants(
-        db,
-        student_id=appointment.student_id,
-        patient_id=appointment.patient_id,
-        attending_id=appointment.attending_id,
-        room_id=appointment.room_id,
-        equipment_id=appointment.equipment_id,
-    )
 
     if time_changed or attending_changed:
         if appointment.attending_id is not None:
@@ -233,6 +264,21 @@ def accept_appointment(
             room_id=room_id,
             equipment_id=appointment.equipment_id,
         )
+        conflicts = find_conflicts(
+            db,
+            student_id=appointment.student_id,
+            patient_id=appointment.patient_id,
+            attending_id=appointment.attending_id,
+            room_id=room_id,
+            equipment_id=appointment.equipment_id,
+            start_time=appointment.start_time,
+            end_time=appointment.end_time,
+            exclude_appointment_id=appointment.id,
+        )
+        if conflicts:
+            raise AppointmentConflictError(
+                "Requested room conflicts with an existing booking", conflicts
+            )
         appointment.room_id = room_id
 
     appointment.student_confirmed_at = datetime.now(UTC)
@@ -311,7 +357,7 @@ def reject_appointment(
         raise HTTPException(status_code=409, detail="Appointment is already finalized")
 
     appointment.status = AppointmentStatus.cancelled
-    check_and_notify_waitlist(db, appointment)
+    recheck_waitlist_after_cancellation(db, appointment)
     flush_or_409(db)
 
     record_audit_log(
@@ -350,7 +396,7 @@ def cancel_appointment(
         raise HTTPException(status_code=409, detail="Appointment is already finalized")
 
     appointment.status = AppointmentStatus.cancelled
-    check_and_notify_waitlist(db, appointment)
+    recheck_waitlist_after_cancellation(db, appointment)
     flush_or_409(db)
 
     record_audit_log(

@@ -1,42 +1,34 @@
-import { Badge, Button, Group, Modal, Select, Stack, Table, Title } from '@mantine/core'
-import { DateTimePicker } from '@mantine/dates'
-import { useForm } from '@mantine/form'
-import { useDisclosure } from '@mantine/hooks'
+import { Badge, Button, Group, Stack, Table, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listAttendings } from '../../api/attendings'
-import { listActiveEquipment } from '../../api/equipment'
+import { useNavigate } from 'react-router-dom'
 import { apiErrorMessage } from '../../api/httpClient'
-import { listPatients } from '../../api/patients'
-import { listActiveRooms } from '../../api/rooms'
-import type { WaitlistStatus } from '../../api/types'
-import { cancelWaitlistEntry, createWaitlistEntry, listWaitlistEntries } from '../../api/waitlist'
+import type { ConflictResourceType, WaitlistStatus } from '../../api/types'
+import { cancelWaitlistEntry, listWaitlistEntries } from '../../api/waitlist'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
 import { LoadingText } from '../../components/StateText'
-import { mantineDateTimeToIso } from '../../utils/dates'
 
 const STATUS_COLORS: Record<WaitlistStatus, string> = {
   active: 'blue',
-  notified: 'green',
+  booked: 'green',
   cancelled: 'gray',
 }
 
-interface CreateFormValues {
-  patient_id: string
-  attending_id: string | null
-  room_id: string | null
-  equipment_id: string | null
-  start_time: string | null
-  end_time: string | null
+const CAUSE_LABELS: Record<ConflictResourceType, string> = {
+  student: 'Student busy',
+  patient: 'Patient busy',
+  attending: 'Attending busy',
+  room: 'Room busy',
+  equipment: 'Equipment busy',
 }
 
 export function WaitlistPage() {
   const token = useAuthToken()
   const { principal } = useAuth()
   const queryClient = useQueryClient()
-  const [opened, { open, close }] = useDisclosure(false)
+  const navigate = useNavigate()
 
   const isStudent = principal?.role === 'student'
   const isPatient = principal?.role === 'patient'
@@ -45,72 +37,6 @@ export function WaitlistPage() {
   const { data: entries, isLoading } = useQuery({
     queryKey: ['waitlist'],
     queryFn: () => listWaitlistEntries(token),
-  })
-
-  const { data: patients } = useQuery({
-    queryKey: ['patients'],
-    queryFn: () => listPatients(token),
-    enabled: isStudent,
-  })
-  const { data: attendings } = useQuery({
-    queryKey: ['attendings'],
-    queryFn: () => listAttendings(token),
-    enabled: isStudent,
-  })
-  const { data: rooms } = useQuery({
-    queryKey: ['rooms'],
-    queryFn: () => listActiveRooms(token),
-    enabled: isStudent,
-  })
-  const { data: equipment } = useQuery({
-    queryKey: ['equipment'],
-    queryFn: () => listActiveEquipment(token),
-    enabled: isStudent,
-  })
-
-  const form = useForm<CreateFormValues>({
-    initialValues: {
-      patient_id: '',
-      attending_id: null,
-      room_id: null,
-      equipment_id: null,
-      start_time: null,
-      end_time: null,
-    },
-    validate: {
-      patient_id: (value) => (isStudent && !value ? 'Patient is required' : null),
-      start_time: (value) => (value ? null : 'Start time is required'),
-      end_time: (value, values) =>
-        value && values.start_time && value <= values.start_time
-          ? 'End time must be after start time'
-          : null,
-    },
-  })
-
-  const createMutation = useMutation({
-    mutationFn: () => {
-      const values = form.values
-      return createWaitlistEntry(token, {
-        ...(isStudent ? { patient_id: values.patient_id } : {}),
-        ...(values.attending_id ? { attending_id: values.attending_id } : {}),
-        ...(values.room_id ? { room_id: values.room_id } : {}),
-        ...(values.equipment_id ? { equipment_id: values.equipment_id } : {}),
-        start_time: mantineDateTimeToIso(values.start_time!),
-        end_time: mantineDateTimeToIso(values.end_time!),
-      })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['waitlist'] })
-      notifications.show({ message: 'Added to waitlist', color: 'green' })
-      form.reset()
-      close()
-    },
-    onError: (err) => {
-      notifications.show({
-        message: apiErrorMessage(err, 'Failed to join waitlist'),
-        color: 'red',
-      })
-    },
   })
 
   const cancelMutation = useMutation({
@@ -127,90 +53,84 @@ export function WaitlistPage() {
     },
   })
 
-  const patientOptions = (patients ?? []).map((p) => ({ value: p.id, label: p.full_name }))
-  const attendingOptions = (attendings ?? []).map((a) => ({ value: a.id, label: a.full_name }))
-  const roomOptions = (rooms ?? []).map((r) => ({ value: r.id, label: r.name }))
-  const equipmentOptions = (equipment ?? []).map((e) => ({ value: e.id, label: e.name }))
+  const sortedEntries = [...(entries ?? [])].sort(
+    (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
+  )
 
   return (
     <Stack>
-      <Group justify="space-between">
-        <Title order={2}>Waitlist</Title>
-        {canManageOwn && <Button onClick={open}>New Waitlist Entry</Button>}
-      </Group>
+      <Title order={2}>Waitlist</Title>
+      <Text size="sm" c="dimmed">
+        A log of appointment requests that couldn't be booked because something was unavailable.
+        Joining happens automatically when you try to book a conflicting time -- once whatever was
+        blocking it frees up, it's booked for you here.
+      </Text>
 
       {isLoading ? (
         <LoadingText />
+      ) : sortedEntries.length === 0 ? (
+        <Text c="dimmed">Nothing on the waitlist.</Text>
       ) : (
         <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Start</Table.Th>
-              <Table.Th>End</Table.Th>
+              <Table.Th>Requested time</Table.Th>
+              <Table.Th>Requested for</Table.Th>
+              <Table.Th>Why</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {entries?.map((entry) => (
+            {sortedEntries.map((entry) => (
               <Table.Tr key={entry.id}>
-                <Table.Td>{new Date(entry.start_time).toLocaleString()}</Table.Td>
-                <Table.Td>{new Date(entry.end_time).toLocaleString()}</Table.Td>
+                <Table.Td>
+                  {new Date(entry.start_time).toLocaleString()} &ndash;{' '}
+                  {new Date(entry.end_time).toLocaleString()}
+                </Table.Td>
+                <Table.Td>
+                  {[entry.attending_name, entry.room_name, entry.equipment_name]
+                    .filter(Boolean)
+                    .join(', ') || '—'}
+                </Table.Td>
+                <Table.Td>
+                  <Group gap={4}>
+                    {entry.conflicts.map((conflict) => (
+                      <Badge key={conflict.resource_type} size="sm" color="orange">
+                        {CAUSE_LABELS[conflict.resource_type]}
+                      </Badge>
+                    ))}
+                  </Group>
+                </Table.Td>
                 <Table.Td>
                   <Badge color={STATUS_COLORS[entry.status]}>{entry.status}</Badge>
                 </Table.Td>
                 <Table.Td>
-                  {canManageOwn && entry.status === 'active' && (
-                    <ConfirmButton
-                      label="Cancel"
-                      message="This will cancel your waitlist entry."
-                      onConfirm={() => cancelMutation.mutate(entry.id)}
-                      loading={cancelMutation.isPending}
-                    />
-                  )}
+                  <Group gap="xs">
+                    {entry.status === 'booked' && entry.resulting_appointment_id && (
+                      <Button
+                        size="xs"
+                        variant="light"
+                        onClick={() => navigate(`/appointments/${entry.resulting_appointment_id}`)}
+                      >
+                        View appointment ({entry.resulting_appointment_status})
+                      </Button>
+                    )}
+                    {canManageOwn && entry.status === 'active' && (
+                      <ConfirmButton
+                        label="Cancel"
+                        message="This will remove your waitlist entry."
+                        onConfirm={() => cancelMutation.mutate(entry.id)}
+                        loading={cancelMutation.isPending}
+                      />
+                    )}
+                  </Group>
                 </Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
         </Table>
       )}
-
-      <Modal opened={opened} onClose={close} title="New Waitlist Entry">
-        <form onSubmit={form.onSubmit(() => createMutation.mutate())}>
-          <Stack>
-            {isStudent && (
-              <Select label="Patient" data={patientOptions} {...form.getInputProps('patient_id')} />
-            )}
-            <DateTimePicker label="Start time" {...form.getInputProps('start_time')} />
-            <DateTimePicker label="End time" {...form.getInputProps('end_time')} />
-            {isStudent && (
-              <>
-                <Select
-                  label="Attending (optional)"
-                  data={attendingOptions}
-                  clearable
-                  {...form.getInputProps('attending_id')}
-                />
-                <Select
-                  label="Room (optional)"
-                  data={roomOptions}
-                  clearable
-                  {...form.getInputProps('room_id')}
-                />
-                <Select
-                  label="Equipment (optional)"
-                  data={equipmentOptions}
-                  clearable
-                  {...form.getInputProps('equipment_id')}
-                />
-              </>
-            )}
-            <Button type="submit" loading={createMutation.isPending}>
-              Join Waitlist
-            </Button>
-          </Stack>
-        </form>
-      </Modal>
     </Stack>
   )
 }

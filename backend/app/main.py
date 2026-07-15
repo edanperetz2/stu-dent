@@ -2,8 +2,9 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import (
     admin,
@@ -25,6 +26,7 @@ from app.api.routes import (
 )
 from app.config import settings
 from app.realtime.listener import listen_forever
+from app.services.scheduling import AppointmentConflictError
 
 
 @asynccontextmanager
@@ -66,6 +68,19 @@ app.include_router(messages.router)
 app.include_router(scheduling_assistant.router)
 app.include_router(reports.router)
 app.include_router(websocket.router)
+
+
+@app.exception_handler(AppointmentConflictError)
+async def handle_appointment_conflict(
+    request: Request, exc: AppointmentConflictError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "detail": exc.message,
+            "conflicts": [c.model_dump(mode="json") for c in exc.conflicts],
+        },
+    )
 
 
 @app.get("/health")

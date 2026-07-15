@@ -12,7 +12,6 @@ import {
   Textarea,
   Title,
 } from '@mantine/core'
-import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
@@ -28,16 +27,24 @@ import {
 } from '../../api/appointments'
 import { listAttendings } from '../../api/attendings'
 import { listActiveEquipment } from '../../api/equipment'
-import { apiErrorMessage } from '../../api/httpClient'
+import { apiErrorMessage, ApiError } from '../../api/httpClient'
 import { listPatients } from '../../api/patients'
 import { getResourcesSchedule } from '../../api/resources'
 import { listActiveRooms } from '../../api/rooms'
 import { interpretSchedulingRequest } from '../../api/schedulingAssistant'
-import type { Appointment, AppointmentStatus } from '../../api/types'
+import type { Appointment, AppointmentStatus, ConflictReason } from '../../api/types'
+import { joinWaitlist } from '../../api/waitlist'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
+import { ConflictResolutionModal } from '../../components/ConflictResolutionModal'
 import { LoadingText } from '../../components/StateText'
-import { isoToMantineDateTime, mantineDateTimeToIso } from '../../utils/dates'
+import {
+  APPOINTMENT_END_TIME_OPTIONS,
+  APPOINTMENT_START_TIME_OPTIONS,
+  isoToMantineDateTime,
+  mantineDateTimeToIso,
+} from '../../utils/dates'
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
   proposed: 'gray',
@@ -158,6 +165,10 @@ export function AppointmentsListPage() {
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [calendarLens, setCalendarLens] = useState<CalendarLens>('personal')
   const [hiddenResourceIds, setHiddenResourceIds] = useState<string[]>([])
+  const [conflictState, setConflictState] = useState<{
+    payload: AppointmentCreateInput
+    conflicts: ConflictReason[]
+  } | null>(null)
 
   const isStudent = principal?.role === 'student'
   const isPatient = principal?.role === 'patient'
@@ -247,9 +258,32 @@ export function AppointmentsListPage() {
       setInterpretWarnings([])
       close()
     },
-    onError: (err) => {
+    onError: (err, payload) => {
+      if (err instanceof ApiError && err.status === 409 && err.conflicts?.length) {
+        setConflictState({ payload, conflicts: err.conflicts })
+        return
+      }
       notifications.show({
         message: apiErrorMessage(err, 'Failed to create appointment'),
+        color: 'red',
+      })
+    },
+  })
+
+  const joinWaitlistMutation = useMutation({
+    mutationFn: (payload: AppointmentCreateInput) => joinWaitlist(token, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['waitlist'] })
+      notifications.show({ message: 'Added to the waitlist', color: 'green' })
+      setConflictState(null)
+      form.reset()
+      setDescribeText('')
+      setInterpretWarnings([])
+      close()
+    },
+    onError: (err) => {
+      notifications.show({
+        message: apiErrorMessage(err, 'Failed to join the waitlist'),
         color: 'red',
       })
     },
@@ -328,18 +362,28 @@ export function AppointmentsListPage() {
   const roomOptions = (rooms ?? []).map((r) => ({ value: r.id, label: r.name }))
   const equipmentOptions = (equipment ?? []).map((e) => ({ value: e.id, label: e.name }))
 
+  // A cancelled appointment is done -- it holds no resource and is no
+  // longer actionable, so it's dropped from the list/calendar entirely
+  // rather than cluttering either view. Still reachable directly (e.g. via
+  // a notification link) at /appointments/{id}, which shows its true
+  // status unfiltered.
+  const visibleAppointments = useMemo(
+    () => (appointments ?? []).filter((appointment) => appointment.status !== 'cancelled'),
+    [appointments],
+  )
+
   // Personal lens: your own appointments, full detail -- unchanged from
   // before the Resources lens existed.
   const personalCalendarEvents = useMemo<CalendarEventItem[]>(
     () =>
-      (appointments ?? []).map((appointment) => ({
+      visibleAppointments.map((appointment) => ({
         id: appointment.id,
         title: `${appointment.patient_name} · ${appointment.status}`,
         start: new Date(appointment.start_time),
         end: new Date(appointment.end_time),
         resource: appointment,
       })),
-    [appointments],
+    [visibleAppointments],
   )
 
   // Resources lens, both roles: one entry per resource actually occupied by
@@ -353,7 +397,7 @@ export function AppointmentsListPage() {
   const resourceCalendarEvents = useMemo<CalendarEventItem[]>(() => {
     if (isAdmin) {
       const events: CalendarEventItem[] = []
-      for (const appointment of appointments ?? []) {
+      for (const appointment of visibleAppointments) {
         const title = `${appointment.patient_name} · ${appointment.status}`
         if (appointment.room_id) {
           events.push({
@@ -399,7 +443,7 @@ export function AppointmentsListPage() {
       resource: null,
       studentName: booking.student_name,
     }))
-  }, [isAdmin, appointments, resourcesSchedule])
+  }, [isAdmin, visibleAppointments, resourcesSchedule])
 
   // Every currently-active room/equipment, plus any resource that's
   // deactivated but still has a booking showing in resourceCalendarEvents
@@ -520,7 +564,7 @@ export function AppointmentsListPage() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {appointments?.map((appointment) => (
+            {visibleAppointments.map((appointment) => (
               <Table.Tr
                 key={appointment.id}
                 style={{ cursor: 'pointer' }}
@@ -671,8 +715,16 @@ export function AppointmentsListPage() {
             {isStudent && (
               <Select label="Patient" data={patientOptions} {...form.getInputProps('patient_id')} />
             )}
-            <DateTimePicker label="Start time" {...form.getInputProps('start_time')} />
-            <DateTimePicker label="End time" {...form.getInputProps('end_time')} />
+            <AppointmentDateTimeInput
+              label="Start time"
+              timeOptions={APPOINTMENT_START_TIME_OPTIONS}
+              {...form.getInputProps('start_time')}
+            />
+            <AppointmentDateTimeInput
+              label="End time"
+              timeOptions={APPOINTMENT_END_TIME_OPTIONS}
+              {...form.getInputProps('end_time')}
+            />
             {isStudent && (
               <>
                 <Select
@@ -697,6 +749,16 @@ export function AppointmentsListPage() {
           </Stack>
         </form>
       </Modal>
+
+      {conflictState && (
+        <ConflictResolutionModal
+          opened
+          onClose={() => setConflictState(null)}
+          conflicts={conflictState.conflicts}
+          joining={joinWaitlistMutation.isPending}
+          onJoinWaitlist={() => joinWaitlistMutation.mutate(conflictState.payload)}
+        />
+      )}
     </Stack>
   )
 }

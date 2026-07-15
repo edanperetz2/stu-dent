@@ -52,6 +52,7 @@ const ADMIN_LINKS: NavItem[] = [
 
 const PATIENT_LINKS: NavItem[] = [
   { label: 'My Appointments', to: '/appointments' },
+  { label: 'Waitlist', to: '/waitlist' },
   { label: 'Messages', to: '/messages' },
   { label: 'Notifications', to: '/notifications' },
   { label: 'Preferences', to: '/preferences' },

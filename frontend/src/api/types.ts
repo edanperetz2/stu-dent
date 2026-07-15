@@ -9,7 +9,15 @@ export type AppointmentStatus =
   | 'no_show'
   | 'rescheduling_requested'
 
-export type WaitlistStatus = 'active' | 'notified' | 'cancelled'
+export type WaitlistStatus = 'active' | 'booked' | 'cancelled'
+
+export type ConflictResourceType = 'student' | 'patient' | 'attending' | 'room' | 'equipment'
+
+export interface ConflictReason {
+  resource_type: ConflictResourceType
+  resource_id: string
+  resource_name: string
+}
 
 export type NotificationType =
   | 'appointment_reminder'
@@ -106,8 +114,20 @@ export interface WaitlistEntry {
   equipment_id: string | null
   start_time: string
   end_time: string
+  notes: string | null
   status: WaitlistStatus
-  notified_at: string | null
+  resolved_at: string | null
+  resulting_appointment_id: string | null
+  // The resulting appointment's status keeps progressing after promotion
+  // (e.g. awaiting_confirmation -> confirmed), so this is resolved fresh
+  // server-side on every read rather than frozen at promotion time.
+  resulting_appointment_status: AppointmentStatus | null
+  conflicts: ConflictReason[]
+  student_name: string
+  patient_name: string
+  attending_name: string | null
+  room_name: string | null
+  equipment_name: string | null
 }
 
 export interface ForumPost {

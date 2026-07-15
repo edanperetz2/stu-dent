@@ -56,6 +56,15 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         const data = JSON.parse(event.data) as RealtimeEvent
         if (data.event === 'notification') {
           queryClient.invalidateQueries({ queryKey: ['notifications'] })
+          // A notification can document a change to an appointment the
+          // recipient didn't make themselves -- a reminder, an expiry, or
+          // (see services/waitlist.py) a waitlist entry auto-promoted into
+          // a brand-new appointment. Without this, a student/patient/
+          // attending with /appointments open wouldn't see it appear until
+          // a manual refresh.
+          queryClient.invalidateQueries({ queryKey: ['appointments'] })
+          queryClient.invalidateQueries({ queryKey: ['waitlist'] })
+          queryClient.invalidateQueries({ queryKey: ['resources'] })
         } else if (data.event === 'message') {
           // Broad prefix match: also refreshes the contacts/groups sidebar
           // lists, not just the open thread, since a new message can be the
