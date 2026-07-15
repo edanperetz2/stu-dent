@@ -1,31 +1,13 @@
-import {
-  Badge,
-  Button,
-  Divider,
-  Group,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core'
+import { Badge, Button, Divider, Group, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
 import { apiErrorMessage } from '../../api/httpClient'
-import {
-  confirmPatient,
-  deletePatient,
-  getPatient,
-  updatePatient,
-  type PatientUpdateInput,
-} from '../../api/patients'
-import type { PreferredTimeOfDay } from '../../api/types'
+import { confirmPatient, deletePatient, updatePatient, type PatientUpdateInput } from '../../api/patients'
+import type { PreferredTimeOfDay, User } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
-import { LoadingText } from '../../components/StateText'
 
 const PREFERRED_TIME_OPTIONS: { value: PreferredTimeOfDay; label: string }[] = [
   { value: 'morning', label: 'Morning' },
@@ -33,38 +15,40 @@ const PREFERRED_TIME_OPTIONS: { value: PreferredTimeOfDay; label: string }[] = [
   { value: 'evening', label: 'Evening' },
 ]
 
-export function PatientDetailPage() {
-  const { patientId } = useParams<{ patientId: string }>()
+interface PatientDetailPanelProps {
+  patient: User
+}
+
+/** Inline expanded detail for a patient row -- takes the already-fetched
+ * list object as a prop rather than re-fetching by id (listPatients already
+ * returns every field this needs), same shape as ForumPostCard. */
+export function PatientDetailPanel({ patient }: PatientDetailPanelProps) {
   const token = useAuthToken()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
-
-  const { data: patient, isLoading } = useQuery({
-    queryKey: ['patients', patientId],
-    queryFn: () => getPatient(token, patientId!),
-    enabled: !!patientId,
-  })
 
   const form = useForm<PatientUpdateInput>({
-    initialValues: { full_name: '', contact_phone: '', preferred_time_of_day: null },
+    initialValues: {
+      full_name: patient.full_name,
+      contact_phone: patient.contact_phone ?? '',
+      preferred_time_of_day: patient.preferred_time_of_day,
+    },
   })
 
   useEffect(() => {
-    if (patient) {
-      form.setValues({
-        full_name: patient.full_name,
-        contact_phone: patient.contact_phone ?? '',
-        preferred_time_of_day: patient.preferred_time_of_day,
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync when the fetched patient changes
+    form.setValues({
+      full_name: patient.full_name,
+      contact_phone: patient.contact_phone ?? '',
+      preferred_time_of_day: patient.preferred_time_of_day,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync when the patient itself changes
   }, [patient])
 
+  const invalidatePatients = () => queryClient.invalidateQueries({ queryKey: ['patients'] })
+
   const updateMutation = useMutation({
-    mutationFn: (payload: PatientUpdateInput) => updatePatient(token, patientId!, payload),
+    mutationFn: (payload: PatientUpdateInput) => updatePatient(token, patient.id, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId] })
-      queryClient.invalidateQueries({ queryKey: ['patients'] })
+      invalidatePatients()
       notifications.show({ message: 'Patient updated', color: 'green' })
     },
     onError: (err) => {
@@ -76,10 +60,9 @@ export function PatientDetailPage() {
   })
 
   const confirmMutation = useMutation({
-    mutationFn: () => confirmPatient(token, patientId!),
+    mutationFn: () => confirmPatient(token, patient.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients', patientId] })
-      queryClient.invalidateQueries({ queryKey: ['patients'] })
+      invalidatePatients()
       notifications.show({ message: 'Patient confirmed', color: 'green' })
     },
     onError: (err) => {
@@ -91,11 +74,10 @@ export function PatientDetailPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: () => deletePatient(token, patientId!),
+    mutationFn: () => deletePatient(token, patient.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients'] })
+      invalidatePatients()
       notifications.show({ message: 'Patient deleted', color: 'green' })
-      navigate('/patients')
     },
     onError: (err) => {
       notifications.show({
@@ -105,13 +87,9 @@ export function PatientDetailPage() {
     },
   })
 
-  if (isLoading) return <LoadingText />
-  if (!patient) return <Text>Patient not found.</Text>
-
   return (
     <Stack maw={480}>
-      <Group justify="space-between">
-        <Title order={2}>{patient.full_name}</Title>
+      <Group justify="flex-end">
         <ConfirmButton
           label="Delete"
           message="This will deactivate the patient record. This can't be undone from here."

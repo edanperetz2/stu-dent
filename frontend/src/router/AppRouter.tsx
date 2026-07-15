@@ -18,11 +18,6 @@ const RoomsPage = lazy(() =>
 const UsersPage = lazy(() =>
   import('../pages/admin/UsersPage').then((m) => ({ default: m.UsersPage })),
 )
-const AppointmentDetailPage = lazy(() =>
-  import('../pages/appointments/AppointmentDetailPage').then((m) => ({
-    default: m.AppointmentDetailPage,
-  })),
-)
 const AppointmentsListPage = lazy(() =>
   import('../pages/appointments/AppointmentsListPage').then((m) => ({
     default: m.AppointmentsListPage,
@@ -44,9 +39,6 @@ const NotificationsPage = lazy(() =>
   import('../pages/notifications/NotificationsPage').then((m) => ({
     default: m.NotificationsPage,
   })),
-)
-const PatientDetailPage = lazy(() =>
-  import('../pages/patients/PatientDetailPage').then((m) => ({ default: m.PatientDetailPage })),
 )
 const PatientsListPage = lazy(() =>
   import('../pages/patients/PatientsListPage').then((m) => ({ default: m.PatientsListPage })),
@@ -86,9 +78,7 @@ export function AppRouter() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<PlaceholderPage title="Dashboard" />} />
               <Route path="/patients" element={<PatientsListPage />} />
-              <Route path="/patients/:patientId" element={<PatientDetailPage />} />
               <Route path="/appointments" element={<AppointmentsListPage />} />
-              <Route path="/appointments/:appointmentId" element={<AppointmentDetailPage />} />
               <Route path="/waitlist" element={<WaitlistPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/messages" element={<MessagesPage />} />

@@ -74,8 +74,8 @@ const selfPatient: Principal = {
 }
 const otherPatient: Principal = { ...selfPatient, id: 'other-patient' }
 
-function names(appointment: Appointment, principal: Principal): string[] {
-  return getAvailableActions(appointment, principal).map((a) => a.name)
+function names(appointment: Appointment, principal: Principal, now?: Date): string[] {
+  return getAvailableActions(appointment, principal, now).map((a) => a.name)
 }
 
 describe('getAvailableActions', () => {
@@ -114,16 +114,38 @@ describe('getAvailableActions', () => {
     expect(actions).toContain('reject')
   })
 
-  it('offers complete and no_show only to the owning student on a confirmed appointment', () => {
-    const studentActions = names(makeAppointment({ status: 'confirmed' }), owningStudent)
+  it('offers complete and no_show only to the owning student on a confirmed, already-started appointment', () => {
+    const afterStart = new Date('2026-01-01T10:00:00Z')
+    const studentActions = names(makeAppointment({ status: 'confirmed' }), owningStudent, afterStart)
     expect(studentActions).toContain('complete')
     expect(studentActions).toContain('no_show')
     expect(studentActions).toContain('cancel')
     expect(studentActions).not.toContain('accept')
 
-    const attendingActions = names(makeAppointment({ status: 'confirmed' }), assignedAttending)
+    const attendingActions = names(makeAppointment({ status: 'confirmed' }), assignedAttending, afterStart)
     expect(attendingActions).not.toContain('complete')
     expect(attendingActions).not.toContain('no_show')
+  })
+
+  it('does not offer complete/no_show before the appointment has started, but keeps cancel available', () => {
+    const beforeStart = new Date('2026-01-01T08:00:00Z')
+    const actions = names(makeAppointment({ status: 'confirmed' }), owningStudent, beforeStart)
+    expect(actions).not.toContain('complete')
+    expect(actions).not.toContain('no_show')
+    expect(actions).toContain('cancel')
+  })
+
+  it('offers complete/no_show exactly at the start time', () => {
+    const atStart = new Date('2026-01-01T09:00:00Z')
+    const actions = names(makeAppointment({ status: 'confirmed' }), owningStudent, atStart)
+    expect(actions).toContain('complete')
+    expect(actions).toContain('no_show')
+  })
+
+  it('keeps cancel available on a past (already-started) confirmed appointment', () => {
+    const wellAfterStart = new Date('2026-06-01T00:00:00Z')
+    const actions = names(makeAppointment({ status: 'confirmed' }), owningStudent, wellAfterStart)
+    expect(actions).toContain('cancel')
   })
 
   it('lets the self patient cancel their own non-terminal appointment', () => {

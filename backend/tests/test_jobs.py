@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.jobs.expiry import expire_stale_appointments
 from app.jobs.reminders import send_appointment_reminders
+from app.jobs.unresolved_appointments import notify_unresolved_past_appointments
 from app.models.appointment import Appointment, AppointmentStatus
 from tests.helpers import auth_header, create_default_room, create_patient, register_and_login
 
@@ -214,3 +215,66 @@ def test_expire_does_not_touch_confirmed_or_terminal_appointments(client, db_ses
 
     row = db_session.get(Appointment, confirmed["id"])
     assert row.status == AppointmentStatus.confirmed
+
+
+def test_unresolved_notifies_confirmed_appointment_past_grace_period(client, db_session):
+    student_token = register_and_login(client, "job-s9@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+
+    now = datetime.now(UTC)
+    start = now - timedelta(hours=30)
+    end = now - timedelta(hours=29)
+    appointment = _book(
+        client, student_token, patient_id=patient_id, start_time=_iso(start), end_time=_iso(end)
+    ).json()
+    assert appointment["status"] == "confirmed"
+
+    notified = notify_unresolved_past_appointments(db_session)
+    assert notified == 1
+
+    notifications = client.get("/notifications", headers=auth_header(student_token)).json()
+    assert any(n["notification_type"] == "appointment_needs_resolution" for n in notifications)
+
+
+def test_unresolved_not_notified_again_within_grace_window(client, db_session):
+    student_token = register_and_login(client, "job-s10@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+
+    now = datetime.now(UTC)
+    start = now - timedelta(hours=30)
+    end = now - timedelta(hours=29)
+    _book(client, student_token, patient_id=patient_id, start_time=_iso(start), end_time=_iso(end))
+
+    assert notify_unresolved_past_appointments(db_session) == 1
+    assert notify_unresolved_past_appointments(db_session) == 0
+
+
+def test_unresolved_skips_appointment_still_within_grace_period(client, db_session):
+    student_token = register_and_login(client, "job-s11@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+
+    now = datetime.now(UTC)
+    start = now - timedelta(hours=2)
+    end = now - timedelta(hours=1)
+    appointment = _book(
+        client, student_token, patient_id=patient_id, start_time=_iso(start), end_time=_iso(end)
+    ).json()
+    assert appointment["status"] == "confirmed"
+
+    assert notify_unresolved_past_appointments(db_session) == 0
+
+
+def test_unresolved_skips_terminal_appointments(client, db_session):
+    student_token = register_and_login(client, "job-s12@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+
+    now = datetime.now(UTC)
+    start = now - timedelta(hours=30)
+    end = now - timedelta(hours=29)
+    appointment = _book(
+        client, student_token, patient_id=patient_id, start_time=_iso(start), end_time=_iso(end)
+    ).json()
+
+    client.post(f"/appointments/{appointment['id']}/cancel", headers=auth_header(student_token))
+
+    assert notify_unresolved_past_appointments(db_session) == 0

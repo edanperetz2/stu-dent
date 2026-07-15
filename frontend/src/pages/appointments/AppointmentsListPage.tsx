@@ -17,9 +17,9 @@ import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Calendar, dayjsLocalizer, type SlotInfo, type View } from 'react-big-calendar'
-import { useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   createAppointment,
   listAppointments,
@@ -39,6 +39,7 @@ import { useAuthToken } from '../../auth/useAuthToken'
 import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
 import { ConflictResolutionModal } from '../../components/ConflictResolutionModal'
 import { LoadingText } from '../../components/StateText'
+import { AppointmentDetailPanel } from './AppointmentDetailPanel'
 import {
   APPOINTMENT_END_TIME_OPTIONS,
   APPOINTMENT_START_TIME_OPTIONS,
@@ -156,7 +157,7 @@ export function AppointmentsListPage() {
   const token = useAuthToken()
   const { principal } = useAuth()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [opened, { open, close }] = useDisclosure(false)
   const [describeText, setDescribeText] = useState('')
   const [interpretWarnings, setInterpretWarnings] = useState<string[]>([])
@@ -169,6 +170,32 @@ export function AppointmentsListPage() {
     payload: AppointmentCreateInput
     conflicts: ConflictReason[]
   } | null>(null)
+  // Row-expansion key for the List sub-view -- plain appointment id for the
+  // Personal-lens table, but the composite `${resourceId}-${id}` key for the
+  // admin Resources-lens table, since one appointment using both a room and
+  // equipment produces two rows sharing the same appointment id there (see
+  // resourceCalendarEvents below, which already keys those rows the same way).
+  const [expandedAppointmentId, setExpandedAppointmentId] = useState<string | null>(null)
+  // Calendar sub-view has no "row" to expand underneath -- clicking an event
+  // opens this appointment in a Modal instead (a "banner/window similar to
+  // the New Appointment modal", per the user's request).
+  const [viewingAppointment, setViewingAppointment] = useState<Appointment | null>(null)
+
+  // Deep-link support for WaitlistPage's "View appointment" button, which
+  // can't navigate to a /appointments/:id route anymore (removed) -- it
+  // instead links to /appointments?appointment=<id>, and this one-time
+  // effect expands that row here. Self-terminating: clearing the param
+  // makes the effect's own `if (id)` guard a no-op on the next run, so no
+  // extra ref/flag is needed to prevent it firing again.
+  useEffect(() => {
+    const id = searchParams.get('appointment')
+    if (id) {
+      setViewMode('list')
+      setExpandedAppointmentId(id)
+      setSearchParams({}, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount only
+  }, [])
 
   const isStudent = principal?.role === 'student'
   const isPatient = principal?.role === 'patient'
@@ -330,16 +357,16 @@ export function AppointmentsListPage() {
   }
 
   function handleSelectEvent(event: CalendarEventItem) {
-    // Non-admin Resources lens has no real appointment to navigate to --
-    // clicking a busy block instead reveals only which student booked it,
-    // never the patient or any other detail. Admin's Resources events are
-    // full real appointments (see resourceCalendarEvents), so they still
-    // navigate through like Personal ones.
+    // Non-admin Resources lens has no real appointment to show -- clicking a
+    // busy block instead reveals only which student booked it, never the
+    // patient or any other detail. Admin's Resources events are full real
+    // appointments (see resourceCalendarEvents), so they still open like
+    // Personal ones.
     if (effectiveLens === 'resources' && !isAdmin) {
       notifications.show({ message: `Booked by ${event.studentName}` })
       return
     }
-    navigate(`/appointments/${event.id}`)
+    setViewingAppointment(event.resource)
   }
 
   function handleSubmit(values: CreateFormValues) {
@@ -564,32 +591,53 @@ export function AppointmentsListPage() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {visibleAppointments.map((appointment) => (
-              <Table.Tr
-                key={appointment.id}
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/appointments/${appointment.id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    navigate(`/appointments/${appointment.id}`)
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-              >
-                <Table.Td>{new Date(appointment.start_time).toLocaleString()}</Table.Td>
-                <Table.Td>{new Date(appointment.end_time).toLocaleString()}</Table.Td>
-                <Table.Td>
-                  <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
-                </Table.Td>
-                <Table.Td>{appointment.student_name}</Table.Td>
-                <Table.Td>{appointment.patient_name}</Table.Td>
-                <Table.Td>{appointment.attending_name ?? '—'}</Table.Td>
-                <Table.Td>{appointment.room_name ?? '—'}</Table.Td>
-                <Table.Td>{appointment.equipment_name ?? '—'}</Table.Td>
-              </Table.Tr>
-            ))}
+            {visibleAppointments.map((appointment) => {
+              const expanded = expandedAppointmentId === appointment.id
+              const toggle = () =>
+                setExpandedAppointmentId((current) =>
+                  current === appointment.id ? null : appointment.id,
+                )
+              return (
+                <Fragment key={appointment.id}>
+                  <Table.Tr
+                    style={{ cursor: 'pointer' }}
+                    onClick={toggle}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggle()
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-expanded={expanded}
+                  >
+                    <Table.Td>{new Date(appointment.start_time).toLocaleString()}</Table.Td>
+                    <Table.Td>{new Date(appointment.end_time).toLocaleString()}</Table.Td>
+                    <Table.Td>
+                      <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
+                    </Table.Td>
+                    <Table.Td>{appointment.student_name}</Table.Td>
+                    <Table.Td>{appointment.patient_name}</Table.Td>
+                    <Table.Td>{appointment.attending_name ?? '—'}</Table.Td>
+                    <Table.Td>{appointment.room_name ?? '—'}</Table.Td>
+                    <Table.Td>{appointment.equipment_name ?? '—'}</Table.Td>
+                  </Table.Tr>
+                  {expanded && (
+                    <Table.Tr>
+                      <Table.Td colSpan={8}>
+                        <AppointmentDetailPanel
+                          appointment={appointment}
+                          attendings={attendings}
+                          rooms={rooms}
+                          equipment={equipment}
+                        />
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                </Fragment>
+              )
+            })}
           </Table.Tbody>
         </Table>
       ) : viewMode === 'list' ? (
@@ -612,45 +660,75 @@ export function AppointmentsListPage() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {visibleEvents.map((event) => (
-              <Table.Tr
-                key={`${event.resourceId}-${event.id}`}
-                style={isAdmin ? { cursor: 'pointer' } : undefined}
-                onClick={isAdmin ? () => navigate(`/appointments/${event.id}`) : undefined}
-                onKeyDown={
-                  isAdmin
-                    ? (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigate(`/appointments/${event.id}`)
-                        }
-                      }
-                    : undefined
-                }
-                tabIndex={isAdmin ? 0 : undefined}
-                role={isAdmin ? 'button' : undefined}
-              >
-                <Table.Td>{event.resourceName}</Table.Td>
-                <Table.Td>{event.resourceKind === 'room' ? 'Room' : 'Equipment'}</Table.Td>
-                <Table.Td>{event.start.toLocaleString()}</Table.Td>
-                <Table.Td>{event.end.toLocaleString()}</Table.Td>
-                {isAdmin ? (
-                  <>
-                    <Table.Td>{event.resource?.student_name}</Table.Td>
-                    <Table.Td>{event.resource?.patient_name}</Table.Td>
-                    <Table.Td>
-                      {event.resource && (
-                        <Badge color={STATUS_COLORS[event.resource.status]}>
-                          {event.resource.status}
-                        </Badge>
-                      )}
-                    </Table.Td>
-                  </>
-                ) : (
-                  <Table.Td>{event.studentName}</Table.Td>
-                )}
-              </Table.Tr>
-            ))}
+            {visibleEvents.map((event) => {
+              // One appointment using both a room and equipment produces two
+              // rows here sharing the same event.id but different
+              // resourceId (see resourceCalendarEvents' isAdmin branch) --
+              // the expansion key must be the same composite string already
+              // used for React's key, or clicking either row would expand
+              // both. The bare-id fallback below only matters for the
+              // Waitlist deep-link (which only knows the appointment id, not
+              // which resource row it landed on); harmless in the rare
+              // dual-resource case since both rows are then just correct.
+              const compositeKey = `${event.resourceId}-${event.id}`
+              const expanded =
+                expandedAppointmentId === compositeKey || expandedAppointmentId === event.id
+              const toggle = () =>
+                setExpandedAppointmentId((current) => (current === compositeKey ? null : compositeKey))
+              return (
+                <Fragment key={compositeKey}>
+                  <Table.Tr
+                    style={isAdmin ? { cursor: 'pointer' } : undefined}
+                    onClick={isAdmin ? toggle : undefined}
+                    onKeyDown={
+                      isAdmin
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              toggle()
+                            }
+                          }
+                        : undefined
+                    }
+                    tabIndex={isAdmin ? 0 : undefined}
+                    role={isAdmin ? 'button' : undefined}
+                    aria-expanded={isAdmin ? expanded : undefined}
+                  >
+                    <Table.Td>{event.resourceName}</Table.Td>
+                    <Table.Td>{event.resourceKind === 'room' ? 'Room' : 'Equipment'}</Table.Td>
+                    <Table.Td>{event.start.toLocaleString()}</Table.Td>
+                    <Table.Td>{event.end.toLocaleString()}</Table.Td>
+                    {isAdmin ? (
+                      <>
+                        <Table.Td>{event.resource?.student_name}</Table.Td>
+                        <Table.Td>{event.resource?.patient_name}</Table.Td>
+                        <Table.Td>
+                          {event.resource && (
+                            <Badge color={STATUS_COLORS[event.resource.status]}>
+                              {event.resource.status}
+                            </Badge>
+                          )}
+                        </Table.Td>
+                      </>
+                    ) : (
+                      <Table.Td>{event.studentName}</Table.Td>
+                    )}
+                  </Table.Tr>
+                  {isAdmin && expanded && event.resource && (
+                    <Table.Tr>
+                      <Table.Td colSpan={7}>
+                        <AppointmentDetailPanel
+                          appointment={event.resource}
+                          attendings={attendings}
+                          rooms={rooms}
+                          equipment={equipment}
+                        />
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                </Fragment>
+              )
+            })}
           </Table.Tbody>
         </Table>
       ) : (
@@ -759,6 +837,22 @@ export function AppointmentsListPage() {
           onJoinWaitlist={() => joinWaitlistMutation.mutate(conflictState.payload)}
         />
       )}
+
+      <Modal
+        opened={!!viewingAppointment}
+        onClose={() => setViewingAppointment(null)}
+        title="Appointment"
+      >
+        {viewingAppointment && (
+          <AppointmentDetailPanel
+            appointment={viewingAppointment}
+            attendings={attendings}
+            rooms={rooms}
+            equipment={equipment}
+            onActionSuccess={() => setViewingAppointment(null)}
+          />
+        )}
+      </Modal>
     </Stack>
   )
 }

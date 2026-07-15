@@ -46,6 +46,15 @@ def _require_owning_student(appointment: Appointment, current_user: User) -> Non
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not the owning student")
 
 
+def _require_started(appointment: Appointment) -> None:
+    if datetime.now(UTC) < appointment.start_time:
+        raise HTTPException(
+            status_code=409,
+            detail="This appointment hasn't started yet -- try again after its "
+            "start time, or edit the appointment if the time is wrong.",
+        )
+
+
 @router.post("/appointments", response_model=AppointmentOut, status_code=status.HTTP_201_CREATED)
 def create_appointment(
     payload: AppointmentCreate,
@@ -422,6 +431,7 @@ def complete_appointment(
 
     if appointment.status != AppointmentStatus.confirmed:
         raise HTTPException(status_code=409, detail="Only a confirmed appointment can be completed")
+    _require_started(appointment)
 
     appointment.status = AppointmentStatus.completed
     flush_or_409(db)
@@ -451,6 +461,7 @@ def mark_no_show(
         raise HTTPException(
             status_code=409, detail="Only a confirmed appointment can be marked no-show"
         )
+    _require_started(appointment)
 
     appointment.status = AppointmentStatus.no_show
     flush_or_409(db)

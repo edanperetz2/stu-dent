@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from tests.helpers import (
     auth_header,
     create_and_login_patient,
@@ -350,12 +352,14 @@ def test_complete_and_no_show_require_confirmed_status(client):
     student_token = register_and_login(client, "s16@example.com", role="student")
     patient_id = create_patient(client, student_token)
 
+    # Must already be in the past -- complete/no-show are gated on the
+    # appointment's start time, see test_complete_and_no_show_require_started_time.
     proposed_like = _book(
         client,
         student_token,
         patient_id=patient_id,
-        start_time="2026-08-04T09:00:00+00:00",
-        end_time="2026-08-04T10:00:00+00:00",
+        start_time="2020-08-04T09:00:00+00:00",
+        end_time="2020-08-04T10:00:00+00:00",
     ).json()
     # already confirmed since no attending; complete should succeed
     complete_response = client.post(
@@ -374,14 +378,47 @@ def test_complete_and_no_show_require_confirmed_status(client):
         client,
         student_token,
         patient_id=patient_id,
-        start_time="2026-08-05T09:00:00+00:00",
-        end_time="2026-08-05T10:00:00+00:00",
+        start_time="2020-08-05T09:00:00+00:00",
+        end_time="2020-08-05T10:00:00+00:00",
     ).json()
     no_show_response = client.post(
         f"/appointments/{no_show_appt['id']}/no-show", headers=auth_header(student_token)
     )
     assert no_show_response.status_code == 200
     assert no_show_response.json()["status"] == "no_show"
+
+
+def test_complete_and_no_show_require_started_time(client):
+    student_token = register_and_login(client, "s16b@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+
+    now = datetime.now(UTC)
+    future_appt = _book(
+        client,
+        student_token,
+        patient_id=patient_id,
+        start_time=(now + timedelta(hours=1)).isoformat(),
+        end_time=(now + timedelta(hours=2)).isoformat(),
+    ).json()
+    assert future_appt["status"] == "confirmed"
+
+    complete_response = client.post(
+        f"/appointments/{future_appt['id']}/complete", headers=auth_header(student_token)
+    )
+    assert complete_response.status_code == 409
+
+    no_show_response = client.post(
+        f"/appointments/{future_appt['id']}/no-show", headers=auth_header(student_token)
+    )
+    assert no_show_response.status_code == 409
+
+    # cancel is unaffected by time -- must stay available for a future (and,
+    # by the same logic, a past) appointment.
+    cancel_response = client.post(
+        f"/appointments/{future_appt['id']}/cancel", headers=auth_header(student_token)
+    )
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["status"] == "cancelled"
 
 
 def test_visibility_scoping_returns_404_out_of_scope(client):

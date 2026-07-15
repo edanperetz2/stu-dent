@@ -1,33 +1,28 @@
-import { Badge, Button, Group, Modal, Select, Stack, Text, Textarea, Title } from '@mantine/core'
+import { Badge, Button, Group, Modal, Select, Stack, Text, Textarea } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
 import {
   acceptAppointment,
   approveAppointment,
   cancelAppointment,
   completeAppointment,
-  getAppointment,
   markNoShow,
   rejectAppointment,
   updateAppointment,
   type AppointmentCreateInput,
   type AppointmentUpdateInput,
 } from '../../api/appointments'
-import { listAttendings } from '../../api/attendings'
-import { listActiveEquipment } from '../../api/equipment'
 import { apiErrorMessage, ApiError } from '../../api/httpClient'
-import { listActiveRooms } from '../../api/rooms'
-import type { Appointment, AppointmentStatus, ConflictReason } from '../../api/types'
+import type { Appointment, AppointmentStatus, ConflictReason, Equipment, Room, User } from '../../api/types'
 import { joinWaitlist } from '../../api/waitlist'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
+import { ConfirmButton } from '../../components/ConfirmButton'
 import { ConflictResolutionModal } from '../../components/ConflictResolutionModal'
-import { LoadingText } from '../../components/StateText'
 import {
   APPOINTMENT_END_TIME_OPTIONS,
   APPOINTMENT_START_TIME_OPTIONS,
@@ -60,6 +55,15 @@ const ACTION_FUNCTIONS: Record<
 
 const TERMINAL_STATUSES: AppointmentStatus[] = ['cancelled', 'completed', 'no_show']
 
+// These three finalize the appointment (or, for cancel, end it outright) --
+// worth a confirmation step before firing, unlike accept/approve/reject/edit
+// which just move it forward in the normal flow.
+const CONFIRM_MESSAGES: Partial<Record<AppointmentActionName, string>> = {
+  cancel: 'This will cancel the appointment.',
+  complete: 'This will mark the appointment as completed.',
+  no_show: 'This will mark the appointment as a no-show.',
+}
+
 interface EditFormValues {
   // DateTimePicker value format -- see src/utils/dates.ts
   start_time: string | null
@@ -70,8 +74,32 @@ interface EditFormValues {
   notes: string
 }
 
-export function AppointmentDetailPage() {
-  const { appointmentId } = useParams<{ appointmentId: string }>()
+interface AppointmentDetailPanelProps {
+  appointment: Appointment
+  attendings?: User[]
+  rooms?: Room[]
+  equipment?: Equipment[]
+  // Called after any direct action (accept/approve/reject/cancel/complete/
+  // no_show) or a waitlist-join-cancels-this-appointment succeeds. Only
+  // wired up by the Calendar view's viewing Modal (to close itself) --
+  // left undefined for the inline List-view row expansions, which should
+  // just keep showing the updated status in place, not collapse.
+  onActionSuccess?: () => void
+}
+
+/** Inline/modal expanded detail for an appointment -- takes the
+ * already-fetched list object (and the list page's already-fetched
+ * attendings/rooms/equipment) as props rather than re-fetching any of them,
+ * same shape as ForumPostCard/PatientDetailPanel. Rendered both inline in
+ * AppointmentsListPage's List sub-view (inside an expanded table row) and
+ * inside a Modal for the Calendar sub-view. */
+export function AppointmentDetailPanel({
+  appointment,
+  attendings,
+  rooms,
+  equipment,
+  onActionSuccess,
+}: AppointmentDetailPanelProps) {
   const token = useAuthToken()
   const { principal } = useAuth()
   const queryClient = useQueryClient()
@@ -83,37 +111,17 @@ export function AppointmentDetailPage() {
     conflicts: ConflictReason[]
   } | null>(null)
 
-  const { data: appointment, isLoading } = useQuery({
-    queryKey: ['appointments', appointmentId],
-    queryFn: () => getAppointment(token, appointmentId!),
-    enabled: !!appointmentId,
-  })
-
   const isStudent = principal?.role === 'student'
 
-  const { data: attendings } = useQuery({
-    queryKey: ['attendings'],
-    queryFn: () => listAttendings(token),
-    enabled: isStudent,
-  })
-  const { data: rooms } = useQuery({
-    queryKey: ['rooms'],
-    queryFn: () => listActiveRooms(token),
-    enabled: isStudent,
-  })
-  const { data: equipment } = useQuery({
-    queryKey: ['equipment'],
-    queryFn: () => listActiveEquipment(token),
-    enabled: isStudent,
-  })
+  const invalidateAppointments = () => queryClient.invalidateQueries({ queryKey: ['appointments'] })
 
   const actionMutation = useMutation({
     mutationFn: (actionName: AppointmentActionName) =>
-      ACTION_FUNCTIONS[actionName](token, appointmentId!),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(['appointments', appointmentId], updated)
-      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      ACTION_FUNCTIONS[actionName](token, appointment.id),
+    onSuccess: () => {
+      invalidateAppointments()
       notifications.show({ message: 'Appointment updated', color: 'green' })
+      onActionSuccess?.()
     },
     onError: (err) => {
       notifications.show({
@@ -128,24 +136,24 @@ export function AppointmentDetailPage() {
   // mutation/modal instead of going through the generic actionMutation
   // above (which assumes no extra input is needed).
   const acceptMutation = useMutation({
-    mutationFn: (roomId?: string) => acceptAppointment(token, appointmentId!, roomId),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(['appointments', appointmentId], updated)
-      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+    mutationFn: (roomId?: string) => acceptAppointment(token, appointment.id, roomId),
+    onSuccess: () => {
+      invalidateAppointments()
       notifications.show({ message: 'Appointment updated', color: 'green' })
       closeAccept()
+      onActionSuccess?.()
     },
     onError: (err, roomId) => {
       if (err instanceof ApiError && err.status === 409 && err.conflicts?.length) {
         setConflictState({
           payload: {
-            patient_id: appointment!.patient_id,
-            attending_id: appointment!.attending_id ?? undefined,
-            room_id: roomId ?? appointment!.room_id ?? undefined,
-            equipment_id: appointment!.equipment_id ?? undefined,
-            start_time: appointment!.start_time,
-            end_time: appointment!.end_time,
-            notes: appointment!.notes ?? undefined,
+            patient_id: appointment.patient_id,
+            attending_id: appointment.attending_id ?? undefined,
+            room_id: roomId ?? appointment.room_id ?? undefined,
+            equipment_id: appointment.equipment_id ?? undefined,
+            start_time: appointment.start_time,
+            end_time: appointment.end_time,
+            notes: appointment.notes ?? undefined,
           },
           conflicts: err.conflicts,
         })
@@ -174,10 +182,9 @@ export function AppointmentDetailPage() {
 
   const editMutation = useMutation({
     mutationFn: (payload: AppointmentUpdateInput) =>
-      updateAppointment(token, appointmentId!, payload),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(['appointments', appointmentId], updated)
-      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      updateAppointment(token, appointment.id, payload),
+    onSuccess: () => {
+      invalidateAppointments()
       notifications.show({ message: 'Appointment updated', color: 'green' })
       closeEdit()
     },
@@ -189,7 +196,7 @@ export function AppointmentDetailPage() {
       if (err instanceof ApiError && err.status === 409 && err.conflicts?.length) {
         setConflictState({
           payload: {
-            patient_id: appointment!.patient_id,
+            patient_id: appointment.patient_id,
             attending_id: payload.attending_id ?? undefined,
             room_id: payload.room_id ?? undefined,
             equipment_id: payload.equipment_id ?? undefined,
@@ -223,14 +230,14 @@ export function AppointmentDetailPage() {
       // point, so a failure here is reported separately, not as "the
       // waitlist join failed" (it didn't).
       try {
-        await cancelAppointment(token, appointmentId!)
-        queryClient.invalidateQueries({ queryKey: ['appointments'] })
+        await cancelAppointment(token, appointment.id)
+        invalidateAppointments()
         notifications.show({
           message: 'Added to the waitlist and cancelled this appointment',
           color: 'green',
         })
       } catch (err) {
-        queryClient.invalidateQueries({ queryKey: ['appointments'] })
+        invalidateAppointments()
         notifications.show({
           message: apiErrorMessage(
             err,
@@ -239,6 +246,7 @@ export function AppointmentDetailPage() {
           color: 'orange',
         })
       }
+      onActionSuccess?.()
     },
     onError: (err) => {
       notifications.show({
@@ -248,8 +256,7 @@ export function AppointmentDetailPage() {
     },
   })
 
-  if (isLoading) return <LoadingText />
-  if (!appointment || !principal) return <Text>Appointment not found.</Text>
+  if (!principal) return null
 
   const actions = getAvailableActions(appointment, principal)
   const acceptAction = actions.find((a) => a.name === 'accept')
@@ -258,7 +265,7 @@ export function AppointmentDetailPage() {
   const isTerminal = TERMINAL_STATUSES.includes(appointment.status)
 
   function handleAcceptClick() {
-    if (appointment!.room_id) {
+    if (appointment.room_id) {
       acceptMutation.mutate(undefined)
     } else {
       setAcceptRoomId(null)
@@ -268,12 +275,12 @@ export function AppointmentDetailPage() {
 
   function openEditModal() {
     editForm.setValues({
-      start_time: isoToMantineDateTime(appointment!.start_time),
-      end_time: isoToMantineDateTime(appointment!.end_time),
-      attending_id: appointment!.attending_id,
-      room_id: appointment!.room_id,
-      equipment_id: appointment!.equipment_id,
-      notes: appointment!.notes ?? '',
+      start_time: isoToMantineDateTime(appointment.start_time),
+      end_time: isoToMantineDateTime(appointment.end_time),
+      attending_id: appointment.attending_id,
+      room_id: appointment.room_id,
+      equipment_id: appointment.equipment_id,
+      notes: appointment.notes ?? '',
     })
     openEdit()
   }
@@ -281,7 +288,6 @@ export function AppointmentDetailPage() {
   return (
     <Stack maw={480}>
       <Group justify="space-between">
-        <Title order={2}>Appointment</Title>
         <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
       </Group>
 
@@ -305,16 +311,31 @@ export function AppointmentDetailPage() {
             {acceptAction.label}
           </Button>
         )}
-        {otherActions.map((action) => (
-          <Button
-            key={action.name}
-            color={action.color}
-            loading={actionMutation.isPending}
-            onClick={() => actionMutation.mutate(action.name)}
-          >
-            {action.label}
-          </Button>
-        ))}
+        {otherActions.map((action) => {
+          const confirmMessage = CONFIRM_MESSAGES[action.name]
+          if (confirmMessage) {
+            return (
+              <ConfirmButton
+                key={action.name}
+                label={action.label}
+                message={confirmMessage}
+                color={action.color}
+                onConfirm={() => actionMutation.mutate(action.name)}
+                loading={actionMutation.isPending}
+              />
+            )
+          }
+          return (
+            <Button
+              key={action.name}
+              color={action.color}
+              loading={actionMutation.isPending}
+              onClick={() => actionMutation.mutate(action.name)}
+            >
+              {action.label}
+            </Button>
+          )
+        })}
         {isOwningStudent && !isTerminal && (
           <Button variant="light" onClick={openEditModal}>
             Edit

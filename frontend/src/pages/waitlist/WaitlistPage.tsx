@@ -111,7 +111,7 @@ export function WaitlistPage() {
                       <Button
                         size="xs"
                         variant="light"
-                        onClick={() => navigate(`/appointments/${entry.resulting_appointment_id}`)}
+                        onClick={() => navigate(`/appointments?appointment=${entry.resulting_appointment_id}`)}
                       >
                         View appointment ({entry.resulting_appointment_status})
                       </Button>

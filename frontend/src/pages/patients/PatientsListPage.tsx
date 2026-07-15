@@ -3,17 +3,18 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { Fragment, useState } from 'react'
 import { apiErrorMessage } from '../../api/httpClient'
 import { createPatient, listPatients, type PatientCreateInput } from '../../api/patients'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { LoadingText } from '../../components/StateText'
+import { PatientDetailPanel } from './PatientDetailPanel'
 
 export function PatientsListPage() {
   const token = useAuthToken()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const [opened, { open, close }] = useDisclosure(false)
+  const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null)
 
   const { data: patients, isLoading } = useQuery({
     queryKey: ['patients'],
@@ -65,36 +66,50 @@ export function PatientsListPage() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {patients?.map((patient) => (
-              <Table.Tr
-                key={patient.id}
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/patients/${patient.id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    navigate(`/patients/${patient.id}`)
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-              >
-                <Table.Td>{patient.full_name}</Table.Td>
-                <Table.Td>{patient.contact_phone ?? '-'}</Table.Td>
-                <Table.Td>
-                  {patient.owner_confirmed_at ? (
-                    <Badge color="green">Confirmed</Badge>
-                  ) : (
-                    <Badge color="yellow">Pending confirmation</Badge>
+            {patients?.map((patient) => {
+              const expanded = expandedPatientId === patient.id
+              const toggle = () =>
+                setExpandedPatientId((current) => (current === patient.id ? null : patient.id))
+              return (
+                <Fragment key={patient.id}>
+                  <Table.Tr
+                    style={{ cursor: 'pointer' }}
+                    onClick={toggle}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggle()
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-expanded={expanded}
+                  >
+                    <Table.Td>{patient.full_name}</Table.Td>
+                    <Table.Td>{patient.contact_phone ?? '-'}</Table.Td>
+                    <Table.Td>
+                      {patient.owner_confirmed_at ? (
+                        <Badge color="green">Confirmed</Badge>
+                      ) : (
+                        <Badge color="yellow">Pending confirmation</Badge>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color={patient.is_active ? 'blue' : 'gray'}>
+                        {patient.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </Table.Td>
+                  </Table.Tr>
+                  {expanded && (
+                    <Table.Tr>
+                      <Table.Td colSpan={4}>
+                        <PatientDetailPanel patient={patient} />
+                      </Table.Td>
+                    </Table.Tr>
                   )}
-                </Table.Td>
-                <Table.Td>
-                  <Badge color={patient.is_active ? 'blue' : 'gray'}>
-                    {patient.is_active ? 'Active' : 'Inactive'}
-                  </Badge>
-                </Table.Td>
-              </Table.Tr>
-            ))}
+                </Fragment>
+              )
+            })}
           </Table.Tbody>
         </Table>
       )}

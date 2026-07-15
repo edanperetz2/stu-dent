@@ -24,6 +24,8 @@ export type NotificationType =
   | 'appointment_expired'
   | 'waitlist_slot_available'
   | 'patient_registration_request'
+  | 'resource_deactivated'
+  | 'appointment_needs_resolution'
 
 export type PreferredTimeOfDay = 'morning' | 'afternoon' | 'evening'
 

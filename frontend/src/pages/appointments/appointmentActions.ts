@@ -17,7 +17,11 @@ const TERMINAL_STATUSES: AppointmentStatus[] = ['cancelled', 'completed', 'no_sh
  * action the API would reject. Kept as a pure function (no rendering) so
  * it's directly unit-testable without mounting the page.
  */
-export function getAvailableActions(appointment: Appointment, principal: Principal): AppointmentAction[] {
+export function getAvailableActions(
+  appointment: Appointment,
+  principal: Principal,
+  now: Date = new Date(),
+): AppointmentAction[] {
   const actions: AppointmentAction[] = []
 
   const isOwningStudent =
@@ -47,7 +51,11 @@ export function getAvailableActions(appointment: Appointment, principal: Princip
     actions.push({ name: 'cancel', label: 'Cancel', color: 'red' })
   }
 
-  if (isOwningStudent && appointment.status === 'confirmed') {
+  if (
+    isOwningStudent &&
+    appointment.status === 'confirmed' &&
+    now >= new Date(appointment.start_time)
+  ) {
     actions.push({ name: 'complete', label: 'Complete', color: 'blue' })
     actions.push({ name: 'no_show', label: 'Mark No-Show', color: 'orange' })
   }
