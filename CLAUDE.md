@@ -28,8 +28,7 @@ shared resources (rooms/equipment), reminders, and communication.
 - Infra: Docker Compose (`api`, `db`, `frontend`, `mailhog`, `worker` — the
   worker shares the `backend` image/build context with `api`, just runs a
   different command — and `ollama`, added in Phase 6), one startup command,
-  `.env.example`. A hardened `docker-compose.prod.yml` (added in Phase 7)
-  targets a plain VM deploy — see that phase's roadmap entry below.
+  `.env.example`.
 - Auth: argon2 password hashing (`argon2-cffi`), JWT access tokens (`PyJWT`,
   HS256, no refresh token).
 - Local AI: Ollama (`llama3.2` by default), called only through
@@ -234,62 +233,30 @@ docker compose exec frontend npm run lint
   regression + live verification). Requires a one-time
   `docker compose exec ollama ollama pull <model>` after first `docker
   compose up` — models aren't baked into the `ollama/ollama` image.
-- **7 — CI/CD + VM deploy + seed data** (§6): in progress. Proposal §6's
-  "supplied Azure environment" turned out (confirmed with the course
-  lecturer) to mean a plain VM, not a managed cloud platform — the user
-  has sent their SSH public key and is waiting on the VM to actually be
-  provisioned. **Done for real, zero cost/credentials needed**: (a) full
-  CI pipeline — `.github/workflows/ci.yml` fixed a real pre-existing bug
-  (the `push:` trigger targeted branch `main`, which never existed; the
-  repo's only branch is `master`, so `push` had silently never fired,
-  only `pull_request` ever ran CI) and gained `frontend-tests` (vitest +
+- **7 — CI/CD + seed data** (§6): done. **Full CI pipeline** —
+  `.github/workflows/ci.yml` fixed a real pre-existing bug (the `push:`
+  trigger targeted branch `main`, which never existed; the repo's only
+  branch is `master`, so `push` had silently never fired, only
+  `pull_request` ever ran CI) and gained `frontend-tests` (vitest +
   `tsc -b && vite build`, previously never run in CI at all) and
-  `docker-build` (build-only validation of all four Dockerfiles, dev and
-  prod). (b) `backend/app/seed_demo.py` — idempotent (checks for a
-  sentinel demo admin email, no-ops if already seeded), mirrors
-  `worker.py`'s `python -m app.<module>` invocation pattern, reuses real
-  service functions (`validate_participants`/`recompute_status`,
+  `docker-build` (build-only validation of both Dockerfiles).
+  **`backend/app/seed_demo.py`** — idempotent (checks for a sentinel demo
+  admin email, no-ops if already seeded), mirrors `worker.py`'s
+  `python -m app.<module>` invocation pattern, reuses real service
+  functions (`validate_participants`/`recompute_status`,
   `services/notifications.py::notify`,
   `services/report_assistant.py::generate_periodic_report`) rather than
   hand-crafting rows, so demo data respects the same invariants real data
   would. Live-verified: seeded data renders correctly across
   Patients/Appointments/Forum/Reports/Notifications, and the seeded
   weekly report gets genuinely narrated by Ollama referencing the actual
-  seeded entities. **Prepared, locally rehearsed, not yet run against a
-  real VM** (which doesn't exist yet): `docker-compose.prod.yml`
-  (standalone file, not a compose override — every dev service hardened
-  for production: prod Dockerfiles, no bind-mounts/`--reload`,
-  `restart: unless-stopped`; unlike the Container-Apps plan this
-  replaced, Ollama stays in since a VM's cost model is flat, not
-  pay-per-container-second), `backend/Dockerfile.prod`,
-  `frontend/Dockerfile.prod` + `frontend/nginx.conf` (multi-stage,
-  SPA-fallback routing), `deploy/bootstrap-vm.sh`,
-  `.github/workflows/deploy.yml` (`workflow_dispatch`-only, structurally
-  inert until VM secrets are configured). Also added CORS multi-origin
-  support (`frontend_origins` comma-separated setting +
-  `frontend_origin_list` property) since a real deploy needs to allow
-  both `localhost` and the VM's own origin. **The full prod stack was
-  actually rehearsed locally** (stopped the dev stack, brought up
-  `docker-compose.prod.yml` reusing the same named Postgres volume so the
-  seeded demo data carried over, logged in through the real nginx-served
-  frontend against the real prod API) — this caught and fixed two genuine
-  bugs a review alone wouldn't have: (1) the prod `frontend` service had
-  no explicit `image:` tag and silently collided with/overwrote the dev
-  stack's implicit `finalproject-frontend` image tag — fixed by giving it
-  an explicit distinct tag; (2) forgetting to add the deploy origin to
-  `FRONTEND_ORIGINS` produces a confusing silent "login failed" with no
-  visible error (the browser blocks the cross-origin request client-side)
-  — now documented prominently in the README's VM deploy section.
-  **Resume next**: once the VM exists, SSH in, run
-  `deploy/bootstrap-vm.sh`, configure `.env` with the VM's real address,
-  bring up `docker-compose.prod.yml` for real, optionally wire up
-  `deploy.yml`'s secrets. Proposal §6's other two deliverables that don't
-  depend on the VM — `docs/final_report.md` (architecture, features,
-  testing, deployment status, risks; team contributions left as a
-  placeholder for the authors) and `docs/demo_video_script.md` (a timed
-  walkthrough script covering every required workflow, using the seeded
-  demo accounts) — are both drafted and committed. Recording the actual
-  video is the user's to do.
+  seeded entities. `docs/final_report.md` (architecture, features,
+  testing, risks; team contributions left as a placeholder for the
+  authors) and `docs/demo_video_script.md` (a timed walkthrough script
+  covering every required workflow, using the seeded demo accounts) are
+  both drafted and committed, frozen as of course submission (see the
+  note at the top of the post-submission section below); recording the
+  actual video is still the user's to do.
 - **Codebase review + cleanup (cross-phase, not a proposal-scoped phase)**:
   **done**. A full scan of every phase's code (backend, frontend,
   infra/CI/docs) via 3 parallel research passes produced 29 concrete,

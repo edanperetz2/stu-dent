@@ -1,7 +1,7 @@
 import type { ConflictReason } from './types'
 
-// Inlined by Vite at build time (see Dockerfile.prod) -- changing this env
-// var after the image is built has no effect; a new image must be built.
+// Inlined by Vite at build time -- changing this env var after the image
+// is built has no effect; a new image must be built.
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 export class ApiError extends Error {

@@ -7,6 +7,38 @@ full project proposal and `CLAUDE.md` for the phase roadmap and conventions.
 
 Localhost-first, fully Dockerized, zero paid services.
 
+## Features
+
+- **Auth & roles**: unified login/registration for student, attending, admin,
+  and patient accounts, argon2 password hashing, JWT sessions, and
+  login-rate-limiting backed by the audit log.
+- **Appointments**: create, approve, edit, cancel, complete, or mark a
+  no-show through a table view or a full day/week/month calendar, with
+  database-enforced conflict prevention across student, patient, attending,
+  room, and equipment at once.
+- **Waitlist**: joining happens automatically when a booking attempt hits a
+  real conflict — no manual "add me to a waitlist" form. Once whatever was
+  blocking it frees up, the request is booked automatically, first-come-
+  first-served.
+- **Notifications & email**: in-app notifications with a live unread-count
+  badge, mirrored to email via MailHog for local testing, for reminders,
+  cancellations, expirations, and unresolved/pending-feedback nags.
+- **Forum**: a student community feed — posts, comments, and voting.
+- **Messaging**: direct messages between a patient and their student,
+  student/attending group chats, and a shared inbox for admin.
+- **Admin management**: users, rooms, and equipment, including scheduled
+  (date-limited) deactivation that auto-reactivates on its own.
+- **Resources view**: an anonymized, clinic-wide room/equipment schedule so
+  students and attendings can see what's free without seeing whose patient
+  is using what.
+- **Reports & local AI**: auto-generated weekly/monthly utilization reports,
+  live ad-hoc natural-language Q&A, and a natural-language scheduling
+  interpreter that pre-fills the appointment form for review — all backed by
+  a local Ollama model, never trusted to make a booking decision itself.
+- **Feedback**: after a completed appointment, the patient and attending (if
+  one was assigned) can leave qualitative feedback for the treating student,
+  with reminders until they do.
+
 ## Stack
 
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2, Pydantic v2, Alembic, pytest
@@ -92,56 +124,7 @@ docker compose exec api black --check .
 docker compose exec frontend npm run lint
 ```
 
-## Deploying to the course VM
-
-This project targets a plain Linux VM (not a managed cloud platform) —
-Postgres, Ollama, and everything else just run as Docker containers on the
-VM itself, the same shape as local `docker compose up`, just hardened for
-production via `docker-compose.prod.yml`. **These steps haven't been run
-against a real VM yet** (written before one was available) — the most
-likely adjustment needed is the exact address the VM is reachable at;
-everything else should work as described.
-
-**First-time setup** (once the VM exists and you can SSH into it):
-
-```bash
-ssh <your-user>@<vm-ip>
-curl -fsSL https://raw.githubusercontent.com/edanperetz2/stu-dent/master/deploy/bootstrap-vm.sh | bash
-git clone https://github.com/edanperetz2/stu-dent.git
-cd stu-dent
-cp .env.example .env
-```
-
-Edit `.env`:
-- `VITE_API_URL` → this VM's real address, e.g. `http://<vm-ip>:8000`
-- `FRONTEND_ORIGINS` → include this VM's frontend URL too, e.g.
-  `http://localhost:5173,http://<vm-ip>` — **this one is easy to miss**;
-  forgetting it produces a real, confusing "login failed" with no obvious
-  error in the UI (the browser silently blocks the cross-origin request).
-- `JWT_SECRET_KEY` → generate a real random value, don't keep the example.
-
-Then bring up the production stack:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml exec ollama ollama pull llama3.2  # optional, one-time
-```
-
-Visit `http://<vm-ip>` for the frontend, `http://<vm-ip>:8025` for MailHog
-(useful for demoing "the app really sent an email" live).
-
-**Redeploying after a code change**: either SSH in again and re-run
-`git pull && docker compose -f docker-compose.prod.yml up -d --build`, or
-set up push-button redeploys via `.github/workflows/deploy.yml`
-(`workflow_dispatch`-only, never runs automatically):
-
-1. Generate a dedicated SSH keypair for CI (don't reuse your personal
-   one) and add the public half to the VM's `~/.ssh/authorized_keys`.
-2. Add three GitHub repo secrets: `VM_HOST`, `VM_USER`, `VM_SSH_KEY`
-   (the private half of the deploy keypair).
-3. Go to Actions → "Deploy to VM" → "Run workflow".
-
-## Known Phase 1 limitations
+## Known limitations
 
 - `POST /auth/register` accepts a `role` field with no admin gating — anyone
   can self-register as `student`, `attending`, or `admin`. This is an accepted
