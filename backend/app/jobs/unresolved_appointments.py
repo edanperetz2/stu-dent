@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.appointment import Appointment
 from app.models.notification import Notification, NotificationType
+from app.services.formatting import format_dt
 from app.services.notifications import notify
 from app.services.scheduling import TERMINAL_STATUSES
 
@@ -54,7 +55,7 @@ def notify_unresolved_past_appointments(db: Session) -> int:
             db,
             notification_type=NotificationType.appointment_needs_resolution,
             message=(
-                f"Your appointment on {appointment.start_time.isoformat()} still hasn't "
+                f"Your appointment on {format_dt(appointment.start_time)} still hasn't "
                 "been marked completed, no-show, or cancelled -- please resolve it or "
                 "edit its details."
             ),

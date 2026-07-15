@@ -9,6 +9,7 @@ from app.models.appointment import ACTIVE_STATUSES, Appointment
 from app.models.conversation import ConversationKind
 from app.models.notification import NotificationType
 from app.models.user import User
+from app.services.formatting import format_dt
 from app.services.messaging import admin_key, get_or_create_conversation, send_message
 from app.services.notifications import notify
 
@@ -40,7 +41,7 @@ def notify_students_of_deactivation(
     for appointment in affected:
         message_body = (
             f'The {resource_kind} "{resource_name}" used by your appointment on '
-            f"{appointment.start_time.isoformat()} has just been deactivated. "
+            f"{format_dt(appointment.start_time)} has just been deactivated. "
             "Please update this appointment with a new one."
         )
         conversation = get_or_create_conversation(

@@ -26,6 +26,7 @@ from app.models.report import ReportPeriodType
 from app.models.room import Room
 from app.models.user import RoleEnum, User
 from app.models.waitlist_entry import WaitlistEntry, WaitlistStatus
+from app.services.formatting import format_dt
 from app.services.messaging import admin_key, direct_key
 from app.services.notifications import notify
 from app.services.report_assistant import generate_periodic_report
@@ -326,14 +327,14 @@ def _seed_notifications(
     notify(
         db,
         notification_type=NotificationType.appointment_reminder,
-        message=f"Reminder: appointment scheduled for {reminder_appt.start_time.isoformat()}.",
+        message=f"Reminder: appointment scheduled for {format_dt(reminder_appt.start_time)}.",
         recipient_id=students[2].id,
         related_appointment_id=reminder_appt.id,
     )
     notify(
         db,
         notification_type=NotificationType.appointment_reminder,
-        message=f"Reminder: appointment scheduled for {reminder_appt.start_time.isoformat()}.",
+        message=f"Reminder: appointment scheduled for {format_dt(reminder_appt.start_time)}.",
         recipient_id=patients[2].id,
         related_appointment_id=reminder_appt.id,
     )

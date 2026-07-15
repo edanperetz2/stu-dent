@@ -7,6 +7,7 @@ from app.config import settings
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.feedback import Feedback
 from app.models.notification import Notification, NotificationType
+from app.services.formatting import format_dt
 from app.services.notifications import notify
 
 
@@ -62,7 +63,7 @@ def notify_pending_feedback(db: Session) -> int:
                 notification_type=NotificationType.feedback_reminder,
                 message=(
                     f"Please leave feedback for {appointment.student_name} about your "
-                    f"appointment on {appointment.start_time.isoformat()}."
+                    f"appointment on {format_dt(appointment.start_time)}."
                 ),
                 recipient_id=author_id,
                 related_appointment_id=appointment.id,

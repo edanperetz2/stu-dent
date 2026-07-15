@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.notification import NotificationType
+from app.services.formatting import format_dt
 from app.services.notifications import notify
 from app.services.waitlist import recheck_waitlist_after_cancellation
 
@@ -40,7 +41,7 @@ def expire_stale_appointments(db: Session) -> int:
         recheck_waitlist_after_cancellation(db, appointment)
 
         message = (
-            f"Your appointment request for {appointment.start_time.isoformat()} "
+            f"Your appointment request for {format_dt(appointment.start_time)} "
             "expired because it was never confirmed in time."
         )
         notify(

@@ -8,6 +8,7 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.notification import NotificationType
 from app.models.waitlist_entry import WaitlistEntry, WaitlistStatus
 from app.services.audit import record_audit_log
+from app.services.formatting import format_dt
 from app.services.notifications import notify
 from app.services.scheduling import find_conflicts, recompute_status
 
@@ -122,8 +123,8 @@ def recheck_waitlist_after_cancellation(db: Session, appointment: Appointment) -
         entry.resulting_appointment_id = new_appointment.id
 
         message = (
-            f"Your waitlisted request for {entry.start_time.isoformat()} - "
-            f"{entry.end_time.isoformat()} was automatically booked "
+            f"Your waitlisted request for {format_dt(entry.start_time)} - "
+            f"{format_dt(entry.end_time)} was automatically booked "
             f"(status: {new_appointment.status.value})."
         )
         notify(

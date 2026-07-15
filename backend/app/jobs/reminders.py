@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.notification import NotificationType
+from app.services.formatting import format_dt
 from app.services.notifications import notify
 
 
@@ -34,7 +35,7 @@ def send_appointment_reminders(db: Session) -> int:
     for appointment in candidates:
         message = (
             f"Reminder: you have an appointment scheduled for "
-            f"{appointment.start_time.isoformat()}."
+            f"{format_dt(appointment.start_time)}."
         )
         notify(
             db,
