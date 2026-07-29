@@ -1,5 +1,4 @@
 import { Badge, Button, Group, Modal, Stack, Table, Text, TextInput, Title } from '@mantine/core'
-import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
@@ -13,8 +12,9 @@ import {
 } from '../../api/equipment'
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
+import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
 import { LoadingText } from '../../components/StateText'
-import { formatDateTime, mantineDateTimeToIso } from '../../utils/dates'
+import { FULL_DAY_HALF_HOUR_OPTIONS, formatDateTime, mantineDateTimeToIso } from '../../utils/dates'
 
 export function EquipmentPage() {
   const token = useAuthToken()
@@ -100,6 +100,7 @@ export function EquipmentPage() {
       {isLoading ? (
         <LoadingText />
       ) : (
+        <Table.ScrollContainer minWidth={500}>
         <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
@@ -129,7 +130,9 @@ export function EquipmentPage() {
                     size="xs"
                     variant="light"
                     color={item.is_active ? 'red' : 'green'}
-                    loading={updateMutation.isPending}
+                    loading={
+                      updateMutation.isPending && updateMutation.variables?.equipmentId === item.id
+                    }
                     onClick={() =>
                       item.is_active
                         ? handleDeactivateClick(item.id)
@@ -143,6 +146,7 @@ export function EquipmentPage() {
             ))}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       )}
 
       <Modal opened={opened} onClose={close} title="New Equipment">
@@ -162,11 +166,11 @@ export function EquipmentPage() {
           <Text size="sm" c="dimmed">
             Students booking a future appointment using this equipment will be notified.
           </Text>
-          <DateTimePicker
+          <AppointmentDateTimeInput
             label="Automatically reactivate on (optional)"
-            clearable
             value={reactivateAt}
             onChange={setReactivateAt}
+            timeOptions={FULL_DAY_HALF_HOUR_OPTIONS}
           />
           <Button color="red" loading={updateMutation.isPending} onClick={confirmDeactivate}>
             Deactivate

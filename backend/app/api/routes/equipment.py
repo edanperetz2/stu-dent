@@ -73,6 +73,9 @@ def update_equipment(
         target_type="equipment",
         target_id=equipment.id,
     )
+    # Committed before the notification fan-out below -- see the matching
+    # comment in rooms.py::update_room for why.
+    db.commit()
 
     if was_active and not equipment.is_active:
         notify_students_of_deactivation(
@@ -83,7 +86,6 @@ def update_equipment(
             resource_name=equipment.name,
         )
 
-    db.commit()
     db.refresh(equipment)
     return equipment
 

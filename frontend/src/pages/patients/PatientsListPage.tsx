@@ -7,7 +7,7 @@ import { Fragment, useState } from 'react'
 import { apiErrorMessage } from '../../api/httpClient'
 import { createPatient, listPatients, type PatientCreateInput } from '../../api/patients'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { LoadingText } from '../../components/StateText'
+import { EmptyText, LoadingText } from '../../components/StateText'
 import { PatientDetailPanel } from './PatientDetailPanel'
 
 export function PatientsListPage() {
@@ -55,6 +55,8 @@ export function PatientsListPage() {
 
       {isLoading ? (
         <LoadingText />
+      ) : patients?.length === 0 ? (
+        <EmptyText>No patients yet. Click "New Patient" to add one.</EmptyText>
       ) : (
         <Table highlightOnHover>
           <Table.Thead>

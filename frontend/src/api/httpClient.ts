@@ -27,6 +27,17 @@ interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined>
 }
 
+/** "went_well" -> "Went well". FastAPI/Pydantic 422 errors name the
+ * offending field with its raw snake_case Python name -- shown verbatim,
+ * that reads as developer-ese to an end user (e.g. a patient submitting
+ * feedback). Not a per-field label map on purpose: new fields would
+ * silently fall back to the raw name until someone remembered to add an
+ * entry, whereas this covers every field automatically. */
+function humanizeFieldName(field: string): string {
+  const spaced = field.replace(/_/g, ' ')
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+}
+
 function buildUrl(path: string, query?: RequestOptions['query']): string {
   const url = new URL(`${API_BASE_URL}${path}`)
   if (query) {
@@ -65,6 +76,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
         detail = data.detail
           .map((item: { msg?: string; loc?: (string | number)[] }) => {
             const field = item.loc?.[item.loc.length - 1]
+            if (typeof field === 'string' && item.msg) {
+              return `${humanizeFieldName(field)}: ${item.msg}`
+            }
             return field && item.msg ? `${field}: ${item.msg}` : item.msg
           })
           .filter(Boolean)

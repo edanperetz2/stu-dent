@@ -27,7 +27,10 @@ from app.services.scheduling import (
     resolve_appointment_requester,
     validate_participants,
 )
-from app.services.waitlist import recheck_waitlist_after_cancellation
+from app.services.waitlist import (
+    recheck_waitlist_after_cancellation,
+    recheck_waitlist_for_freed_slot,
+)
 
 router = APIRouter(tags=["appointments"])
 
@@ -180,6 +183,20 @@ def update_appointment(
     new_room_id = fields.get("room_id", appointment.room_id)
     new_equipment_id = fields.get("equipment_id", appointment.equipment_id)
 
+    old_start, old_end = appointment.start_time, appointment.end_time
+    old_attending_id, old_room_id, old_equipment_id = (
+        appointment.attending_id,
+        appointment.room_id,
+        appointment.equipment_id,
+    )
+    freed_slot_changed = (
+        new_start != old_start
+        or new_end != old_end
+        or new_attending_id != old_attending_id
+        or new_room_id != old_room_id
+        or new_equipment_id != old_equipment_id
+    )
+
     time_changed = "start_time" in fields or "end_time" in fields
     attending_changed = (
         "attending_id" in fields and fields["attending_id"] != appointment.attending_id
@@ -233,6 +250,24 @@ def update_appointment(
 
     flush_or_409(db)
 
+    if freed_slot_changed:
+        # This appointment moved away from its old attending/room/
+        # equipment/time combination without anyone cancelling anything --
+        # a waitlist entry that wanted the vacated combination would
+        # otherwise never get rechecked (only cancel/reject/expiry used to
+        # trigger this).
+        recheck_waitlist_for_freed_slot(
+            db,
+            student_id=appointment.student_id,
+            patient_id=appointment.patient_id,
+            attending_id=old_attending_id,
+            room_id=old_room_id,
+            equipment_id=old_equipment_id,
+            start_time=old_start,
+            end_time=old_end,
+        )
+        flush_or_409(db)
+
     record_audit_log(
         db,
         action="appointment_update",
@@ -264,7 +299,9 @@ def accept_appointment(
         raise HTTPException(
             status_code=422, detail="room_id is required to accept this appointment"
         )
-    if room_id != appointment.room_id:
+    old_room_id = appointment.room_id
+    room_changed = room_id != appointment.room_id
+    if room_changed:
         validate_participants(
             db,
             student_id=appointment.student_id,
@@ -293,6 +330,22 @@ def accept_appointment(
     appointment.student_confirmed_at = datetime.now(UTC)
     recompute_status(appointment)
     flush_or_409(db)
+
+    if room_changed and old_room_id is not None:
+        # The old room is now free at this appointment's time -- a
+        # waitlist entry that wanted it would otherwise never get
+        # rechecked (only cancel/reject/expiry used to trigger this).
+        recheck_waitlist_for_freed_slot(
+            db,
+            student_id=appointment.student_id,
+            patient_id=appointment.patient_id,
+            attending_id=appointment.attending_id,
+            room_id=old_room_id,
+            equipment_id=appointment.equipment_id,
+            start_time=appointment.start_time,
+            end_time=appointment.end_time,
+        )
+        flush_or_409(db)
 
     record_audit_log(
         db,

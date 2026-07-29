@@ -61,6 +61,7 @@ export function UsersPage() {
       {isLoading ? (
         <LoadingText />
       ) : (
+        <Table.ScrollContainer minWidth={700}>
         <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
@@ -106,14 +107,14 @@ export function UsersPage() {
                         onConfirm={() =>
                           updateMutation.mutate({ userId: user.id, is_active: !user.is_active })
                         }
-                        loading={updateMutation.isPending}
+                        loading={updateMutation.isPending && updateMutation.variables?.userId === user.id}
                       />
                       {!isSelf && (
                         <ConfirmButton
                           label="Delete"
                           message={`This will soft-delete ${user.full_name}'s account. This can't be undone from here.`}
                           onConfirm={() => deleteMutation.mutate(user.id)}
-                          loading={deleteMutation.isPending}
+                          loading={deleteMutation.isPending && deleteMutation.variables === user.id}
                         />
                       )}
                     </Group>
@@ -123,6 +124,7 @@ export function UsersPage() {
             })}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       )}
     </Stack>
   )

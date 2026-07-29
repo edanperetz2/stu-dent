@@ -46,6 +46,31 @@ interface Selection {
   label: string
 }
 
+/** Unread threads first, then most-recent-activity first; threads with no
+ * activity yet (e.g. a just-created group with no messages) sort last,
+ * falling back to alphabetical by label so the order stays stable. A pure
+ * module-level function (summaryByKey passed in, not read from a closure)
+ * so it's directly unit-testable without mounting the page. */
+export function sortByActivity(
+  items: Selection[],
+  summaryByKey: Map<string, ThreadSummary>,
+): Selection[] {
+  return [...items].sort((a, b) => {
+    const summaryA = summaryByKey.get(targetKey(a.target))
+    const summaryB = summaryByKey.get(targetKey(b.target))
+    const unreadA = summaryA?.has_unread ?? false
+    const unreadB = summaryB?.has_unread ?? false
+    if (unreadA !== unreadB) return unreadA ? -1 : 1
+
+    const timeA = summaryA?.last_message_at ? new Date(summaryA.last_message_at).getTime() : null
+    const timeB = summaryB?.last_message_at ? new Date(summaryB.last_message_at).getTime() : null
+    if (timeA !== null && timeB !== null) return timeB - timeA
+    if (timeA !== null) return -1
+    if (timeB !== null) return 1
+    return a.label.localeCompare(b.label)
+  })
+}
+
 export function MessagesPage() {
   const token = useAuthToken()
   const { principal } = useAuth()
@@ -110,15 +135,22 @@ export function MessagesPage() {
       }),
   })
 
+  const selectedHasUnread = selectedKey ? (summaryByKey.get(selectedKey)?.has_unread ?? false) : false
+
   useEffect(() => {
-    if (selected) {
+    // Re-marks read both when the selected conversation changes AND when a
+    // live incoming message (via the websocket -> thread-summaries
+    // refetch) flips the *currently open* thread back to unread -- without
+    // the second trigger, an actively-open conversation kept showing an
+    // unread badge until the user navigated away and back.
+    if (selected && selectedHasUnread) {
       markReadMutation.mutate(selected.target)
     }
-    // Only re-run when the selected conversation itself changes -- not on
-    // every markReadMutation identity change (that would re-fire on its
-    // own success/error callbacks).
+    // Only re-run when the selected conversation or its live unread flag
+    // changes -- not on every markReadMutation identity change (that would
+    // re-fire on its own success/error callbacks).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey])
+  }, [selectedKey, selectedHasUnread])
 
   const sendMutation = useMutation({
     mutationFn: (text: string) => sendMessage(token, selected!.target, text),
@@ -182,29 +214,11 @@ export function MessagesPage() {
     label: g.title,
   }))
 
-  // Unread threads first, then most-recent-activity first; threads with no
-  // activity yet (e.g. a just-created group with no messages) sort last,
-  // falling back to alphabetical by label so the order stays stable.
-  const sortByActivity = (items: Selection[]): Selection[] =>
-    [...items].sort((a, b) => {
-      const summaryA = summaryByKey.get(targetKey(a.target))
-      const summaryB = summaryByKey.get(targetKey(b.target))
-      const unreadA = summaryA?.has_unread ?? false
-      const unreadB = summaryB?.has_unread ?? false
-      if (unreadA !== unreadB) return unreadA ? -1 : 1
-
-      const timeA = summaryA?.last_message_at ? new Date(summaryA.last_message_at).getTime() : null
-      const timeB = summaryB?.last_message_at ? new Date(summaryB.last_message_at).getTime() : null
-      if (timeA !== null && timeB !== null) return timeB - timeA
-      if (timeA !== null) return -1
-      if (timeB !== null) return 1
-      return a.label.localeCompare(b.label)
-    })
-
   const sortedContactItems = sortByActivity(
     isAdmin ? contactItems : [...contactItems, { target: { kind: 'admin' }, label: 'Admin' }],
+    summaryByKey,
   )
-  const sortedGroupItems = sortByActivity(groupItems)
+  const sortedGroupItems = sortByActivity(groupItems, summaryByKey)
 
   const selectedGroupMembers = useMemo(() => {
     if (!selected || selected.target.kind !== 'group') return undefined
@@ -214,7 +228,13 @@ export function MessagesPage() {
 
   return (
     <Group align="flex-start" wrap="nowrap" h="calc(100vh - 120px)">
-      <Box w={260} h="100%">
+      {/* Below the "sm" breakpoint this is a single-pane master/detail view,
+          not a permanent two-pane layout -- the fixed-width sidebar next to
+          a flex-1 thread pane doesn't fit a phone screen. Once a thread is
+          selected the contact list hides (and the "Back" button below
+          reappears) so only one pane shows at a time; both stay visible
+          side by side from "sm" up, unchanged from before. */}
+      <Box w={{ base: '100%', sm: 260 }} h="100%" hiddenFrom={selected ? 'sm' : undefined}>
         <ScrollArea h="100%">
           <Stack gap={4}>
             <Text size="xs" fw={700} c="dimmed" mt="xs">
@@ -270,16 +290,23 @@ export function MessagesPage() {
         </ScrollArea>
       </Box>
 
-      <Stack flex={1} h="100%">
+      <Stack flex={1} h="100%" hiddenFrom={!selected ? 'sm' : undefined}>
         <Group justify="space-between" align="flex-start">
-          <Stack gap={0}>
-            <Title order={3}>{selected ? selected.label : 'Messages'}</Title>
-            {selectedGroupMembers && (
-              <Text size="sm" c="dimmed">
-                {selectedGroupMembers.join(', ')}
-              </Text>
+          <Group gap="xs" align="flex-start">
+            {selected && (
+              <Button size="xs" variant="subtle" hiddenFrom="sm" onClick={() => setSelected(null)}>
+                ← Back
+              </Button>
             )}
-          </Stack>
+            <Stack gap={0}>
+              <Title order={3}>{selected ? selected.label : 'Messages'}</Title>
+              {selectedGroupMembers && (
+                <Text size="sm" c="dimmed">
+                  {selectedGroupMembers.join(', ')}
+                </Text>
+              )}
+            </Stack>
+          </Group>
           {selected && (
             <Group gap="xs">
               <Button

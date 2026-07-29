@@ -476,6 +476,122 @@ def test_multi_cause_entry_not_resolved_until_every_cause_clears(client):
     assert resolved["status"] == "booked"
 
 
+def test_stale_conflict_cause_does_not_block_recheck_on_a_different_resource(client):
+    # Regression test for a real bug: the recheck used to gate on the
+    # entry's *original* conflict_resource_types (captured once at
+    # creation, never updated), so once the true current blocker had
+    # shifted to a resource that wasn't part of that original cause list,
+    # a cancellation that freed it was silently ignored forever.
+    admin_token = register_and_login(client, "wl-admin18@example.com", role="admin")
+    room_id = create_room(client, admin_token, "WL Room 18")
+    attending_token = register_and_login(client, "wl-a18@example.com", role="attending")
+    attending_id = _user_id(client, attending_token)
+
+    occupier_a_token = register_and_login(client, "wl-s18a@example.com", role="student")
+    occupier_a_patient_id = create_patient(client, occupier_a_token)
+    appointment_a = _book(
+        client,
+        occupier_a_token,
+        patient_id=occupier_a_patient_id,
+        attending_id=attending_id,
+        start_time="2026-09-03T09:00:00+00:00",
+        end_time="2026-09-03T10:00:00+00:00",
+    ).json()
+
+    waiter_token = register_and_login(client, "wl-s18c@example.com", role="student")
+    waiter_patient_id = create_patient(client, waiter_token)
+    entry = _wait(
+        client,
+        waiter_token,
+        patient_id=waiter_patient_id,
+        attending_id=attending_id,
+        room_id=room_id,
+        start_time="2026-09-03T09:00:00+00:00",
+        end_time="2026-09-03T10:00:00+00:00",
+    ).json()
+    # Room is free at creation time -- the only real conflict is the
+    # attending.
+    assert [c["resource_type"] for c in entry["conflicts"]] == ["attending"]
+    assert entry["conflicts"][0]["resource_id"] == attending_id
+
+    # A second, unrelated booking now takes the room -- something the
+    # entry's stale conflict_resource_types (still just ["attending"])
+    # doesn't know about.
+    occupier_b_token = register_and_login(client, "wl-s18b@example.com", role="student")
+    occupier_b_patient_id = create_patient(client, occupier_b_token)
+    appointment_b = _book(
+        client,
+        occupier_b_token,
+        patient_id=occupier_b_patient_id,
+        room_id=room_id,
+        start_time="2026-09-03T09:00:00+00:00",
+        end_time="2026-09-03T10:00:00+00:00",
+    ).json()
+
+    # Freeing the attending isn't enough -- the room is still held by the
+    # second booking, so this must correctly stay active.
+    client.post(
+        f"/appointments/{appointment_a['id']}/cancel", headers=auth_header(occupier_a_token)
+    )
+    still_active = client.get(f"/waitlist/{entry['id']}", headers=auth_header(waiter_token)).json()
+    assert still_active["status"] == "active"
+
+    # Freeing the room -- a resource never present in the entry's original
+    # conflict_resource_types -- must still trigger a real recheck and
+    # promote the entry, not be silently skipped.
+    client.post(
+        f"/appointments/{appointment_b['id']}/cancel", headers=auth_header(occupier_b_token)
+    )
+    resolved = client.get(f"/waitlist/{entry['id']}", headers=auth_header(waiter_token)).json()
+    assert resolved["status"] == "booked"
+
+
+def test_rescheduling_appointment_away_promotes_waitlist_entry_for_freed_room(client):
+    # Regression test: moving an appointment to a different room (without
+    # ever cancelling it) used to never trigger a waitlist recheck, only
+    # cancel/reject/expiry did -- so a genuinely-freed room left a waiting
+    # entry stranded.
+    admin_token = register_and_login(client, "wl-admin19@example.com", role="admin")
+    room_id = create_room(client, admin_token, "WL Room 19a")
+    other_room_id = create_room(client, admin_token, "WL Room 19b")
+
+    occupier_token = register_and_login(client, "wl-s19a@example.com", role="student")
+    occupier_patient_id = create_patient(client, occupier_token)
+    appointment = _book(
+        client,
+        occupier_token,
+        patient_id=occupier_patient_id,
+        room_id=room_id,
+        start_time="2026-09-04T09:00:00+00:00",
+        end_time="2026-09-04T10:00:00+00:00",
+    ).json()
+
+    waiter_token = register_and_login(client, "wl-s19b@example.com", role="student")
+    waiter_patient_id = create_patient(client, waiter_token)
+    entry = _wait(
+        client,
+        waiter_token,
+        patient_id=waiter_patient_id,
+        room_id=room_id,
+        start_time="2026-09-04T09:00:00+00:00",
+        end_time="2026-09-04T10:00:00+00:00",
+    ).json()
+    assert entry["conflicts"][0]["resource_type"] == "room"
+
+    # Move the occupying appointment to a different room at the same time
+    # -- nothing was cancelled, but Room 19a is now genuinely free.
+    update_response = client.patch(
+        f"/appointments/{appointment['id']}",
+        json={"room_id": other_room_id},
+        headers=auth_header(occupier_token),
+    )
+    assert update_response.status_code == 200
+
+    resolved = client.get(f"/waitlist/{entry['id']}", headers=auth_header(waiter_token)).json()
+    assert resolved["status"] == "booked"
+    assert resolved["resulting_appointment_id"] is not None
+
+
 def test_competing_entries_for_the_same_freed_slot_first_created_wins(client):
     attending_token = register_and_login(client, "wl-a17@example.com", role="attending")
     attending_id = _user_id(client, attending_token)

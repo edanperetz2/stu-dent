@@ -402,6 +402,15 @@ def vote_on_post(
         db.add(ForumPostVote(post_id=post_id, student_id=current_user.id, value=payload.value))
     else:
         vote.value = payload.value
+
+    record_audit_log(
+        db,
+        action="forum_post_vote",
+        actor_id=current_user.id,
+        target_type="forum_post",
+        target_id=post.id,
+        extra_data={"value": payload.value},
+    )
     db.commit()
 
     likes, dislikes = _post_vote_counts(db, post_id)
@@ -424,6 +433,13 @@ def remove_post_vote(
     )
     if vote is not None:
         db.delete(vote)
+        record_audit_log(
+            db,
+            action="forum_post_unvote",
+            actor_id=current_user.id,
+            target_type="forum_post",
+            target_id=post.id,
+        )
         db.commit()
 
     likes, dislikes = _post_vote_counts(db, post_id)
@@ -452,6 +468,15 @@ def vote_on_comment(
         )
     else:
         vote.value = payload.value
+
+    record_audit_log(
+        db,
+        action="forum_comment_vote",
+        actor_id=current_user.id,
+        target_type="forum_comment",
+        target_id=comment.id,
+        extra_data={"value": payload.value},
+    )
     db.commit()
 
     likes, dislikes = _comment_vote_counts(db, comment_id)
@@ -474,6 +499,13 @@ def remove_comment_vote(
     )
     if vote is not None:
         db.delete(vote)
+        record_audit_log(
+            db,
+            action="forum_comment_unvote",
+            actor_id=current_user.id,
+            target_type="forum_comment",
+            target_id=comment.id,
+        )
         db.commit()
 
     likes, dislikes = _comment_vote_counts(db, comment_id)

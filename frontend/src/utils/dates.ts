@@ -59,3 +59,6 @@ function generateHalfHourOptions(
 export const APPOINTMENT_START_TIME_OPTIONS = generateHalfHourOptions(8, 0, 21, 0)
 /** 08:30, 09:00, ..., 21:30 -- appointment end-time options. */
 export const APPOINTMENT_END_TIME_OPTIONS = generateHalfHourOptions(8, 30, 21, 30)
+/** 00:00, 00:30, ..., 23:30 -- unlike appointment slots, a scheduled
+ * reactivation isn't bound to clinic hours, so this covers the full day. */
+export const FULL_DAY_HALF_HOUR_OPTIONS = generateHalfHourOptions(0, 0, 23, 30)

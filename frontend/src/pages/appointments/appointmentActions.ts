@@ -9,7 +9,19 @@ export interface AppointmentAction {
   color: string
 }
 
-const TERMINAL_STATUSES: AppointmentStatus[] = ['cancelled', 'completed', 'no_show']
+export const TERMINAL_STATUSES: AppointmentStatus[] = ['cancelled', 'completed', 'no_show']
+
+/** Shared Mantine Badge color per status -- previously redefined
+ * identically in both AppointmentsListPage and AppointmentDetailPanel. */
+export const STATUS_COLORS: Record<AppointmentStatus, string> = {
+  proposed: 'gray',
+  awaiting_confirmation: 'yellow',
+  confirmed: 'green',
+  cancelled: 'red',
+  completed: 'blue',
+  no_show: 'orange',
+  rescheduling_requested: 'yellow',
+}
 
 /**
  * Mirrors the authorization + status rules in

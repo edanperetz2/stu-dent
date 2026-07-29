@@ -16,7 +16,7 @@ import {
   type AppointmentUpdateInput,
 } from '../../api/appointments'
 import { apiErrorMessage, ApiError } from '../../api/httpClient'
-import type { Appointment, AppointmentStatus, ConflictReason, Equipment, Room, User } from '../../api/types'
+import type { Appointment, ConflictReason, Equipment, Room, User } from '../../api/types'
 import { joinWaitlist } from '../../api/waitlist'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
@@ -30,17 +30,12 @@ import {
   isoToMantineDateTime,
   mantineDateTimeToIso,
 } from '../../utils/dates'
-import { getAvailableActions, type AppointmentActionName } from './appointmentActions'
-
-const STATUS_COLORS: Record<AppointmentStatus, string> = {
-  proposed: 'gray',
-  awaiting_confirmation: 'yellow',
-  confirmed: 'green',
-  cancelled: 'red',
-  completed: 'blue',
-  no_show: 'orange',
-  rescheduling_requested: 'yellow',
-}
+import {
+  getAvailableActions,
+  STATUS_COLORS,
+  TERMINAL_STATUSES,
+  type AppointmentActionName,
+} from './appointmentActions'
 
 const ACTION_FUNCTIONS: Record<
   AppointmentActionName,
@@ -53,8 +48,6 @@ const ACTION_FUNCTIONS: Record<
   complete: completeAppointment,
   no_show: markNoShow,
 }
-
-const TERMINAL_STATUSES: AppointmentStatus[] = ['cancelled', 'completed', 'no_show']
 
 // These three finalize the appointment (or, for cancel, end it outright) --
 // worth a confirmation step before firing, unlike accept/approve/reject/edit

@@ -43,8 +43,24 @@ describe('request error handling', () => {
       await request('/patients/1/credentials')
     } catch (err) {
       expect(err).toBeInstanceOf(ApiError)
-      expect((err as ApiError).message).toContain('password')
+      expect((err as ApiError).message).toContain('Password')
       expect((err as ApiError).message).toContain('String should have at least 8 characters')
+    }
+  })
+
+  it('humanizes a multi-word snake_case field name instead of showing it raw', async () => {
+    mockFetchOnce(422, {
+      detail: [
+        { type: 'missing', loc: ['body', 'went_well'], msg: 'Field required' },
+      ],
+    })
+
+    try {
+      await request('/appointments/1/feedback')
+      throw new Error('expected request to reject')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError)
+      expect((err as ApiError).message).toBe('Went well: Field required')
     }
   })
 

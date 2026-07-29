@@ -1,3 +1,6 @@
+from sqlalchemy import select
+
+from app.models.audit_log import AuditLog
 from tests.helpers import auth_header, create_and_login_patient, register_and_login
 
 
@@ -201,6 +204,37 @@ def test_vote_on_comment_upsert_and_remove(client):
     assert remove.status_code == 200
     assert remove.json()["likes"] == 0
     assert remove.json()["dislikes"] == 0
+
+
+def test_vote_actions_write_audit_log_rows(client, db_session):
+    student_token = register_and_login(client, "forum-s14c@example.com", role="student")
+    voter_token = register_and_login(client, "forum-s14d@example.com", role="student")
+    post = _create_post(client, student_token).json()
+    comment = _create_comment(client, student_token, post["id"]).json()
+
+    client.put(
+        f"/forum/posts/{post['id']}/vote", json={"value": 1}, headers=auth_header(voter_token)
+    )
+    client.delete(f"/forum/posts/{post['id']}/vote", headers=auth_header(voter_token))
+    client.put(
+        f"/forum/comments/{comment['id']}/vote",
+        json={"value": -1},
+        headers=auth_header(voter_token),
+    )
+    client.delete(f"/forum/comments/{comment['id']}/vote", headers=auth_header(voter_token))
+
+    actions = {
+        row.action
+        for row in db_session.scalars(
+            select(AuditLog).where(AuditLog.target_type.in_(["forum_post", "forum_comment"]))
+        ).all()
+    }
+    assert {
+        "forum_post_vote",
+        "forum_post_unvote",
+        "forum_comment_vote",
+        "forum_comment_unvote",
+    } <= actions
 
 
 def test_multiple_voters_aggregate_likes_and_dislikes(client):

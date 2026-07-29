@@ -75,6 +75,15 @@ def update_room(
         target_type="room",
         target_id=room.id,
     )
+    # Committed before the notification fan-out below: send_message()
+    # commits per affected appointment on its own (see its docstring), so
+    # calling it first used to durably commit this room mutation as a side
+    # effect, mid-loop, before this route's own commit ever ran -- breaking
+    # the one-request-one-transaction invariant every other route relies
+    # on. Committing the actual state change first makes it its own atomic
+    # unit; the "let affected students know" fan-out is a separate,
+    # best-effort step after that, not bundled into the same transaction.
+    db.commit()
 
     if was_active and not room.is_active:
         notify_students_of_deactivation(
@@ -85,7 +94,6 @@ def update_room(
             resource_name=room.name,
         )
 
-    db.commit()
     db.refresh(room)
     return room
 

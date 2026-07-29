@@ -113,16 +113,22 @@ export function ForumPostCard({ post, expanded, onToggleExpand }: ForumPostCardP
       invalidateComments()
       invalidatePosts()
     },
+    onError: (err) =>
+      notifications.show({ message: apiErrorMessage(err, 'Failed to delete comment'), color: 'red' }),
   })
 
   const voteCommentMutation = useMutation({
     mutationFn: ({ commentId, value }: { commentId: string; value: 1 | -1 }) =>
       voteComment(token, commentId, value),
     onSuccess: invalidateComments,
+    onError: (err) =>
+      notifications.show({ message: apiErrorMessage(err, 'Failed to vote'), color: 'red' }),
   })
   const removeCommentVoteMutation = useMutation({
     mutationFn: (commentId: string) => removeCommentVote(token, commentId),
     onSuccess: invalidateComments,
+    onError: (err) =>
+      notifications.show({ message: apiErrorMessage(err, 'Failed to remove vote'), color: 'red' }),
   })
 
   return (
@@ -233,14 +239,13 @@ export function ForumPostCard({ post, expanded, onToggleExpand }: ForumPostCardP
                     loading={voteCommentMutation.isPending || removeCommentVoteMutation.isPending}
                   />
                   {(principal?.id === comment.author_student_id || isAdmin) && (
-                    <Button
-                      size="xs"
+                    <ConfirmButton
+                      label="Delete"
                       variant="subtle"
-                      color="red"
-                      onClick={() => deleteCommentMutation.mutate(comment.id)}
-                    >
-                      Delete
-                    </Button>
+                      message="This will delete the comment. This can't be undone."
+                      onConfirm={() => deleteCommentMutation.mutate(comment.id)}
+                      loading={deleteCommentMutation.isPending}
+                    />
                   )}
                 </Group>
               </Paper>

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.appointment import ACTIVE_STATUSES, Appointment
-from app.models.user import User
+from app.models.user import RoleEnum, User
 from app.schemas.resource_schedule import ResourceBookingOut
 
 router = APIRouter(tags=["resources"])
@@ -17,16 +17,21 @@ def get_resources_schedule(
     db: Session = Depends(get_db),
 ) -> list[ResourceBookingOut]:
     """Combined room+equipment busy windows across every user's bookings --
-    lets any role see the whole clinic's resource usage and coordinate with
-    whichever student booked a slot, without ever exposing the patient or
-    any other appointment detail.
+    lets students/attendings/admin see the whole clinic's resource usage and
+    coordinate with whichever student booked a slot, without ever exposing
+    the patient or any other appointment detail. A patient gets only their
+    own bookings -- the clinic-wide feed would otherwise let them learn
+    their own treating student is busy elsewhere with a *different*
+    patient's care, the same leak `redact_conflicts_for_patient` exists to
+    prevent for the waitlist/conflict responses.
     """
-    appointments = db.scalars(
-        select(Appointment).where(
-            or_(Appointment.room_id.is_not(None), Appointment.equipment_id.is_not(None)),
-            Appointment.status.in_(ACTIVE_STATUSES),
-        )
+    stmt = select(Appointment).where(
+        or_(Appointment.room_id.is_not(None), Appointment.equipment_id.is_not(None)),
+        Appointment.status.in_(ACTIVE_STATUSES),
     )
+    if current_user.role == RoleEnum.patient:
+        stmt = stmt.where(Appointment.patient_id == current_user.id)
+    appointments = db.scalars(stmt)
 
     bookings: list[ResourceBookingOut] = []
     for appointment in appointments:

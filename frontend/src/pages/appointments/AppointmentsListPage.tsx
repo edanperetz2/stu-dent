@@ -38,8 +38,9 @@ import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
 import { ConflictResolutionModal } from '../../components/ConflictResolutionModal'
-import { LoadingText } from '../../components/StateText'
+import { EmptyText, LoadingText } from '../../components/StateText'
 import { AppointmentDetailPanel } from './AppointmentDetailPanel'
+import { STATUS_COLORS } from './appointmentActions'
 import {
   APPOINTMENT_END_TIME_OPTIONS,
   APPOINTMENT_START_TIME_OPTIONS,
@@ -47,16 +48,6 @@ import {
   isoToMantineDateTime,
   mantineDateTimeToIso,
 } from '../../utils/dates'
-
-const STATUS_COLORS: Record<AppointmentStatus, string> = {
-  proposed: 'gray',
-  awaiting_confirmation: 'yellow',
-  confirmed: 'green',
-  cancelled: 'red',
-  completed: 'blue',
-  no_show: 'orange',
-  rescheduling_requested: 'yellow',
-}
 
 // react-big-calendar's eventPropGetter needs a real CSS color, not a
 // Mantine theme key -- these are the hex values behind STATUS_COLORS above.
@@ -130,7 +121,7 @@ const RESOURCE_COLOR_HEX: Record<(typeof RESOURCE_COLOR_NAMES)[number], string> 
   teal: '#0ca678',
 }
 
-function hashResourceColor(resourceId: string): (typeof RESOURCE_COLOR_NAMES)[number] {
+export function hashResourceColor(resourceId: string): (typeof RESOURCE_COLOR_NAMES)[number] {
   let hash = 0
   for (let i = 0; i < resourceId.length; i++) {
     hash = (hash * 31 + resourceId.charCodeAt(i)) | 0
@@ -198,6 +189,11 @@ export function AppointmentsListPage() {
   // opens this appointment in a Modal instead (a "banner/window similar to
   // the New Appointment modal", per the user's request).
   const [viewingAppointment, setViewingAppointment] = useState<Appointment | null>(null)
+  // Non-admin Resources lens has no real appointment to show for a busy
+  // block -- just which student booked it. A Modal (not an auto-dismissing
+  // toast) matches every other click-to-view interaction on this page and
+  // doesn't disappear before the user reads it.
+  const [viewingBookedBy, setViewingBookedBy] = useState<string | null>(null)
 
   // Deep-link support for WaitlistPage's "View appointment" button, which
   // can't navigate to a /appointments/:id route anymore (removed) -- it
@@ -381,7 +377,7 @@ export function AppointmentsListPage() {
     // appointments (see resourceCalendarEvents), so they still open like
     // Personal ones.
     if (effectiveLens === 'resources' && !isAdmin) {
-      notifications.show({ message: `Booked by ${event.studentName}` })
+      setViewingBookedBy(event.studentName ?? null)
       return
     }
     setViewingAppointment(event.resource)
@@ -601,71 +597,76 @@ export function AppointmentsListPage() {
 
       {isLoading ? (
         <LoadingText />
+      ) : viewMode === 'list' && effectiveLens === 'personal' && visibleAppointments.length === 0 ? (
+        <EmptyText>No appointments yet. Click "New Appointment" to create one.</EmptyText>
       ) : viewMode === 'list' && effectiveLens === 'personal' ? (
-        <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Start</Table.Th>
-              <Table.Th>End</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Student</Table.Th>
-              <Table.Th>Patient</Table.Th>
-              <Table.Th>Attending</Table.Th>
-              <Table.Th>Room</Table.Th>
-              <Table.Th>Equipment</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {visibleAppointments.map((appointment) => {
-              const expanded = expandedAppointmentId === appointment.id
-              const toggle = () =>
-                setExpandedAppointmentId((current) =>
-                  current === appointment.id ? null : appointment.id,
-                )
-              return (
-                <Fragment key={appointment.id}>
-                  <Table.Tr
-                    style={{ cursor: 'pointer' }}
-                    onClick={toggle}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        toggle()
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-expanded={expanded}
-                  >
-                    <Table.Td>{formatDateTime(appointment.start_time)}</Table.Td>
-                    <Table.Td>{formatDateTime(appointment.end_time)}</Table.Td>
-                    <Table.Td>
-                      <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
-                    </Table.Td>
-                    <Table.Td>{appointment.student_name}</Table.Td>
-                    <Table.Td>{appointment.patient_name}</Table.Td>
-                    <Table.Td>{appointment.attending_name ?? '—'}</Table.Td>
-                    <Table.Td>{appointment.room_name ?? '—'}</Table.Td>
-                    <Table.Td>{appointment.equipment_name ?? '—'}</Table.Td>
-                  </Table.Tr>
-                  {expanded && (
-                    <Table.Tr>
-                      <Table.Td colSpan={8}>
-                        <AppointmentDetailPanel
-                          appointment={appointment}
-                          attendings={attendings}
-                          rooms={rooms}
-                          equipment={equipment}
-                        />
+        <Table.ScrollContainer minWidth={800}>
+          <Table highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Start</Table.Th>
+                <Table.Th>End</Table.Th>
+                <Table.Th>Status</Table.Th>
+                <Table.Th>Student</Table.Th>
+                <Table.Th>Patient</Table.Th>
+                <Table.Th>Attending</Table.Th>
+                <Table.Th>Room</Table.Th>
+                <Table.Th>Equipment</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {visibleAppointments.map((appointment) => {
+                const expanded = expandedAppointmentId === appointment.id
+                const toggle = () =>
+                  setExpandedAppointmentId((current) =>
+                    current === appointment.id ? null : appointment.id,
+                  )
+                return (
+                  <Fragment key={appointment.id}>
+                    <Table.Tr
+                      style={{ cursor: 'pointer' }}
+                      onClick={toggle}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggle()
+                        }
+                      }}
+                      tabIndex={0}
+                      role="button"
+                      aria-expanded={expanded}
+                    >
+                      <Table.Td>{formatDateTime(appointment.start_time)}</Table.Td>
+                      <Table.Td>{formatDateTime(appointment.end_time)}</Table.Td>
+                      <Table.Td>
+                        <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
                       </Table.Td>
+                      <Table.Td>{appointment.student_name}</Table.Td>
+                      <Table.Td>{appointment.patient_name}</Table.Td>
+                      <Table.Td>{appointment.attending_name ?? '—'}</Table.Td>
+                      <Table.Td>{appointment.room_name ?? '—'}</Table.Td>
+                      <Table.Td>{appointment.equipment_name ?? '—'}</Table.Td>
                     </Table.Tr>
-                  )}
-                </Fragment>
-              )
-            })}
-          </Table.Tbody>
-        </Table>
+                    {expanded && (
+                      <Table.Tr>
+                        <Table.Td colSpan={8}>
+                          <AppointmentDetailPanel
+                            appointment={appointment}
+                            attendings={attendings}
+                            rooms={rooms}
+                            equipment={equipment}
+                          />
+                        </Table.Td>
+                      </Table.Tr>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       ) : viewMode === 'list' ? (
+        <Table.ScrollContainer minWidth={700}>
         <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
@@ -756,6 +757,7 @@ export function AppointmentsListPage() {
             })}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       ) : (
         // One flat calendar for every lens -- the Resources lens colors
         // events by resource (via the chips above) instead of splitting
@@ -878,6 +880,14 @@ export function AppointmentsListPage() {
             onActionSuccess={() => setViewingAppointment(null)}
           />
         )}
+      </Modal>
+
+      <Modal
+        opened={!!viewingBookedBy}
+        onClose={() => setViewingBookedBy(null)}
+        title="Booked slot"
+      >
+        <Text>Booked by {viewingBookedBy}</Text>
       </Modal>
     </Stack>
   )

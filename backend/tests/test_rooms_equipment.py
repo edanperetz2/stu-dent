@@ -3,7 +3,13 @@ from datetime import UTC, datetime, timedelta
 from app.jobs.reactivation import reactivate_expired_deactivations
 from app.models.equipment import Equipment
 from app.models.room import Room
-from tests.helpers import auth_header, create_default_room, create_patient, register_and_login
+from tests.helpers import (
+    auth_header,
+    create_and_login_patient,
+    create_default_room,
+    create_patient,
+    register_and_login,
+)
 
 
 def _admin_token(client, email="rooms-admin1@example.com"):
@@ -353,6 +359,58 @@ def test_resources_schedule_reveals_booking_student_but_not_patient(client):
     assert equipment_entries[0]["student_name"] == "Booking Student"
 
     assert "Confidential Patient" not in schedule.text
+
+
+def test_resources_schedule_scopes_patient_to_own_bookings(client):
+    admin_token = _admin_token(client, "rooms-admin11@example.com")
+    student_token = register_and_login(client, "rooms-student12@example.com", role="student")
+    other_student_token = register_and_login(client, "rooms-student13@example.com", role="student")
+
+    patient_id, patient_token = create_and_login_patient(
+        client, student_token, email="rooms-patient12@example.com"
+    )
+    other_patient_id, _ = create_and_login_patient(
+        client, other_student_token, email="rooms-patient13@example.com"
+    )
+
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 1111"}, headers=auth_header(admin_token)
+    ).json()["id"]
+    other_room_id = client.post(
+        "/admin/rooms", json={"name": "Room 1112"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    own_booking = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "room_id": room_id,
+            "start_time": "2026-09-01T09:00:00+00:00",
+            "end_time": "2026-09-01T09:30:00+00:00",
+        },
+        headers=auth_header(student_token),
+    ).json()
+    assert own_booking["status"] == "confirmed"
+
+    other_booking = client.post(
+        "/appointments",
+        json={
+            "patient_id": other_patient_id,
+            "room_id": other_room_id,
+            "start_time": "2026-09-01T10:00:00+00:00",
+            "end_time": "2026-09-01T10:30:00+00:00",
+        },
+        headers=auth_header(other_student_token),
+    ).json()
+    assert other_booking["status"] == "confirmed"
+
+    schedule = client.get("/resources/schedule", headers=auth_header(patient_token))
+    assert schedule.status_code == 200
+    body = schedule.json()
+
+    resource_ids = {row["resource_id"] for row in body}
+    assert room_id in resource_ids
+    assert other_room_id not in resource_ids
 
 
 def test_resources_schedule_excludes_cancelled_and_proposed(client):
