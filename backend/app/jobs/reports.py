@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.report import Report, ReportPeriodType
 from app.models.user import RoleEnum, User
 from app.services.report_assistant import generate_periodic_report
+from app.services.report_data import resource_utilization
 from app.services.users import active_user_filters
 
 logger = logging.getLogger(__name__)
@@ -56,12 +57,25 @@ def generate_scheduled_reports(db: Session) -> int:
             )
         )
 
+        # resource_utilization is clinic-wide, not recipient-specific --
+        # computed at most once per period_type here (lazily, only if
+        # there's actually a recipient left needing a report) instead of
+        # once per recipient inside generate_periodic_report.
+        shared_resource_utilization: list[dict] | None = None
+
         for recipient in recipients:
             if recipient.id in already_generated:
                 continue
+            if shared_resource_utilization is None:
+                shared_resource_utilization = resource_utilization(db, start=start, end=end)
             try:
                 generate_periodic_report(
-                    db, recipient, period_type=period_type, period_start=start, period_end=end
+                    db,
+                    recipient,
+                    period_type=period_type,
+                    period_start=start,
+                    period_end=end,
+                    resource_utilization_data=shared_resource_utilization,
                 )
             except Exception:
                 # One recipient's report failing (e.g. a malformed Ollama

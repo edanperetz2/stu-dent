@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.report import ReportPeriodType
+from app.models.report import ReportContentSource, ReportPeriodType
 
 
 class ReportOut(BaseModel):
@@ -16,6 +16,7 @@ class ReportOut(BaseModel):
     question: str | None
     title: str
     content: str
+    content_source: ReportContentSource
     created_at: datetime
 
 

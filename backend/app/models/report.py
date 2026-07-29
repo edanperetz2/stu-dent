@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Text, Uuid
+from sqlalchemy import DateTime, Enum, ForeignKey, Text, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -13,6 +13,13 @@ class ReportPeriodType(enum.StrEnum):
     weekly = "weekly"
     monthly = "monthly"
     ad_hoc = "ad_hoc"
+
+
+class ReportContentSource(enum.StrEnum):
+    ai = "ai"
+    fallback_summary = "fallback_summary"
+    unsupported = "unsupported"
+    unavailable = "unavailable"
 
 
 class Report(TimestampMixin, Base):
@@ -37,3 +44,14 @@ class Report(TimestampMixin, Base):
 
     title: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # What actually produced `content` -- a real model narration, the
+    # deterministic plain-English fallback (model unreachable/unusable), a
+    # genuinely unsupported ad-hoc question, or the assistant being down
+    # entirely when an ad-hoc question was being classified. Lets a viewer
+    # tell these apart instead of only inferring it from the prose.
+    content_source: Mapped[ReportContentSource] = mapped_column(
+        Enum(ReportContentSource, name="report_content_source_enum", native_enum=True),
+        nullable=False,
+        server_default=text("'ai'"),
+    )

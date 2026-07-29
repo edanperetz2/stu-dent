@@ -30,6 +30,7 @@ def test_generate_report_now_creates_weekly_and_monthly(client, monkeypatch):
     for report in body:
         assert report["content"] == "Everything looks fine."
         assert report["question"] is None
+        assert report["content_source"] == "ai"
 
     list_response = client.get("/reports", headers=auth_header(student_token))
     assert len(list_response.json()) == 2
@@ -62,9 +63,13 @@ def test_ask_question_unsupported_type_returns_plain_message(client, monkeypatch
     assert body["period_type"] == "ad_hoc"
     assert body["question"] == "what's the weather"
     assert "only answer questions about" in body["content"]
+    assert body["content_source"] == "unsupported"
 
 
-def test_ask_question_ollama_unavailable_returns_unsupported_message(client, monkeypatch):
+def test_ask_question_ollama_unavailable_returns_assistant_unavailable_message(client, monkeypatch):
+    # Distinct from a genuinely unsupported question -- the classify call
+    # itself failed (Ollama unreachable), so the viewer should be told the
+    # assistant is down, not that their question type isn't supported.
     _mock_ollama_router(monkeypatch, classify=None)
     student_token = register_and_login(client, "rep-s6@example.com", role="student")
 
@@ -72,7 +77,9 @@ def test_ask_question_ollama_unavailable_returns_unsupported_message(client, mon
         "/reports/ask", json={"question": "anything"}, headers=auth_header(student_token)
     )
     assert response.status_code == 201
-    assert "only answer questions about" in response.json()["content"]
+    body = response.json()
+    assert "currently unavailable" in body["content"]
+    assert body["content_source"] == "unavailable"
 
 
 def test_ask_question_time_impact_narrates_successfully(client, monkeypatch):
@@ -92,6 +99,7 @@ def test_ask_question_time_impact_narrates_successfully(client, monkeypatch):
     body = response.json()
     assert body["content"] == "No notable time was lost this week."
     assert body["period_type"] == "ad_hoc"
+    assert body["content_source"] == "ai"
 
 
 def test_ask_question_resource_utilization_narrates_successfully(client, monkeypatch):
@@ -110,12 +118,14 @@ def test_ask_question_resource_utilization_narrates_successfully(client, monkeyp
     assert response.status_code == 201
     body = response.json()
     assert body["content"] == "All rooms are used about evenly."
+    assert body["content_source"] == "ai"
 
 
 def test_generate_report_falls_back_when_model_returns_blank_summary(client, monkeypatch):
     # A real model can return technically-valid JSON with an empty/blank
-    # "summary" -- this must fall back to the raw-data string rather than
-    # silently producing a blank report (found via live testing).
+    # "summary" -- this must fall back to the deterministic plain-English
+    # summary rather than silently producing a blank report (found via live
+    # testing), and must be flagged as a fallback, not real AI content.
     _mock_ollama_router(monkeypatch, narrate={"summary": "   "})
     student_token = register_and_login(client, "rep-s9@example.com", role="student")
 
@@ -123,7 +133,8 @@ def test_generate_report_falls_back_when_model_returns_blank_summary(client, mon
     assert response.status_code == 201
     for report in response.json():
         assert report["content"].strip() != ""
-        assert "Narration unavailable" in report["content"]
+        assert "AI narration unavailable" in report["content"]
+        assert report["content_source"] == "fallback_summary"
 
 
 def test_generate_scheduled_reports_idempotent(client, db_session, monkeypatch):
@@ -135,6 +146,36 @@ def test_generate_scheduled_reports_idempotent(client, db_session, monkeypatch):
 
     second = generate_scheduled_reports(db_session)
     assert second == 0
+
+
+def test_generate_scheduled_reports_dedupes_resource_utilization_across_recipients(
+    client, db_session, monkeypatch
+):
+    # resource_utilization is clinic-wide, not recipient-specific -- it
+    # should be computed once per period_type per run, not once per
+    # recipient, even though generate_periodic_report is still called once
+    # per recipient.
+    register_and_login(client, "rep-job-s4@example.com", role="student")
+    register_and_login(client, "rep-job-s5@example.com", role="student")
+    register_and_login(client, "rep-job-s6@example.com", role="student")
+    _mock_ollama_router(monkeypatch, narrate={"summary": "ok"})
+
+    from app.jobs import reports as reports_job
+    from app.services import report_data
+
+    real_resource_utilization = report_data.resource_utilization
+    call_count = 0
+
+    def counting_resource_utilization(db, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return real_resource_utilization(db, **kwargs)
+
+    monkeypatch.setattr(reports_job, "resource_utilization", counting_resource_utilization)
+
+    generated = generate_scheduled_reports(db_session)
+    assert generated == 6  # 3 recipients x 2 period types
+    assert call_count == 2  # once per period type (weekly, monthly), not per recipient
 
 
 def test_generate_scheduled_reports_one_recipient_failing_does_not_block_others(

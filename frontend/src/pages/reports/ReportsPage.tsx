@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { askQuestion, generateReport, listReports } from '../../api/reports'
 import { apiErrorMessage } from '../../api/httpClient'
-import type { ReportPeriodType } from '../../api/types'
+import type { ReportContentSource, ReportPeriodType } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { EmptyText, ErrorText, LoadingText } from '../../components/StateText'
 import { formatDateTime } from '../../utils/dates'
@@ -18,6 +18,13 @@ const PERIOD_COLORS: Record<ReportPeriodType, string> = {
 function periodLabel(periodType: ReportPeriodType): string {
   if (periodType === 'ad_hoc') return 'Q&A'
   return periodType[0].toUpperCase() + periodType.slice(1)
+}
+
+const CONTENT_SOURCE: Record<ReportContentSource, { label: string; color: string }> = {
+  ai: { label: 'AI-narrated', color: 'blue' },
+  fallback_summary: { label: 'Data summary', color: 'gray' },
+  unsupported: { label: 'Unsupported question', color: 'yellow' },
+  unavailable: { label: 'Assistant unavailable', color: 'red' },
 }
 
 export function ReportsPage() {
@@ -110,9 +117,18 @@ export function ReportsPage() {
             <Paper key={report.id} withBorder p="sm">
               <Stack gap={4}>
                 <Group justify="space-between" wrap="nowrap">
-                  <Badge size="sm" color={PERIOD_COLORS[report.period_type]}>
-                    {periodLabel(report.period_type)}
-                  </Badge>
+                  <Group gap="xs" wrap="nowrap">
+                    <Badge size="sm" color={PERIOD_COLORS[report.period_type]}>
+                      {periodLabel(report.period_type)}
+                    </Badge>
+                    <Badge
+                      size="sm"
+                      variant="light"
+                      color={CONTENT_SOURCE[report.content_source].color}
+                    >
+                      {CONTENT_SOURCE[report.content_source].label}
+                    </Badge>
+                  </Group>
                   <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
                     {formatDateTime(report.created_at)}
                   </Text>
