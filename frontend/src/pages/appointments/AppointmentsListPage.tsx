@@ -353,6 +353,11 @@ export function AppointmentsListPage() {
   })
 
   function handleOpenModal() {
+    // Closing without submitting (X, Escape, backdrop click) never reset
+    // the form -- the previously-picked patient/room/attending/notes were
+    // still silently selected the next time this opened, a real risk of
+    // submitting for the wrong patient without noticing.
+    form.reset()
     setDescribeText('')
     setInterpretWarnings([])
     open()

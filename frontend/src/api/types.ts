@@ -27,6 +27,8 @@ export type NotificationType =
   | 'resource_deactivated'
   | 'appointment_needs_resolution'
   | 'feedback_reminder'
+  | 'appointment_created'
+  | 'appointment_status_changed'
 
 export type PreferredTimeOfDay = 'morning' | 'afternoon' | 'evening'
 

@@ -43,7 +43,13 @@ export function ForumPostCard({ post, expanded, onToggleExpand }: ForumPostCardP
   const isAdmin = principal?.role === 'admin'
   const isAuthor = principal?.id === post.author_student_id
 
-  const editForm = useForm({ initialValues: { title: post.title, body: post.body } })
+  const editForm = useForm({
+    initialValues: { title: post.title, body: post.body },
+    validate: {
+      title: (value) => (value.trim().length > 0 ? null : 'Title is required'),
+      body: (value) => (value.trim().length > 0 ? null : 'Body is required'),
+    },
+  })
 
   useEffect(() => {
     editForm.setValues({ title: post.title, body: post.body })
@@ -195,11 +201,25 @@ export function ForumPostCard({ post, expanded, onToggleExpand }: ForumPostCardP
                 <Button
                   size="xs"
                   loading={updateMutation.isPending}
-                  onClick={() => updateMutation.mutate(editForm.values)}
+                  onClick={() => {
+                    if (editForm.validate().hasErrors) return
+                    updateMutation.mutate(editForm.values)
+                  }}
                 >
                   Save
                 </Button>
-                <Button size="xs" variant="default" onClick={() => setEditing(false)}>
+                <Button
+                  size="xs"
+                  variant="default"
+                  onClick={() => {
+                    // Otherwise a discarded draft (typed, then Cancelled)
+                    // was still sitting in the form next time Edit reopened
+                    // -- the sync effect above only re-runs after a real
+                    // save, not on Cancel.
+                    editForm.setValues({ title: post.title, body: post.body })
+                    setEditing(false)
+                  }}
+                >
                   Cancel
                 </Button>
               </Group>

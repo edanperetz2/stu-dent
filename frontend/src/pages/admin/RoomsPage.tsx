@@ -2,6 +2,7 @@ import { Badge, Button, Group, Modal, Stack, Table, Text, TextInput, Title } fro
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
+import { IconPencil } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiErrorMessage } from '../../api/httpClient'
@@ -123,10 +124,22 @@ export function RoomsPage() {
                         }
                         if (e.key === 'Escape') setRenamingId(null)
                       }}
+                      onBlur={() => {
+                        // Clicking away is expected to save (like most
+                        // inline-edit UIs), not silently do nothing -- an
+                        // emptied-out name just cancels instead, same as
+                        // Escape, rather than saving a blank name.
+                        if (renameValue.trim() && renameValue.trim() !== room.name) {
+                          updateMutation.mutate({ roomId: room.id, name: renameValue.trim() })
+                        }
+                        setRenamingId(null)
+                      }}
                       autoFocus
                     />
                   ) : (
-                    <Text
+                    <Group
+                      gap={4}
+                      wrap="nowrap"
                       style={{ cursor: 'pointer' }}
                       onClick={() => {
                         setRenamingId(room.id)
@@ -142,8 +155,9 @@ export function RoomsPage() {
                       tabIndex={0}
                       role="button"
                     >
-                      {room.name}
-                    </Text>
+                      <Text>{room.name}</Text>
+                      <IconPencil size={14} color="var(--mantine-color-dimmed)" />
+                    </Group>
                   )}
                 </Table.Td>
                 <Table.Td>

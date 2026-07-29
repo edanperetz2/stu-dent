@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { notifications } from '@mantine/notifications'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { API_BASE_URL } from '../api/httpClient'
-import type { RealtimeEvent } from '../api/types'
+import type { NotificationType, RealtimeEvent } from '../api/types'
 
 interface RealtimeContextValue {
   isConnected: boolean
@@ -12,16 +13,34 @@ const RealtimeContext = createContext<RealtimeContextValue>({ isConnected: false
 
 const RECONNECT_DELAY_MS = 3000
 
-function wsUrl(token: string): string {
+// Worth interrupting with a toast, not just a quiet badge update -- these
+// document something time-sensitive that a user not currently on the
+// relevant page would otherwise have no way to notice (a waitlist entry
+// auto-booked into a real slot, an appointment rejected/cancelled/approved,
+// a resource pulled out from under a booking, something newly needing
+// review). Left out on purpose: appointment_reminder/appointment_expired/
+// feedback_reminder/patient_registration_request -- routine enough, or
+// already visible via the existing nav badges, that a toast for every one
+// would just be noise.
+const TOAST_NOTIFICATION_TYPES = new Set<NotificationType>([
+  'waitlist_slot_available',
+  'appointment_status_changed',
+  'appointment_created',
+  'resource_deactivated',
+  'appointment_needs_resolution',
+])
+
+function wsUrl(): string {
   const base = API_BASE_URL.replace(/^http/, 'ws')
-  return `${base}/ws?token=${encodeURIComponent(token)}`
+  return `${base}/ws`
 }
 
 /**
- * Opens the backend's /ws?token= connection (Phase 4) once authenticated and
- * relays events by invalidating the matching TanStack Query cache key, so a
- * push just triggers a normal refetch rather than needing a second,
- * separate state layer.
+ * Opens the backend's /ws connection (Phase 4) once authenticated,
+ * authenticating via a first message rather than a query param, and relays
+ * events by invalidating the matching TanStack Query cache key, so a push
+ * just triggers a normal refetch rather than needing a second, separate
+ * state layer.
  */
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { principal } = useAuth()
@@ -40,10 +59,17 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
     function connect() {
       if (cancelled || !principal) return
-      const socket = new WebSocket(wsUrl(principal.token))
+      const socket = new WebSocket(wsUrl())
       socketRef.current = socket
 
-      socket.onopen = () => setIsConnected(true)
+      // The token is sent as the first message instead of a `?token=`
+      // query param -- a query string ends up in access logs/proxy logs/
+      // browser history, and a leaked log line would be a replayable
+      // bearer token for the rest of its life.
+      socket.onopen = () => {
+        socket.send(JSON.stringify({ token: principal.token }))
+        setIsConnected(true)
+      }
 
       socket.onclose = () => {
         setIsConnected(false)
@@ -55,6 +81,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data) as RealtimeEvent
         if (data.event === 'notification') {
+          const notificationType = data.notification_type as NotificationType | undefined
+          const message = data.message as string | undefined
+          if (notificationType && message && TOAST_NOTIFICATION_TYPES.has(notificationType)) {
+            notifications.show({ message, color: 'blue' })
+          }
           queryClient.invalidateQueries({ queryKey: ['notifications'] })
           // A notification can document a change to an appointment the
           // recipient didn't make themselves -- a reminder, an expiry, or

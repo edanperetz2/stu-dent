@@ -51,10 +51,23 @@ def generate_periodic_report(
     period_type: ReportPeriodType,
     period_start: datetime,
     period_end: datetime,
+    commit: bool = True,
 ) -> Report:
     """Compute + narrate a weekly/monthly report for `recipient`. Ollama
     only ever narrates already-computed facts here -- it never sees the DB
     and never contributes a number of its own.
+
+    Commits on its own by default -- every route/job caller treats one
+    report as a complete, independent unit of work. `commit=False` lets a
+    caller that's managing its own larger transaction (seed_demo.py,
+    seeding several reports alongside a lot of other still-uncommitted
+    setup) defer that to its own single final commit instead: this used to
+    always commit internally, so seed_demo.py's sentinel admin user (and
+    everything else built before this ran) was already durably persisted
+    the moment the *first* report succeeded -- if a *later* report call
+    then failed, a re-run would see the admin already exists and treat
+    everything as fully seeded, permanently skipping whatever hadn't
+    actually been generated yet.
     """
     data = {
         "resource_utilization": resource_utilization(db, start=period_start, end=period_end),
@@ -73,8 +86,11 @@ def generate_periodic_report(
         content=content,
     )
     db.add(report)
-    db.commit()
-    db.refresh(report)
+    if commit:
+        db.commit()
+        db.refresh(report)
+    else:
+        db.flush()
     return report
 
 

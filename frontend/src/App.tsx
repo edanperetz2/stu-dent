@@ -7,6 +7,7 @@ import { MantineProvider } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './auth/AuthContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { RealtimeProvider } from './realtime/RealtimeContext'
 import { AppRouter } from './router/AppRouter'
 
@@ -16,13 +17,15 @@ function App() {
   return (
     <MantineProvider>
       <Notifications />
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <RealtimeProvider>
-            <AppRouter />
-          </RealtimeProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <RealtimeProvider>
+              <AppRouter />
+            </RealtimeProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
     </MantineProvider>
   )
 }

@@ -22,7 +22,10 @@ class ConnectionManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, recipient_id: uuid.UUID, websocket: WebSocket) -> None:
-        await websocket.accept()
+        # The caller (api/routes/websocket.py) accepts the connection itself,
+        # before authenticating -- it needs to receive the client's first
+        # message (the auth token) to get that far, which requires the
+        # handshake already accepted.
         key = str(recipient_id)
         async with self._lock:
             self._connections[key].add(websocket)

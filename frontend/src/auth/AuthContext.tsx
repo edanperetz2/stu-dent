@@ -71,9 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const { token } = JSON.parse(stored) as StoredAuth
     ;(async () => {
       try {
+        // Parsing lives inside the same try/catch as the network call
+        // below -- malformed JSON here (corrupted write, a future format
+        // migration, some browser storage quirk) used to throw straight
+        // out of this effect with nothing catching it, and with no
+        // top-level ErrorBoundary in the app that was an unrecoverable
+        // white screen with no way back to even /login.
+        const { token } = JSON.parse(stored) as StoredAuth
         const user = await getCurrentUser(token)
         setPrincipal(toPrincipal(token, user))
       } catch {

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.appointment import Appointment, AppointmentStatus
+from app.models.notification import NotificationType
 from app.models.user import RoleEnum, User
 from app.schemas.appointment import (
     AppointmentAccept,
@@ -16,6 +17,8 @@ from app.schemas.appointment import (
     AppointmentUpdate,
 )
 from app.services.audit import record_audit_log
+from app.services.formatting import format_dt
+from app.services.notifications import notify
 from app.services.scheduling import (
     TERMINAL_STATUSES,
     AppointmentConflictError,
@@ -120,6 +123,31 @@ def create_appointment(
     db.add(appointment)
     flush_or_409(db)
 
+    # Whoever needs to act next on this new appointment should be told --
+    # previously nobody but the creator ever found out it existed.
+    if current_user.role == RoleEnum.student and payload.attending_id is not None:
+        notify(
+            db,
+            notification_type=NotificationType.appointment_created,
+            message=(
+                f"New appointment with {appointment.patient_name} on "
+                f"{format_dt(appointment.start_time)} needs your approval."
+            ),
+            recipient_id=payload.attending_id,
+            related_appointment_id=appointment.id,
+        )
+    elif current_user.role == RoleEnum.patient:
+        notify(
+            db,
+            notification_type=NotificationType.appointment_created,
+            message=(
+                f"{appointment.patient_name} requested an appointment on "
+                f"{format_dt(appointment.start_time)} -- accept or reject it."
+            ),
+            recipient_id=student_id,
+            related_appointment_id=appointment.id,
+        )
+
     record_audit_log(
         db,
         action="appointment_create",
@@ -197,7 +225,11 @@ def update_appointment(
         or new_equipment_id != old_equipment_id
     )
 
-    time_changed = "start_time" in fields or "end_time" in fields
+    # Compares actual values, not payload-key presence -- the frontend's
+    # edit form always submits start_time/end_time on every PATCH (even
+    # when only e.g. notes changed), so checking "start_time" in fields
+    # used to incorrectly reset attending approval on every single edit.
+    time_changed = new_start != old_start or new_end != old_end
     attending_changed = (
         "attending_id" in fields and fields["attending_id"] != appointment.attending_id
     )
@@ -243,9 +275,26 @@ def update_appointment(
     if "notes" in fields:
         appointment.notes = fields["notes"]
 
+    if time_changed:
+        # The one-time reminder already sent (if any) was for the old
+        # time -- without this, a rescheduled appointment would never get
+        # a reminder for its new time at all.
+        appointment.reminder_sent_at = None
+
     if time_changed or attending_changed:
         if appointment.attending_id is not None:
             appointment.attending_approved_at = None
+            notify(
+                db,
+                notification_type=NotificationType.appointment_created,
+                message=(
+                    f"The appointment with {appointment.patient_name} on "
+                    f"{format_dt(appointment.start_time)} was changed and needs "
+                    "your approval again."
+                ),
+                recipient_id=appointment.attending_id,
+                related_appointment_id=appointment.id,
+            )
         recompute_status(appointment, time_changed=time_changed)
 
     flush_or_409(db)
@@ -347,6 +396,25 @@ def accept_appointment(
         )
         flush_or_409(db)
 
+    notify(
+        db,
+        notification_type=NotificationType.appointment_status_changed,
+        message=f"Your appointment request for {format_dt(appointment.start_time)} was accepted.",
+        recipient_id=appointment.patient_id,
+        related_appointment_id=appointment.id,
+    )
+    if appointment.attending_id is not None and appointment.attending_approved_at is None:
+        notify(
+            db,
+            notification_type=NotificationType.appointment_created,
+            message=(
+                f"New appointment with {appointment.patient_name} on "
+                f"{format_dt(appointment.start_time)} needs your approval."
+            ),
+            recipient_id=appointment.attending_id,
+            related_appointment_id=appointment.id,
+        )
+
     record_audit_log(
         db,
         action="appointment_accept",
@@ -382,6 +450,24 @@ def approve_appointment(
     appointment.attending_approved_at = datetime.now(UTC)
     recompute_status(appointment)
     flush_or_409(db)
+
+    approve_message = (
+        f"Your appointment on {format_dt(appointment.start_time)} was approved and confirmed."
+    )
+    notify(
+        db,
+        notification_type=NotificationType.appointment_status_changed,
+        message=approve_message,
+        recipient_id=appointment.student_id,
+        related_appointment_id=appointment.id,
+    )
+    notify(
+        db,
+        notification_type=NotificationType.appointment_status_changed,
+        message=approve_message,
+        recipient_id=appointment.patient_id,
+        related_appointment_id=appointment.id,
+    )
 
     record_audit_log(
         db,
@@ -422,6 +508,31 @@ def reject_appointment(
     recheck_waitlist_after_cancellation(db, appointment)
     flush_or_409(db)
 
+    reject_message = f"Your appointment on {format_dt(appointment.start_time)} was rejected."
+    if not is_owning_student:
+        notify(
+            db,
+            notification_type=NotificationType.appointment_status_changed,
+            message=reject_message,
+            recipient_id=appointment.student_id,
+            related_appointment_id=appointment.id,
+        )
+    notify(
+        db,
+        notification_type=NotificationType.appointment_status_changed,
+        message=reject_message,
+        recipient_id=appointment.patient_id,
+        related_appointment_id=appointment.id,
+    )
+    if appointment.attending_id is not None and not is_assigned_attending:
+        notify(
+            db,
+            notification_type=NotificationType.appointment_status_changed,
+            message=reject_message,
+            recipient_id=appointment.attending_id,
+            related_appointment_id=appointment.id,
+        )
+
     record_audit_log(
         db,
         action="appointment_reject",
@@ -460,6 +571,32 @@ def cancel_appointment(
     appointment.status = AppointmentStatus.cancelled
     recheck_waitlist_after_cancellation(db, appointment)
     flush_or_409(db)
+
+    cancel_message = f"Your appointment on {format_dt(appointment.start_time)} was cancelled."
+    if not is_owning_student:
+        notify(
+            db,
+            notification_type=NotificationType.appointment_status_changed,
+            message=cancel_message,
+            recipient_id=appointment.student_id,
+            related_appointment_id=appointment.id,
+        )
+    if not is_self_patient:
+        notify(
+            db,
+            notification_type=NotificationType.appointment_status_changed,
+            message=cancel_message,
+            recipient_id=appointment.patient_id,
+            related_appointment_id=appointment.id,
+        )
+    if appointment.attending_id is not None:
+        notify(
+            db,
+            notification_type=NotificationType.appointment_status_changed,
+            message=cancel_message,
+            recipient_id=appointment.attending_id,
+            related_appointment_id=appointment.id,
+        )
 
     record_audit_log(
         db,

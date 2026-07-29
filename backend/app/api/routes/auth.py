@@ -3,8 +3,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
-from app.core.rate_limit import enforce_login_rate_limit
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.rate_limit import enforce_login_rate_limit, enforce_registration_rate_limit
+from app.core.security import (
+    DUMMY_PASSWORD_HASH,
+    create_access_token,
+    hash_password,
+    verify_password,
+)
 from app.database import get_db
 from app.models.notification import NotificationType
 from app.models.user import RoleEnum, User
@@ -23,6 +28,17 @@ def _client_ip(request: Request) -> str | None:
 
 @router.post("/auth/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db)) -> User:
+    ip = _client_ip(request)
+    enforce_registration_rate_limit(db, ip_address=ip)
+    # Recorded unconditionally (success or the 409-already-registered path
+    # below) so the rate limit above counts every attempt from this IP, not
+    # just successful ones -- otherwise probing many emails for the
+    # 409-vs-201 signal would never itself be throttled.
+    record_audit_log(
+        db, action="user_register_attempt", attempted_identifier="register", ip_address=ip
+    )
+    db.commit()
+
     email = payload.email.lower()
     existing = db.scalar(select(User).where(User.email == email))
     if existing is not None:
@@ -85,16 +101,21 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)) -> 
     email = payload.email.lower()
     ip = _client_ip(request)
 
-    enforce_login_rate_limit(db, identifier=email, failure_action="user_login_failure")
+    enforce_login_rate_limit(
+        db, identifier=email, ip_address=ip, failure_action="user_login_failure"
+    )
 
     user = db.scalar(select(User).where(User.email == email))
+    # Always runs the real (slow) argon2 comparison, against a dummy hash
+    # when there's no real one to check -- otherwise a nonexistent email
+    # skipped verify_password() entirely and responded measurably faster
+    # than a real wrong-password attempt, leaking which emails are
+    # registered purely from login response timing.
+    password_valid = verify_password(
+        payload.password, user.hashed_password if user is not None else DUMMY_PASSWORD_HASH
+    )
     role_matches = payload.role is None or (user is not None and user.role == payload.role)
-    if (
-        user is None
-        or not user.is_active
-        or not verify_password(payload.password, user.hashed_password)
-        or not role_matches
-    ):
+    if user is None or not user.is_active or not password_valid or not role_matches:
         record_audit_log(
             db,
             action="user_login_failure",

@@ -26,6 +26,14 @@ class NotificationType(enum.StrEnum):
     resource_deactivated = "resource_deactivated"
     appointment_needs_resolution = "appointment_needs_resolution"
     feedback_reminder = "feedback_reminder"
+    # A new appointment (or one whose change re-opened attending approval)
+    # needs the recipient's attention -- an attending to approve, or a
+    # student to accept a patient-originated request.
+    appointment_created = "appointment_created"
+    # accept/approve/reject/cancel all reduce to "this appointment's status
+    # changed and you should know" for whichever participants didn't
+    # perform the action themselves.
+    appointment_status_changed = "appointment_status_changed"
 
 
 class Notification(TimestampMixin, Base):

@@ -32,6 +32,9 @@ export function PatientDetailPanel({ patient }: PatientDetailPanelProps) {
       contact_phone: patient.contact_phone ?? '',
       preferred_time_of_day: patient.preferred_time_of_day,
     },
+    validate: {
+      full_name: (value) => (value?.trim().length ? null : 'Full name is required'),
+    },
   })
 
   useEffect(() => {
@@ -40,8 +43,13 @@ export function PatientDetailPanel({ patient }: PatientDetailPanelProps) {
       contact_phone: patient.contact_phone ?? '',
       preferred_time_of_day: patient.preferred_time_of_day,
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync when the patient itself changes
-  }, [patient])
+    // Re-sync only when these specific fields change (e.g. after a
+    // successful save elsewhere), not on every refetch triggered by a
+    // window-focus/background refetch returning a new-but-equal object --
+    // depending on the whole `patient` object clobbered an in-progress
+    // edit whenever that happened, same fix as ForumPostCard.tsx.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient.full_name, patient.contact_phone, patient.preferred_time_of_day])
 
   const invalidatePatients = () => queryClient.invalidateQueries({ queryKey: ['patients'] })
 

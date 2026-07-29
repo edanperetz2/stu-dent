@@ -74,7 +74,7 @@ function displayName(principal: Principal | null): string {
 }
 
 export function AppLayout() {
-  const [opened, { toggle }] = useDisclosure()
+  const [opened, { toggle, close }] = useDisclosure()
   const { principal, logout } = useAuth()
   const navigate = useNavigate()
   const links = linksForPrincipal(principal)
@@ -112,7 +112,13 @@ export function AppLayout() {
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="xs">
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
+            <Burger
+              opened={opened}
+              onClick={toggle}
+              hiddenFrom="sm"
+              size="sm"
+              aria-label="Toggle navigation"
+            />
             <UnstyledButton
               component={Link}
               to={homePath}
@@ -160,7 +166,14 @@ export function AppLayout() {
               key={link.to}
               label={link.label}
               className="app-nav-link"
-              onClick={() => navigate(link.to)}
+              onClick={() => {
+                navigate(link.to)
+                // Only visually relevant on mobile (the navbar is always
+                // visible from "sm" up regardless of `opened`) -- without
+                // this, tapping a link left the overlay covering the new
+                // page until the user tapped the burger again themselves.
+                close()
+              }}
               rightSection={
                 badgeCount > 0 ? (
                   <Badge size="sm" circle color="red">

@@ -186,7 +186,8 @@ docker compose exec frontend npm run lint
 - **5 — Frontend** (whole app so far): **done**. The first real frontend
   work — the frontend was an untouched Vite scaffold through phases 0-4.
   Covers auth (unified login/register, role-aware routing), patients,
-  appointments, availability, waitlist, notifications (with a live
+  appointments, availability (removed post-submission, see below —
+  never really used), waitlist, notifications (with a live
   unread-count badge), forum, DMs, admin rooms/equipment/user management,
   and patient preferences — all with live updates over the Phase 4
   WebSocket where relevant. Built across 7 milestones plus a mid-phase
@@ -266,7 +267,11 @@ docker compose exec frontend npm run lint
   next started: **(1) infra/CI/docs** (`fe39079`) — Node 20→22, pip/npm/
   Docker-layer CI caching, a couple of stale README/comment fixes, the
   `docker-compose.prod.yml` frontend healthcheck (with the IPv4-vs-IPv6
-  `wget`/`localhost` gotcha fixed along the way). **(2) backend efficiency
+  `wget`/`localhost` gotcha fixed along the way) — `docker-compose.prod.yml`
+  itself was later deleted entirely by `a311dd0` once the VM deploy was
+  descoped, so this healthcheck fix no longer exists in the current repo;
+  left here as historical record of the batch, not something to go re-apply.
+  **(2) backend efficiency
   + dedup** (`24f23a7`) — added indexes (`appointment.end_time`, a
   composite `audit_log` index), collapsed an N+1 existence-check loop in
   `jobs/reports.py` into one batched query, added

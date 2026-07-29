@@ -552,6 +552,7 @@ def _seed_reports(db: Session, students: list[User], attendings: list[User]) -> 
             period_type=ReportPeriodType.weekly,
             period_start=week_start,
             period_end=week_end,
+            commit=False,
         )
 
 

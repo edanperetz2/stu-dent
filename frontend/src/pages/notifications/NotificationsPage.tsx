@@ -2,6 +2,7 @@ import { Badge, Button, Group, Paper, Stack, Switch, Text, Title } from '@mantin
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   listNotifications,
   markNotificationRead,
@@ -22,6 +23,7 @@ function formatType(notificationType: string): string {
 export function NotificationsPage() {
   const token = useAuthToken()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [unreadOnly, setUnreadOnly] = useState(false)
 
   const { data: items, isLoading } = useQuery({
@@ -72,12 +74,33 @@ export function NotificationsPage() {
         <EmptyText>No notifications.</EmptyText>
       ) : (
         <Stack gap="xs">
-          {items?.map((item) => (
+          {items?.map((item) => {
+            const isLinkable = !!item.related_appointment_id
+            const goToAppointment = () => {
+              if (!item.related_appointment_id) return
+              if (!item.read_at) markReadMutation.mutate(item.id)
+              navigate(`/appointments?appointment=${item.related_appointment_id}`)
+            }
+            return (
             <Paper
               key={item.id}
               withBorder
               p="sm"
               bg={item.read_at ? undefined : 'var(--mantine-color-blue-0)'}
+              style={isLinkable ? { cursor: 'pointer' } : undefined}
+              onClick={isLinkable ? goToAppointment : undefined}
+              onKeyDown={
+                isLinkable
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        goToAppointment()
+                      }
+                    }
+                  : undefined
+              }
+              tabIndex={isLinkable ? 0 : undefined}
+              role={isLinkable ? 'button' : undefined}
             >
               <Group justify="space-between" wrap="nowrap" align="flex-start">
                 <Stack gap={2}>
@@ -95,7 +118,10 @@ export function NotificationsPage() {
                       size="compact-xs"
                       variant="subtle"
                       loading={markUnreadMutation.isPending}
-                      onClick={() => markUnreadMutation.mutate(item.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        markUnreadMutation.mutate(item.id)
+                      }}
                     >
                       Mark unread
                     </Button>
@@ -104,7 +130,10 @@ export function NotificationsPage() {
                       size="compact-xs"
                       variant="light"
                       loading={markReadMutation.isPending}
-                      onClick={() => markReadMutation.mutate(item.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        markReadMutation.mutate(item.id)
+                      }}
                     >
                       Mark read
                     </Button>
@@ -112,7 +141,8 @@ export function NotificationsPage() {
                 </Stack>
               </Group>
             </Paper>
-          ))}
+            )
+          })}
         </Stack>
       )}
     </Stack>

@@ -1,6 +1,7 @@
-import { Badge, Group, Select, Stack, Table, Title } from '@mantine/core'
+import { Badge, Button, Group, Modal, Select, Stack, Table, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { deleteUser, listAllUsers, updateUser } from '../../api/admin'
 import { apiErrorMessage } from '../../api/httpClient'
 import type { Role } from '../../api/types'
@@ -20,6 +21,11 @@ export function UsersPage() {
   const token = useAuthToken()
   const { principal } = useAuth()
   const queryClient = useQueryClient()
+  const [pendingRoleChange, setPendingRoleChange] = useState<{
+    userId: string
+    fullName: string
+    newRole: Role
+  } | null>(null)
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin', 'users'],
@@ -87,10 +93,15 @@ export function UsersPage() {
                       value={user.role}
                       allowDeselect={false}
                       disabled={isSelf}
-                      onChange={(value) =>
-                        value &&
-                        updateMutation.mutate({ userId: user.id, role: value as Role })
-                      }
+                      onChange={(value) => {
+                        if (value && value !== user.role) {
+                          setPendingRoleChange({
+                            userId: user.id,
+                            fullName: user.full_name,
+                            newRole: value as Role,
+                          })
+                        }
+                      }}
                     />
                   </Table.Td>
                   <Table.Td>
@@ -100,15 +111,33 @@ export function UsersPage() {
                   </Table.Td>
                   <Table.Td>
                     <Group gap="xs">
-                      <ConfirmButton
-                        label={user.is_active ? 'Deactivate' : 'Activate'}
-                        color={user.is_active ? 'red' : 'green'}
-                        message={`This will ${user.is_active ? 'deactivate' : 'activate'} ${user.full_name}'s account.`}
-                        onConfirm={() =>
-                          updateMutation.mutate({ userId: user.id, is_active: !user.is_active })
-                        }
-                        loading={updateMutation.isPending && updateMutation.variables?.userId === user.id}
-                      />
+                      {user.is_active ? (
+                        <ConfirmButton
+                          label="Deactivate"
+                          color="red"
+                          message={`This will deactivate ${user.full_name}'s account.`}
+                          onConfirm={() =>
+                            updateMutation.mutate({ userId: user.id, is_active: false })
+                          }
+                          loading={
+                            updateMutation.isPending && updateMutation.variables?.userId === user.id
+                          }
+                        />
+                      ) : (
+                        <Button
+                          size="xs"
+                          variant="light"
+                          color="green"
+                          loading={
+                            updateMutation.isPending && updateMutation.variables?.userId === user.id
+                          }
+                          onClick={() =>
+                            updateMutation.mutate({ userId: user.id, is_active: true })
+                          }
+                        >
+                          Activate
+                        </Button>
+                      )}
                       {!isSelf && (
                         <ConfirmButton
                           label="Delete"
@@ -126,6 +155,40 @@ export function UsersPage() {
         </Table>
         </Table.ScrollContainer>
       )}
+
+      <Modal
+        opened={!!pendingRoleChange}
+        onClose={() => setPendingRoleChange(null)}
+        title="Change role?"
+      >
+        <Stack>
+          <Text size="sm">
+            This will change {pendingRoleChange?.fullName}&apos;s role to{' '}
+            <strong>{pendingRoleChange?.newRole}</strong>. They will immediately gain or lose
+            whatever access that role has.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setPendingRoleChange(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              loading={updateMutation.isPending}
+              onClick={() => {
+                if (pendingRoleChange) {
+                  updateMutation.mutate({
+                    userId: pendingRoleChange.userId,
+                    role: pendingRoleChange.newRole,
+                  })
+                }
+                setPendingRoleChange(null)
+              }}
+            >
+              Change role
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   )
 }

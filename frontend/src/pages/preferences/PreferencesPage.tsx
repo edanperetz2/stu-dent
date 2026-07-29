@@ -35,8 +35,11 @@ export function PreferencesPage() {
         preferred_time_of_day: user.preferred_time_of_day,
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync when the fetched user changes
-  }, [user])
+    // Depending on specific fields (not the whole `user` object) so a
+    // window-focus refetch returning a new-but-equal object doesn't
+    // clobber an in-progress edit -- same fix as ForumPostCard.tsx.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.contact_phone, user?.preferred_time_of_day])
 
   const updateMutation = useMutation({
     mutationFn: (payload: UserSelfUpdateInput) => updateCurrentUser(token, payload),

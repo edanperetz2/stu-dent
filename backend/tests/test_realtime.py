@@ -132,7 +132,9 @@ def test_websocket_receives_direct_message_live():
             patient_token = create_access_token(subject=patient_id, role=RoleEnum.patient.value)
             student_jwt = create_access_token(subject=student_id, role=RoleEnum.student.value)
 
-            with real_client.websocket_connect(f"/ws?token={patient_token}") as websocket:
+            with real_client.websocket_connect("/ws") as websocket:
+                websocket.send_json({"token": patient_token})
+                assert websocket.receive_json()["event"] == "connected"
                 response = real_client.post(
                     f"/messages/direct/{patient_id}",
                     json={"body": "live hello"},
@@ -227,9 +229,13 @@ def test_websocket_broadcasts_group_message_to_every_other_participant():
             ]
 
             with (
-                real_client.websocket_connect(f"/ws?token={listener_tokens[0]}") as ws1,
-                real_client.websocket_connect(f"/ws?token={listener_tokens[1]}") as ws2,
+                real_client.websocket_connect("/ws") as ws1,
+                real_client.websocket_connect("/ws") as ws2,
             ):
+                ws1.send_json({"token": listener_tokens[0]})
+                ws2.send_json({"token": listener_tokens[1]})
+                assert ws1.receive_json()["event"] == "connected"
+                assert ws2.receive_json()["event"] == "connected"
                 response = real_client.post(
                     f"/messages/groups/{conversation_id}",
                     json={"body": "hello group"},

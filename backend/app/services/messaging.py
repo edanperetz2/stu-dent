@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import exists, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.conversation import (
@@ -93,9 +94,23 @@ def get_or_create_conversation(
     if conversation is not None:
         return conversation
 
-    conversation = Conversation(kind=kind, direct_key=key, title=title)
-    db.add(conversation)
-    db.flush()
+    # `direct_key` has a DB-level unique constraint -- two simultaneous
+    # first-messages between the same pair (double-click send, two open
+    # tabs) can both reach here having seen no existing row. A SAVEPOINT
+    # means the loser only unwinds this insert, not the whole request's
+    # transaction, and falls back to the winner's row instead of a bare
+    # 500 from an uncaught IntegrityError.
+    try:
+        with db.begin_nested():
+            conversation = Conversation(kind=kind, direct_key=key, title=title)
+            db.add(conversation)
+            db.flush()
+    except IntegrityError:
+        conversation = db.scalar(select(Conversation).where(Conversation.direct_key == key))
+        if conversation is None:
+            raise
+        return conversation
+
     for user_id in participant_ids:
         db.add(ConversationParticipant(conversation_id=conversation.id, user_id=user_id))
     db.flush()
@@ -114,11 +129,32 @@ def create_group_conversation(
     return conversation
 
 
+def _get_or_create_participant(
+    db: Session, conversation_id: uuid.UUID, user_id: uuid.UUID
+) -> ConversationParticipant:
+    """Shared check-then-insert-with-rescue for the (conversation_id,
+    user_id) composite PK, used by ensure_participant/touch_read/
+    touch_unread -- same concurrent-first-touch race as
+    get_or_create_conversation's direct_key, rescued the same way via a
+    SAVEPOINT instead of an uncaught IntegrityError.
+    """
+    participant = db.get(ConversationParticipant, (conversation_id, user_id))
+    if participant is not None:
+        return participant
+    try:
+        with db.begin_nested():
+            participant = ConversationParticipant(conversation_id=conversation_id, user_id=user_id)
+            db.add(participant)
+            db.flush()
+    except IntegrityError:
+        participant = db.get(ConversationParticipant, (conversation_id, user_id))
+        if participant is None:
+            raise
+    return participant
+
+
 def ensure_participant(db: Session, conversation: Conversation, user_id: uuid.UUID) -> None:
-    exists = db.get(ConversationParticipant, (conversation.id, user_id))
-    if exists is None:
-        db.add(ConversationParticipant(conversation_id=conversation.id, user_id=user_id))
-        db.flush()
+    _get_or_create_participant(db, conversation.id, user_id)
 
 
 def touch_read(
@@ -128,10 +164,7 @@ def touch_read(
     and creates the participant row if this is their first-ever visit
     (e.g. an admin opening a user's support thread for the first time).
     """
-    participant = db.get(ConversationParticipant, (conversation.id, user_id))
-    if participant is None:
-        participant = ConversationParticipant(conversation_id=conversation.id, user_id=user_id)
-        db.add(participant)
+    participant = _get_or_create_participant(db, conversation.id, user_id)
     participant.last_read_at = datetime.now(UTC)
     db.flush()
     return participant
@@ -144,10 +177,7 @@ def touch_unread(
     high-water mark entirely rather than advancing it, so every message in
     the conversation counts as unread again (see unread_message_count).
     """
-    participant = db.get(ConversationParticipant, (conversation.id, user_id))
-    if participant is None:
-        participant = ConversationParticipant(conversation_id=conversation.id, user_id=user_id)
-        db.add(participant)
+    participant = _get_or_create_participant(db, conversation.id, user_id)
     participant.last_read_at = None
     db.flush()
     return participant

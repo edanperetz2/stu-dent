@@ -49,6 +49,17 @@ def update_user(
 ) -> User:
     user = _get_active_user(db, user_id)
 
+    if user_id == current_user.id:
+        if payload.role is not None and payload.role != RoleEnum.admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change your own role"
+            )
+        if payload.is_active is False:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot deactivate your own account",
+            )
+
     if payload.is_active is not None:
         user.is_active = payload.is_active
     if payload.role is not None:

@@ -8,9 +8,14 @@ from sqlalchemy.orm import Session
 from app.core.deps import require_role
 from app.core.security import hash_password
 from app.database import get_db
+from app.models.appointment import ACTIVE_STATUSES, Appointment, AppointmentStatus
+from app.models.notification import NotificationType
 from app.models.user import RoleEnum, User
 from app.schemas.patient import PatientCreate, PatientOut, PatientUpdate
 from app.services.audit import record_audit_log
+from app.services.formatting import format_dt
+from app.services.notifications import notify
+from app.services.waitlist import recheck_waitlist_after_cancellation
 
 router = APIRouter(tags=["patients"])
 
@@ -125,6 +130,39 @@ def delete_patient(
 ) -> None:
     patient = _get_owned_patient(db, patient_id, current_user)
     patient.deleted_at = datetime.now(UTC)
+
+    # A deleted patient can no longer log in to cancel their own upcoming
+    # appointments, and the room/equipment/attending they hold would
+    # otherwise stay locked indefinitely with no one aware of it.
+    active_appointments = db.scalars(
+        select(Appointment).where(
+            Appointment.patient_id == patient.id,
+            Appointment.status.in_(ACTIVE_STATUSES),
+        )
+    )
+    for appointment in active_appointments:
+        appointment.status = AppointmentStatus.cancelled
+        recheck_waitlist_after_cancellation(db, appointment)
+        message = (
+            f"Your appointment with {patient.full_name} on "
+            f"{format_dt(appointment.start_time)} was cancelled because the patient "
+            "record was deleted."
+        )
+        notify(
+            db,
+            notification_type=NotificationType.appointment_status_changed,
+            message=message,
+            recipient_id=appointment.student_id,
+            related_appointment_id=appointment.id,
+        )
+        if appointment.attending_id is not None:
+            notify(
+                db,
+                notification_type=NotificationType.appointment_status_changed,
+                message=message,
+                recipient_id=appointment.attending_id,
+                related_appointment_id=appointment.id,
+            )
 
     record_audit_log(
         db,

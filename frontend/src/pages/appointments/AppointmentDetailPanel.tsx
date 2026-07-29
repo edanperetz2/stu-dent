@@ -49,10 +49,12 @@ const ACTION_FUNCTIONS: Record<
   no_show: markNoShow,
 }
 
-// These three finalize the appointment (or, for cancel, end it outright) --
-// worth a confirmation step before firing, unlike accept/approve/reject/edit
-// which just move it forward in the normal flow.
+// Reject and cancel both end the appointment outright, and complete/no_show
+// finalize it -- all four are just as final as each other and worth a
+// confirmation step, unlike accept/approve/edit which just move it forward
+// in the normal flow.
 const CONFIRM_MESSAGES: Partial<Record<AppointmentActionName, string>> = {
+  reject: 'This will reject the appointment request.',
   cancel: 'This will cancel the appointment.',
   complete: 'This will mark the appointment as completed.',
   no_show: 'This will mark the appointment as a no-show.',
@@ -66,6 +68,44 @@ interface EditFormValues {
   room_id: string | null
   equipment_id: string | null
   notes: string
+}
+
+interface ConflictPayloadOverrides {
+  attending_id?: string | null
+  room_id?: string | null
+  equipment_id?: string | null
+  start_time?: string
+  end_time?: string
+  notes?: string | null
+}
+
+/** Rebuilds the request that just 409'd (accept's room-only payload, or
+ * edit's full-form payload) into the shape ConflictResolutionModal's
+ * "join the waitlist with this exact request" needs -- deduped from two
+ * near-identical inline reconstructions. `overrides` uses an explicit
+ * `!== undefined` check (not `??`) so a deliberate `null` (e.g. clearing
+ * notes in the edit form) is respected instead of falling back to the
+ * appointment's old value. */
+function buildConflictPayload(
+  appointment: Appointment,
+  overrides: ConflictPayloadOverrides = {},
+): AppointmentCreateInput {
+  const attending_id =
+    overrides.attending_id !== undefined ? overrides.attending_id : appointment.attending_id
+  const room_id = overrides.room_id !== undefined ? overrides.room_id : appointment.room_id
+  const equipment_id =
+    overrides.equipment_id !== undefined ? overrides.equipment_id : appointment.equipment_id
+  const notes = overrides.notes !== undefined ? overrides.notes : appointment.notes
+
+  return {
+    patient_id: appointment.patient_id,
+    attending_id: attending_id ?? undefined,
+    room_id: room_id ?? undefined,
+    equipment_id: equipment_id ?? undefined,
+    start_time: overrides.start_time ?? appointment.start_time,
+    end_time: overrides.end_time ?? appointment.end_time,
+    notes: notes ?? undefined,
+  }
 }
 
 interface AppointmentDetailPanelProps {
@@ -140,15 +180,7 @@ export function AppointmentDetailPanel({
     onError: (err, roomId) => {
       if (err instanceof ApiError && err.status === 409 && err.conflicts?.length) {
         setConflictState({
-          payload: {
-            patient_id: appointment.patient_id,
-            attending_id: appointment.attending_id ?? undefined,
-            room_id: roomId ?? appointment.room_id ?? undefined,
-            equipment_id: appointment.equipment_id ?? undefined,
-            start_time: appointment.start_time,
-            end_time: appointment.end_time,
-            notes: appointment.notes ?? undefined,
-          },
+          payload: buildConflictPayload(appointment, { room_id: roomId }),
           conflicts: err.conflicts,
         })
         return
@@ -171,6 +203,11 @@ export function AppointmentDetailPanel({
     },
     validate: {
       room_id: (value) => (value ? null : 'Room is required'),
+      start_time: (value) => (value ? null : 'Start time is required'),
+      end_time: (value, values) =>
+        value && values.start_time && value <= values.start_time
+          ? 'End time must be after start time'
+          : null,
     },
   })
 
@@ -189,15 +226,14 @@ export function AppointmentDetailPanel({
       // `appointment` is needed here.
       if (err instanceof ApiError && err.status === 409 && err.conflicts?.length) {
         setConflictState({
-          payload: {
-            patient_id: appointment.patient_id,
-            attending_id: payload.attending_id ?? undefined,
-            room_id: payload.room_id ?? undefined,
-            equipment_id: payload.equipment_id ?? undefined,
-            start_time: payload.start_time!,
-            end_time: payload.end_time!,
-            notes: payload.notes ?? undefined,
-          },
+          payload: buildConflictPayload(appointment, {
+            attending_id: payload.attending_id,
+            room_id: payload.room_id,
+            equipment_id: payload.equipment_id,
+            start_time: payload.start_time,
+            end_time: payload.end_time,
+            notes: payload.notes,
+          }),
           conflicts: err.conflicts,
         })
         return

@@ -19,7 +19,7 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { listAttendings } from '../../api/attendings'
 import { apiErrorMessage } from '../../api/httpClient'
 import {
@@ -122,9 +122,18 @@ export function MessagesPage() {
       }),
   })
 
+  // Set right before an explicit "Mark unread" click, so the auto-mark-read
+  // effect below (which also reacts to that same has_unread flag flipping
+  // true) can tell "the user just asked for this" apart from "a live
+  // message arrived" and skip re-marking it read out from under them --
+  // without this it flipped back to read within one refetch cycle, every
+  // time, since the button only renders while the thread is selected.
+  const justMarkedUnreadRef = useRef(false)
+
   const markUnreadMutation = useMutation({
     mutationFn: (target: MessageTarget) => markUnread(token, target),
     onSuccess: () => {
+      justMarkedUnreadRef.current = true
       queryClient.invalidateQueries({ queryKey: ['messages', 'unread-count'] })
       queryClient.invalidateQueries({ queryKey: ['messages', 'thread-summaries'] })
     },
@@ -144,6 +153,10 @@ export function MessagesPage() {
     // the second trigger, an actively-open conversation kept showing an
     // unread badge until the user navigated away and back.
     if (selected && selectedHasUnread) {
+      if (justMarkedUnreadRef.current) {
+        justMarkedUnreadRef.current = false
+        return
+      }
       markReadMutation.mutate(selected.target)
     }
     // Only re-run when the selected conversation or its live unread flag
