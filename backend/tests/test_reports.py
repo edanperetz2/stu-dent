@@ -135,3 +135,33 @@ def test_generate_scheduled_reports_idempotent(client, db_session, monkeypatch):
 
     second = generate_scheduled_reports(db_session)
     assert second == 0
+
+
+def test_generate_scheduled_reports_one_recipient_failing_does_not_block_others(
+    client, db_session, monkeypatch
+):
+    # A single bad Ollama response/exception for one recipient must not
+    # abort the whole job -- everyone after them in the loop still gets
+    # their report this pass.
+    register_and_login(client, "rep-job-s2@example.com", role="student")
+    register_and_login(client, "rep-job-s3@example.com", role="student")
+
+    from app.services import report_assistant
+
+    real_generate = report_assistant.generate_periodic_report
+    call_count = 0
+
+    def flaky_generate(db, recipient, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("simulated Ollama failure")
+        return real_generate(db, recipient, **kwargs)
+
+    monkeypatch.setattr(report_assistant, "generate_periodic_report", flaky_generate)
+    monkeypatch.setattr("app.jobs.reports.generate_periodic_report", flaky_generate)
+    _mock_ollama_router(monkeypatch, narrate={"summary": "ok"})
+
+    generated = generate_scheduled_reports(db_session)
+    # 2 recipients x 2 period types = 4 attempts, 1 fails -> 3 succeed.
+    assert generated == 3

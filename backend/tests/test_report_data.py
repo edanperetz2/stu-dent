@@ -222,6 +222,35 @@ def test_time_impact_excludes_appointments_outside_window(client, db_session):
     assert results == []
 
 
+def test_resource_utilization_clips_boundary_spanning_appointment_to_overlap(client, db_session):
+    admin_token = register_and_login(client, "rd-admin4@example.com", role="admin")
+    student_token = register_and_login(client, "rd-s10@example.com", role="student")
+    student_id = client.get("/users/me", headers=auth_header(student_token)).json()["id"]
+    patient_id = create_patient(client, student_token)
+    room_id = create_room(client, admin_token, name="Room RD-D")
+
+    now = datetime.now(UTC)
+    period_start = now - timedelta(days=7)
+    # Starts 1 hour before the period and runs 1 hour into it -- only the
+    # 1 hour that actually falls inside [period_start, now) should count,
+    # and the appointment must not be excluded outright for starting
+    # before the window.
+    _make_appointment(
+        db_session,
+        student_id=student_id,
+        patient_id=patient_id,
+        room_id=room_id,
+        status=AppointmentStatus.completed,
+        start_time=period_start - timedelta(hours=1),
+        end_time=period_start + timedelta(hours=1),
+    )
+
+    results = resource_utilization(db_session, start=period_start, end=now)
+    room_d = next(r for r in results if r["resource_name"] == "Room RD-D")
+    assert room_d["booked_hours"] == 1.0
+    assert room_d["appointment_count"] == 1
+
+
 def test_time_impact_returns_empty_for_non_student_non_attending_scope(client, db_session):
     admin_token = register_and_login(client, "rd-admin2@example.com", role="admin")
     admin_id = client.get("/users/me", headers=auth_header(admin_token)).json()["id"]

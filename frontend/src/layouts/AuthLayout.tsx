@@ -20,6 +20,7 @@ export function AuthLayout() {
             src="/stu-dent-logo.png"
             alt="Stu-Dent logo"
             w={300}
+            h={300}
             mx="auto"
           />
           <Title order={2} ta="center">

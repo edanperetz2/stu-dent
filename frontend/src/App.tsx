@@ -1,7 +1,6 @@
 import '@mantine/core/styles.css'
 import '@mantine/notifications/styles.css'
 import '@mantine/dates/styles.css'
-import 'react-big-calendar/lib/css/react-big-calendar.css'
 
 import { MantineProvider } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
@@ -11,7 +10,9 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { RealtimeProvider } from './realtime/RealtimeContext'
 import { AppRouter } from './router/AppRouter'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 30_000 } },
+})
 
 function App() {
   return (

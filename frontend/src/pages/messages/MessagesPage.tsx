@@ -216,22 +216,37 @@ export function MessagesPage() {
     return [...students, ...attendings]
   }, [allStudents, allAttendings, principal])
 
-  const contactItems: Selection[] = (contacts ?? []).map((c) =>
-    isAdmin
-      ? { target: { kind: 'admin', ownerId: c.id }, label: `${c.full_name} (${c.role})` }
-      : { target: { kind: 'direct', otherUserId: c.id }, label: c.full_name },
+  const contactItems: Selection[] = useMemo(
+    () =>
+      (contacts ?? []).map((c) =>
+        isAdmin
+          ? { target: { kind: 'admin', ownerId: c.id }, label: `${c.full_name} (${c.role})` }
+          : { target: { kind: 'direct', otherUserId: c.id }, label: c.full_name },
+      ),
+    [contacts, isAdmin],
   )
 
-  const groupItems: Selection[] = (groups ?? []).map((g) => ({
-    target: { kind: 'group', conversationId: g.id },
-    label: g.title,
-  }))
-
-  const sortedContactItems = sortByActivity(
-    isAdmin ? contactItems : [...contactItems, { target: { kind: 'admin' }, label: 'Admin' }],
-    summaryByKey,
+  const groupItems: Selection[] = useMemo(
+    () =>
+      (groups ?? []).map((g) => ({
+        target: { kind: 'group', conversationId: g.id },
+        label: g.title,
+      })),
+    [groups],
   )
-  const sortedGroupItems = sortByActivity(groupItems, summaryByKey)
+
+  const sortedContactItems = useMemo(
+    () =>
+      sortByActivity(
+        isAdmin ? contactItems : [...contactItems, { target: { kind: 'admin' }, label: 'Admin' }],
+        summaryByKey,
+      ),
+    [contactItems, isAdmin, summaryByKey],
+  )
+  const sortedGroupItems = useMemo(
+    () => sortByActivity(groupItems, summaryByKey),
+    [groupItems, summaryByKey],
+  )
 
   const selectedGroupMembers = useMemo(() => {
     if (!selected || selected.target.kind !== 'group') return undefined

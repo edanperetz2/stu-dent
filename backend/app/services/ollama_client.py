@@ -30,7 +30,8 @@ def generate_json(prompt: str) -> dict | None:
             timeout=settings.ollama_timeout_seconds,
         )
         response.raise_for_status()
-        return json.loads(response.json()["response"])
-    except (httpx.HTTPError, KeyError, ValueError):
+        parsed = json.loads(response.json()["response"])
+        return parsed if isinstance(parsed, dict) else None
+    except (httpx.HTTPError, KeyError, ValueError, TypeError):
         logger.warning("Ollama call failed", exc_info=True)
         return None

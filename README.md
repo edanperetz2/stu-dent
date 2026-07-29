@@ -124,6 +124,39 @@ docker compose exec api black --check .
 docker compose exec frontend npm run lint
 ```
 
+## Updating backend dependencies
+
+`backend/requirements.txt`/`requirements-dev.txt` are the source of truth for
+version ranges; `requirements.lock.txt`/`requirements-dev.lock.txt` are
+hash-locked (`pip-compile --generate-hashes`) and are what actually gets
+installed (`Dockerfile`, CI). After changing a version range, regenerate both
+lock files from a `python:3.12-slim` container so hashes match the image:
+
+```powershell
+docker run --rm -v "${PWD}/backend:/work" -w /work python:3.12-slim bash -c "
+  pip install --no-cache-dir pip-tools &&
+  pip-compile requirements.txt --generate-hashes --output-file=requirements.lock.txt &&
+  pip-compile requirements-dev.txt --generate-hashes --output-file=requirements-dev.lock.txt
+"
+```
+
+Commit all four files together.
+
+## Base image digests
+
+`backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`, and
+`.github/workflows/ci.yml` pin their base/service images
+(`python:3.12-slim`, `node:22-alpine`, `postgres:16`) by digest, not just tag,
+so a build a year from now uses the exact same image bytes as today. To
+intentionally pick up a new patch release, re-pull and re-pin:
+
+```powershell
+docker pull python:3.12-slim
+docker inspect --format='{{index .RepoDigests 0}}' python:3.12-slim
+```
+
+then update the `@sha256:...` suffix everywhere that image is referenced.
+
 ## Known limitations
 
 - `POST /auth/register` accepts a `role` field with no admin gating — anyone

@@ -90,4 +90,5 @@ def downgrade() -> None:
     op.drop_table('conversation_participants')
     op.drop_index(op.f('ix_conversations_direct_key'), table_name='conversations')
     op.drop_table('conversations')
+    sa.Enum(name='conversation_kind_enum').drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###

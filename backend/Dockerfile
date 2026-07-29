@@ -1,9 +1,9 @@
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 
 WORKDIR /app
 
-COPY requirements.txt requirements-dev.txt ./
-RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY requirements.txt requirements-dev.txt requirements.lock.txt requirements-dev.lock.txt ./
+RUN pip install --no-cache-dir --require-hashes -r requirements-dev.lock.txt
 
 COPY . .
 RUN chmod +x entrypoint.sh

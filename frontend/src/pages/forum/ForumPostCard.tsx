@@ -3,7 +3,7 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { IconMessageCircle, IconUser } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import {
   createComment,
   deleteComment,
@@ -27,13 +27,19 @@ import { formatDateTime } from '../../utils/dates'
 interface ForumPostCardProps {
   post: ForumPost
   expanded: boolean
-  onToggleExpand: () => void
+  onToggleExpand: (postId: string) => void
 }
 
 /** A single feed card: collapsed shows a tweet-like preview (avatar, title,
  * truncated body, vote counters, reply count); expanded (in place, no route
- * change) reveals the full body plus the reply thread inline underneath. */
-export function ForumPostCard({ post, expanded, onToggleExpand }: ForumPostCardProps) {
+ * change) reveals the full body plus the reply thread inline underneath.
+ * Memoized -- `onToggleExpand` is a stable callback (see ForumListPage), so
+ * expanding one post no longer re-renders every other card in the feed. */
+export const ForumPostCard = memo(function ForumPostCard({
+  post,
+  expanded,
+  onToggleExpand,
+}: ForumPostCardProps) {
   const token = useAuthToken()
   const { principal } = useAuth()
   const queryClient = useQueryClient()
@@ -144,11 +150,11 @@ export function ForumPostCard({ post, expanded, onToggleExpand }: ForumPostCardP
         wrap="nowrap"
         p="md"
         style={{ cursor: 'pointer' }}
-        onClick={onToggleExpand}
+        onClick={() => onToggleExpand(post.id)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
-            onToggleExpand()
+            onToggleExpand(post.id)
           }
         }}
         tabIndex={0}
@@ -293,4 +299,4 @@ export function ForumPostCard({ post, expanded, onToggleExpand }: ForumPostCardP
       )}
     </Stack>
   )
-}
+})

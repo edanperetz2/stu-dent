@@ -24,8 +24,19 @@ _UTILIZED_STATUSES = (
 _LOST_TIME_STATUSES = (AppointmentStatus.cancelled, AppointmentStatus.no_show)
 
 
-def _booked_hours(appointments: list[Appointment]) -> float:
-    total_seconds = sum((a.end_time - a.start_time).total_seconds() for a in appointments)
+def _overlap_seconds(appointment: Appointment, *, start: datetime, end: datetime) -> float:
+    """Seconds of `appointment` that actually fall inside [start, end) --
+    an appointment starting before `end` but running past it (or vice
+    versa) should only be credited for the portion that overlaps the
+    period, not its full duration.
+    """
+    overlap_start = max(appointment.start_time, start)
+    overlap_end = min(appointment.end_time, end)
+    return max((overlap_end - overlap_start).total_seconds(), 0.0)
+
+
+def _booked_hours(appointments: list[Appointment], *, start: datetime, end: datetime) -> float:
+    total_seconds = sum(_overlap_seconds(a, start=start, end=end) for a in appointments)
     return round(total_seconds / 3600, 2)
 
 
@@ -40,8 +51,8 @@ def resource_utilization(db: Session, *, start: datetime, end: datetime) -> list
         db.scalars(
             select(Appointment).where(
                 Appointment.status.in_(_UTILIZED_STATUSES),
-                Appointment.start_time >= start,
                 Appointment.start_time < end,
+                Appointment.end_time > start,
             )
         )
     )
@@ -56,7 +67,7 @@ def resource_utilization(db: Session, *, start: datetime, end: datetime) -> list
         count_by_id: dict[uuid.UUID, int] = {}
         for resource in resources:
             matching = [a for a in appointments if getattr(a, id_field) == resource.id]
-            hours_by_id[resource.id] = _booked_hours(matching)
+            hours_by_id[resource.id] = _booked_hours(matching, start=start, end=end)
             count_by_id[resource.id] = len(matching)
 
         mean_hours = sum(hours_by_id.values()) / len(resources) if resources else 0.0
@@ -87,8 +98,8 @@ def time_impact(db: Session, *, scope_user: User, start: datetime, end: datetime
     """
     stmt = select(Appointment).where(
         Appointment.status.in_(_LOST_TIME_STATUSES),
-        Appointment.start_time >= start,
         Appointment.start_time < end,
+        Appointment.end_time > start,
     )
     if scope_user.role == RoleEnum.student:
         stmt = stmt.where(Appointment.student_id == scope_user.id)
@@ -101,7 +112,7 @@ def time_impact(db: Session, *, scope_user: User, start: datetime, end: datetime
 
     tallies: dict[tuple[str, uuid.UUID], dict] = {}
     for appointment in appointments:
-        minutes_lost = (appointment.end_time - appointment.start_time).total_seconds() / 60
+        minutes_lost = _overlap_seconds(appointment, start=start, end=end) / 60
 
         actors: list[tuple[str, uuid.UUID]] = [("patient", appointment.patient_id)]
         if scope_user.role == RoleEnum.student and appointment.attending_id is not None:

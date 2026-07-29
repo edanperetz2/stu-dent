@@ -3,7 +3,7 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { createPost, listPosts, type ForumPostCreateInput } from '../../api/forum'
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuth } from '../../auth/AuthContext'
@@ -49,8 +49,17 @@ export function ForumListPage() {
     },
   })
 
-  const sortedPosts = [...(posts ?? [])].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  const sortedPosts = useMemo(
+    () =>
+      [...(posts ?? [])].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      ),
+    [posts],
+  )
+
+  const toggleExpand = useCallback(
+    (postId: string) => setExpandedPostId((current) => (current === postId ? null : postId)),
+    [],
   )
 
   return (
@@ -69,9 +78,7 @@ export function ForumListPage() {
             key={post.id}
             post={post}
             expanded={expandedPostId === post.id}
-            onToggleExpand={() =>
-              setExpandedPostId((current) => (current === post.id ? null : post.id))
-            }
+            onToggleExpand={toggleExpand}
           />
         ))}
       </Stack>

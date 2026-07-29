@@ -20,7 +20,7 @@ jobs:
 
       - name: Install backend lint deps
         working-directory: backend
-        run: pip install -r requirements-dev.txt
+        run: pip install --require-hashes -r requirements-dev.lock.txt
 
       - name: Ruff check
         working-directory: backend
@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
         env:
           POSTGRES_USER: stu_dent
           POSTGRES_PASSWORD: stu_dent
@@ -76,9 +76,7 @@ jobs:
 
       - name: Install backend deps
         working-directory: backend
-        run: |
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+        run: pip install --require-hashes -r requirements-dev.lock.txt
 
       - name: Run Alembic migrations
         working-directory: backend

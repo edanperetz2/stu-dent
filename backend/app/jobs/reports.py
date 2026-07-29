@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
@@ -7,6 +8,8 @@ from app.models.report import Report, ReportPeriodType
 from app.models.user import RoleEnum, User
 from app.services.report_assistant import generate_periodic_report
 from app.services.users import active_user_filters
+
+logger = logging.getLogger(__name__)
 
 
 def _period_bounds(period_type: ReportPeriodType, *, now: datetime) -> tuple[datetime, datetime]:
@@ -56,9 +59,23 @@ def generate_scheduled_reports(db: Session) -> int:
         for recipient in recipients:
             if recipient.id in already_generated:
                 continue
-            generate_periodic_report(
-                db, recipient, period_type=period_type, period_start=start, period_end=end
-            )
+            try:
+                generate_periodic_report(
+                    db, recipient, period_type=period_type, period_start=start, period_end=end
+                )
+            except Exception:
+                # One recipient's report failing (e.g. a malformed Ollama
+                # response) must not block reports for everyone after them
+                # in this pass -- idempotency means it's simply retried
+                # next time the worker runs this job.
+                logger.warning(
+                    "Failed to generate %s report for user %s",
+                    period_type.value,
+                    recipient.id,
+                    exc_info=True,
+                )
+                db.rollback()
+                continue
             generated += 1
 
     return generated
