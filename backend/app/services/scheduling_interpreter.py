@@ -9,6 +9,7 @@ from app.models.room import Room
 from app.models.user import RoleEnum, User
 from app.schemas.scheduling_assistant import InterpretedAppointmentOut
 from app.services import ollama_client
+from app.services.formatting import DISPLAY_TIMEZONE
 from app.services.nl_dates import TIME_OF_DAY_HOURS, resolve_relative_date
 from app.services.users import active_user_filters
 
@@ -105,7 +106,11 @@ def interpret_request(db: Session, *, user: User, text: str) -> InterpretedAppoi
             warnings.append(f'Couldn\'t understand the date "{date_phrase}" -- pick one manually.')
         else:
             hour = TIME_OF_DAY_HOURS.get(raw.get("time_of_day"), TIME_OF_DAY_HOURS["morning"])
-            start_time = datetime.combine(resolved_date, time(hour=hour), tzinfo=UTC)
+            # tzinfo=DISPLAY_TIMEZONE (not UTC): `hour` is a local Israel
+            # wall-clock hour ("afternoon" -> 13:00 local), so it must be
+            # tagged with the zone it was meant in, not stamped UTC -- the
+            # same instant-vs-wall-clock distinction format_dt exists for.
+            start_time = datetime.combine(resolved_date, time(hour=hour), tzinfo=DISPLAY_TIMEZONE)
             end_time = start_time + timedelta(minutes=DEFAULT_APPOINTMENT_MINUTES)
 
     notes = raw.get("notes")
