@@ -7,8 +7,11 @@ from app.models.user import RoleEnum
 
 class RegisterIn(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8)
-    full_name: str
+    # max_length guards argon2 hashing (and later, verification) from being
+    # handed an arbitrarily large attacker-supplied string -- hash cost
+    # scales with input size, so this bounds the CPU one request can burn.
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str = Field(min_length=1, max_length=200)
     role: RoleEnum
     # Required (and only meaningful) when role == patient: the student the
     # patient is registering under. Validated further in the route (must
@@ -26,7 +29,9 @@ class RegisterIn(BaseModel):
 
 class LoginIn(BaseModel):
     email: EmailStr
-    password: str
+    # Same argon2-cost reasoning as RegisterIn.password -- login is
+    # unauthenticated and repeatable, so this matters at least as much here.
+    password: str = Field(max_length=128)
     # Optional role hint: if provided, the account's actual role must match,
     # or the login is rejected -- lets the frontend offer a role selector at
     # login and have the backend actually enforce it, not just trust the UI.

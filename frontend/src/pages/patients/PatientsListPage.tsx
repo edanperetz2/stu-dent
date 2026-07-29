@@ -58,6 +58,7 @@ export function PatientsListPage() {
       ) : patients?.length === 0 ? (
         <EmptyText>No patients yet. Click "New Patient" to add one.</EmptyText>
       ) : (
+        <Table.ScrollContainer minWidth={500}>
         <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
@@ -114,6 +115,7 @@ export function PatientsListPage() {
             })}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       )}
 
       <Modal opened={opened} onClose={close} title="New Patient">

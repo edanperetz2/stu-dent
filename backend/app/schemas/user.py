@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.user import PreferredTimeOfDay, RoleEnum
 
@@ -33,5 +33,8 @@ class UserSelfUpdate(BaseModel):
     not self-service.
     """
 
-    contact_phone: str | None = None
+    # Input-only constraint (UserOut above is a response schema -- no
+    # max_length there, so a pre-existing row longer than this can't fail
+    # to serialize).
+    contact_phone: str | None = Field(default=None, max_length=32)
     preferred_time_of_day: PreferredTimeOfDay | None = None

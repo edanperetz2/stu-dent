@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.appointment import AppointmentStatus
 
@@ -13,7 +13,7 @@ class AppointmentCreate(BaseModel):
     equipment_id: uuid.UUID | None = None
     start_time: datetime
     end_time: datetime
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5_000)
 
 
 class AppointmentUpdate(BaseModel):
@@ -26,7 +26,7 @@ class AppointmentUpdate(BaseModel):
     # explicit null itself; see PATCH /appointments/{id}.
     room_id: uuid.UUID | None = None
     equipment_id: uuid.UUID | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5_000)
 
 
 class AppointmentAccept(BaseModel):

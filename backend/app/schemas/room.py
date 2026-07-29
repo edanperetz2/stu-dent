@@ -1,15 +1,15 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RoomCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=100)
 
 
 class RoomUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
     is_active: bool | None = None
     # Only meaningful alongside is_active=False -- schedules an automatic
     # reactivation instead of an indefinite one. Reactivating (is_active=True)

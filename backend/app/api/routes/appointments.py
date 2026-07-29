@@ -172,6 +172,12 @@ def list_appointments(
         stmt = stmt.where(Appointment.student_id == current_user.id)
     elif current_user.role == RoleEnum.attending:
         stmt = stmt.where(Appointment.attending_id == current_user.id)
+    # else: admin sees every appointment, unfiltered -- the one branch a
+    # defensive cap actually matters for at realistic scale. Defensive cap,
+    # not full pagination (out of scope for this fix); appointments are
+    # never hard-deleted, so this grows monotonically for the life of the
+    # app.
+    stmt = stmt.order_by(Appointment.start_time.desc()).limit(500)
     return list(db.scalars(stmt))
 
 

@@ -65,10 +65,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       // The token is sent as the first message instead of a `?token=`
       // query param -- a query string ends up in access logs/proxy logs/
       // browser history, and a leaked log line would be a replayable
-      // bearer token for the rest of its life.
+      // bearer token for the rest of its life. `isConnected` isn't flipped
+      // true here -- the socket is accepted before the server has
+      // authenticated it, so a bad token still opens the socket and only
+      // gets closed a moment later; onmessage below waits for the
+      // server's own "connected" ack instead.
       socket.onopen = () => {
         socket.send(JSON.stringify({ token: principal.token }))
-        setIsConnected(true)
       }
 
       socket.onclose = () => {
@@ -80,7 +83,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data) as RealtimeEvent
-        if (data.event === 'notification') {
+        if (data.event === 'connected') {
+          setIsConnected(true)
+        } else if (data.event === 'notification') {
           const notificationType = data.notification_type as NotificationType | undefined
           const message = data.message as string | undefined
           if (notificationType && message && TOAST_NOTIFICATION_TYPES.has(notificationType)) {

@@ -28,7 +28,12 @@ def list_users(
     current_user: User = Depends(require_role(RoleEnum.admin)),
     db: Session = Depends(get_db),
 ) -> list[User]:
-    return list(db.scalars(select(User).where(User.deleted_at.is_(None))))
+    # Defensive cap, not full pagination (out of scope for this fix) --
+    # nothing on this table is ever hard-deleted, so it grows monotonically
+    # for the life of the app; this just guarantees the response can never
+    # be truly unbounded.
+    stmt = select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc()).limit(500)
+    return list(db.scalars(stmt))
 
 
 @router.get("/admin/users/{user_id}", response_model=UserOut)

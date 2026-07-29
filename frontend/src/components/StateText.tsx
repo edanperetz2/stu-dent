@@ -12,3 +12,11 @@ export function LoadingText() {
 export function EmptyText({ children }: { children: ReactNode }) {
   return <Text c="dimmed">{children}</Text>
 }
+
+/** A real query failure (401/500/network) shown distinctly from an empty
+ * state -- several pages used to only check isLoading/data and rendered
+ * their empty-state text for a failed request too, indistinguishable from
+ * genuinely having no data. */
+export function ErrorText({ children }: { children: ReactNode }) {
+  return <Text c="red">{children}</Text>
+}

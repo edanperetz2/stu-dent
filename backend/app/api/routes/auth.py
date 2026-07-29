@@ -29,17 +29,17 @@ def _client_ip(request: Request) -> str | None:
 @router.post("/auth/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db)) -> User:
     ip = _client_ip(request)
-    enforce_registration_rate_limit(db, ip_address=ip)
+    email = payload.email.lower()
+    enforce_registration_rate_limit(db, email=email, ip_address=ip)
     # Recorded unconditionally (success or the 409-already-registered path
-    # below) so the rate limit above counts every attempt from this IP, not
-    # just successful ones -- otherwise probing many emails for the
-    # 409-vs-201 signal would never itself be throttled.
-    record_audit_log(
-        db, action="user_register_attempt", attempted_identifier="register", ip_address=ip
-    )
+    # below), under the real email attempted -- so the per-email check
+    # above counts every attempt at that address, and the per-IP check
+    # counts every attempt from this IP regardless of which email each one
+    # named, without bunching different real registrants' own per-email
+    # counters together.
+    record_audit_log(db, action="user_register_attempt", attempted_identifier=email, ip_address=ip)
     db.commit()
 
-    email = payload.email.lower()
     existing = db.scalar(select(User).where(User.email == email))
     if existing is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")

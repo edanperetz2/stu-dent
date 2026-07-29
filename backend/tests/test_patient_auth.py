@@ -1,6 +1,7 @@
 from tests.helpers import (
     auth_header,
     confirm_patient,
+    create_default_room,
     create_patient,
     login,
     register,
@@ -71,6 +72,95 @@ def test_soft_deleted_patient_not_accessible(client):
 
     list_response = client.get("/patients", headers=auth_header(token))
     assert list_response.json() == []
+
+
+def test_deleting_patient_cancels_active_appointments_and_notifies_attending_not_self(client):
+    student_token = register_and_login(client, "patauth-stud9@example.com", role="student")
+    attending_token = register_and_login(client, "patauth-att9@example.com", role="attending")
+    attending_id = client.get("/users/me", headers=auth_header(attending_token)).json()["id"]
+    patient_id = create_patient(client, student_token, email="patauth-p9@example.com")
+    room_id = create_default_room(client)
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "attending_id": attending_id,
+            "room_id": room_id,
+            "start_time": "2026-10-01T09:00:00+00:00",
+            "end_time": "2026-10-01T10:00:00+00:00",
+        },
+        headers=auth_header(student_token),
+    ).json()
+    assert appointment["status"] in ("awaiting_confirmation", "confirmed")
+
+    delete_response = client.delete(f"/patients/{patient_id}", headers=auth_header(student_token))
+    assert delete_response.status_code == 204
+
+    resulting = client.get(
+        f"/appointments/{appointment['id']}", headers=auth_header(student_token)
+    ).json()
+    assert resulting["status"] == "cancelled"
+
+    # The attending (not the actor) gets a real notification about it.
+    attending_notifications = client.get(
+        "/notifications", headers=auth_header(attending_token)
+    ).json()
+    assert any(
+        n["notification_type"] == "appointment_status_changed"
+        and n["related_appointment_id"] == appointment["id"]
+        for n in attending_notifications
+    )
+
+    # The deleting student does NOT get notified about their own action.
+    student_notifications = client.get("/notifications", headers=auth_header(student_token)).json()
+    assert not any(
+        n["notification_type"] == "appointment_status_changed"
+        and n["related_appointment_id"] == appointment["id"]
+        for n in student_notifications
+    )
+
+
+def test_deleting_patient_promotes_a_waitlist_entry_for_the_freed_room(client):
+    student_token = register_and_login(client, "patauth-stud10@example.com", role="student")
+    doomed_patient_id = create_patient(client, student_token, email="patauth-p10@example.com")
+    room_id = create_default_room(client)
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": doomed_patient_id,
+            "room_id": room_id,
+            "start_time": "2026-10-02T09:00:00+00:00",
+            "end_time": "2026-10-02T10:00:00+00:00",
+        },
+        headers=auth_header(student_token),
+    ).json()
+    assert appointment["status"] == "confirmed"
+
+    other_student_token = register_and_login(client, "patauth-stud10b@example.com", role="student")
+    waiting_patient_id = create_patient(
+        client, other_student_token, email="patauth-p10b@example.com"
+    )
+    entry = client.post(
+        "/waitlist",
+        json={
+            "patient_id": waiting_patient_id,
+            "room_id": room_id,
+            "start_time": "2026-10-02T09:00:00+00:00",
+            "end_time": "2026-10-02T10:00:00+00:00",
+        },
+        headers=auth_header(other_student_token),
+    ).json()
+    assert entry["status"] == "active"
+
+    client.delete(f"/patients/{doomed_patient_id}", headers=auth_header(student_token))
+
+    resolved_entry = client.get(
+        f"/waitlist/{entry['id']}", headers=auth_header(other_student_token)
+    ).json()
+    assert resolved_entry["status"] == "booked"
+    assert resolved_entry["resulting_appointment_id"] is not None
 
 
 def test_patient_email_must_be_unique(client):

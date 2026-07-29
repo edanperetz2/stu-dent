@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.report import ReportPeriodType
 
@@ -20,4 +20,4 @@ class ReportOut(BaseModel):
 
 
 class AskQuestionIn(BaseModel):
-    question: str
+    question: str = Field(min_length=1, max_length=1_000)

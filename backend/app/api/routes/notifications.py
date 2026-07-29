@@ -23,7 +23,10 @@ def list_notifications(
     stmt = select(Notification).where(Notification.recipient_id == current_user.id)
     if unread_only:
         stmt = stmt.where(Notification.read_at.is_(None))
-    stmt = stmt.order_by(Notification.sequence.desc())
+    # Defensive cap, not full pagination (out of scope for this fix) --
+    # notifications are never hard-deleted, so this list grows monotonically
+    # for the life of a single account.
+    stmt = stmt.order_by(Notification.sequence.desc()).limit(500)
     return list(db.scalars(stmt))
 
 

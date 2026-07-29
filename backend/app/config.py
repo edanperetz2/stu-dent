@@ -27,6 +27,12 @@ class Settings(BaseSettings):
 
     registration_rate_limit_max_attempts: int = 10
     registration_rate_limit_window_minutes: int = 15
+    # A separate, much higher per-IP-only ceiling -- a shared classroom/
+    # clinic WiFi with dozens of *different* real people registering in one
+    # onboarding session must not get bunched into the same tight counter
+    # as repeated attempts at one specific email, or the last people
+    # through the door get falsely locked out.
+    registration_rate_limit_max_attempts_per_ip: int = 50
 
     smtp_host: str = "mailhog"
     smtp_port: int = 1025
@@ -48,14 +54,21 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.frontend_origins.split(",") if origin.strip()]
 
 
-settings = Settings()
+def warn_if_placeholder_jwt_secret(jwt_secret_key: str) -> None:
+    """A warning, not a startup crash -- this is a course project that needs
+    to stay reliably reachable for grading, so misconfiguration should be
+    loudly visible in the logs rather than taking the whole app down.
+    Factored out (not inlined below) so a test can call it directly with a
+    fixed string, instead of needing to reload this whole module (with its
+    real Settings()/.env side effects) just to exercise the check.
+    """
+    if jwt_secret_key in _KNOWN_PLACEHOLDER_JWT_SECRETS:
+        logger.warning(
+            "JWT_SECRET_KEY is still set to a known placeholder value -- anyone can forge "
+            "a valid access token for any user/role. Set a real random secret in .env "
+            "before this is reachable from anywhere but localhost."
+        )
 
-if settings.jwt_secret_key in _KNOWN_PLACEHOLDER_JWT_SECRETS:
-    # A warning, not a startup crash -- this is a course project that needs
-    # to stay reliably reachable for grading, so misconfiguration should be
-    # loudly visible in the logs rather than taking the whole app down.
-    logger.warning(
-        "JWT_SECRET_KEY is still set to a known placeholder value -- anyone can forge "
-        "a valid access token for any user/role. Set a real random secret in .env "
-        "before this is reachable from anywhere but localhost."
-    )
+
+settings = Settings()
+warn_if_placeholder_jwt_secret(settings.jwt_secret_key)

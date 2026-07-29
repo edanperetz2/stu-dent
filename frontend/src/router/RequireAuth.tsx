@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
 import type { Role } from '../api/types'
+import { useAuth } from '../auth/AuthContext'
+import { RouteFallback } from '../components/RouteFallback'
 
 interface RequireAuthProps {
   /** Restrict to specific roles; omit to allow any authenticated role. */
@@ -10,7 +11,9 @@ interface RequireAuthProps {
 export function RequireAuth({ roles }: RequireAuthProps) {
   const { principal, isLoading } = useAuth()
 
-  if (isLoading) return null
+  // A hard refresh of any protected route used to show a blank flash here
+  // instead of the same loading fallback every lazy-loaded page chunk uses.
+  if (isLoading) return <RouteFallback />
 
   if (!principal) return <Navigate to="/login" replace />
 

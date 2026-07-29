@@ -7,9 +7,9 @@ from app.models.feedback import FeedbackAuthorRole
 
 
 class FeedbackCreate(BaseModel):
-    went_well: str = Field(min_length=1)
-    could_improve: str = Field(min_length=1)
-    additional_comments: str | None = None
+    went_well: str = Field(min_length=1, max_length=5_000)
+    could_improve: str = Field(min_length=1, max_length=5_000)
+    additional_comments: str | None = Field(default=None, max_length=5_000)
 
 
 class FeedbackOut(BaseModel):

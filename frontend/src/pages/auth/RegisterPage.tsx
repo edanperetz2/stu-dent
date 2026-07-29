@@ -41,7 +41,7 @@ export function RegisterPage() {
     },
   })
 
-  const { data: students } = useQuery({
+  const { data: students, isLoading: studentsLoading } = useQuery({
     queryKey: ['students'],
     queryFn: listStudents,
     enabled: form.values.role === 'patient',
@@ -99,7 +99,14 @@ export function RegisterPage() {
         {form.values.role === 'patient' && (
           <Select
             label="Choose your student"
-            placeholder="Select a student"
+            placeholder={
+              studentsLoading
+                ? 'Loading students...'
+                : students?.length === 0
+                  ? 'No students available yet'
+                  : 'Select a student'
+            }
+            disabled={studentsLoading || students?.length === 0}
             data={(students ?? []).map((s) => ({ value: s.id, label: s.full_name }))}
             {...form.getInputProps('ownerStudentId')}
           />

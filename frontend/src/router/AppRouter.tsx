@@ -1,6 +1,6 @@
-import { Center, Loader } from '@mantine/core'
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { RouteFallback } from '../components/RouteFallback'
 import { AppLayout } from '../layouts/AppLayout'
 import { AuthLayout } from '../layouts/AuthLayout'
 import { RequireAuth } from './RequireAuth'
@@ -55,14 +55,6 @@ const ReportsPage = lazy(() =>
 const WaitlistPage = lazy(() =>
   import('../pages/waitlist/WaitlistPage').then((m) => ({ default: m.WaitlistPage })),
 )
-
-function RouteFallback() {
-  return (
-    <Center h="60vh">
-      <Loader />
-    </Center>
-  )
-}
 
 export function AppRouter() {
   return (

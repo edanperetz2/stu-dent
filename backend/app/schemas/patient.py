@@ -12,15 +12,15 @@ class PatientCreate(BaseModel):
     start and the relationship is auto-confirmed (see PatientConfirm for
     the other path -- a patient self-registering via /auth/register)."""
 
-    full_name: str
+    full_name: str = Field(min_length=1, max_length=200)
     email: EmailStr
-    password: str = Field(min_length=8)
-    contact_phone: str | None = None
+    password: str = Field(min_length=8, max_length=128)
+    contact_phone: str | None = Field(default=None, max_length=32)
 
 
 class PatientUpdate(BaseModel):
-    full_name: str | None = None
-    contact_phone: str | None = None
+    full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    contact_phone: str | None = Field(default=None, max_length=32)
     preferred_time_of_day: PreferredTimeOfDay | None = None
 
 

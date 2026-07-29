@@ -6,7 +6,7 @@ import { askQuestion, generateReport, listReports } from '../../api/reports'
 import { apiErrorMessage } from '../../api/httpClient'
 import type { ReportPeriodType } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { EmptyText, LoadingText } from '../../components/StateText'
+import { EmptyText, ErrorText, LoadingText } from '../../components/StateText'
 import { formatDateTime } from '../../utils/dates'
 
 const PERIOD_COLORS: Record<ReportPeriodType, string> = {
@@ -25,7 +25,12 @@ export function ReportsPage() {
   const queryClient = useQueryClient()
   const [question, setQuestion] = useState('')
 
-  const { data: reports, isLoading } = useQuery({
+  const {
+    data: reports,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ['reports'],
     queryFn: () => listReports(token),
   })
@@ -51,6 +56,11 @@ export function ReportsPage() {
     onSuccess: () => {
       invalidate()
       setQuestion('')
+      // The new answer just lands somewhere in a mixed list of periodic
+      // reports, distinguished only by a small "Q&A" badge -- without this,
+      // a user who asks a question has no confirmation anything happened
+      // beyond the textbox clearing.
+      notifications.show({ message: 'Answer added below', color: 'green' })
     },
     onError: (err) => {
       notifications.show({
@@ -90,6 +100,8 @@ export function ReportsPage() {
 
       {isLoading ? (
         <LoadingText />
+      ) : isError ? (
+        <ErrorText>{apiErrorMessage(error, 'Failed to load reports.')}</ErrorText>
       ) : reports?.length === 0 ? (
         <EmptyText>No reports yet.</EmptyText>
       ) : (

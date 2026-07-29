@@ -15,7 +15,7 @@ import { apiErrorMessage } from '../../api/httpClient'
 import type { Feedback, PendingFeedback } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { EmptyText, LoadingText } from '../../components/StateText'
+import { EmptyText, ErrorText, LoadingText } from '../../components/StateText'
 import { formatDateTime } from '../../utils/dates'
 
 interface GroupSpec {
@@ -156,19 +156,34 @@ export function FeedbackPage() {
   const isAttending = principal?.role === 'attending'
   const canGiveFeedback = principal?.role === 'patient' || isAttending
 
-  const { data: pending, isLoading: pendingLoading } = useQuery({
+  const {
+    data: pending,
+    isLoading: pendingLoading,
+    isError: pendingError,
+    error: pendingErrorValue,
+  } = useQuery({
     queryKey: ['feedback', 'pending'],
     queryFn: () => listPendingFeedback(token),
     enabled: canGiveFeedback,
   })
 
-  const { data: given, isLoading: givenLoading } = useQuery({
+  const {
+    data: given,
+    isLoading: givenLoading,
+    isError: givenError,
+    error: givenErrorValue,
+  } = useQuery({
     queryKey: ['feedback', 'given'],
     queryFn: () => listFeedbackGiven(token),
     enabled: canGiveFeedback,
   })
 
-  const { data: received, isLoading: receivedLoading } = useQuery({
+  const {
+    data: received,
+    isLoading: receivedLoading,
+    isError: receivedError,
+    error: receivedErrorValue,
+  } = useQuery({
     queryKey: ['feedback', 'received'],
     queryFn: () => listFeedbackReceived(token),
     enabled: isStudent,
@@ -224,6 +239,8 @@ export function FeedbackPage() {
         </Text>
         {receivedLoading ? (
           <LoadingText />
+        ) : receivedError ? (
+          <ErrorText>{apiErrorMessage(receivedErrorValue, 'Failed to load feedback.')}</ErrorText>
         ) : (
           <FeedbackList
             feedback={received ?? []}
@@ -243,6 +260,10 @@ export function FeedbackPage() {
         <Title order={4}>Pending feedback</Title>
         {pendingLoading ? (
           <LoadingText />
+        ) : pendingError ? (
+          <ErrorText>
+            {apiErrorMessage(pendingErrorValue, 'Failed to load pending feedback.')}
+          </ErrorText>
         ) : (
           <PendingFeedbackSection pending={pending ?? []} onGive={handleGive} />
         )}
@@ -252,6 +273,8 @@ export function FeedbackPage() {
         <Title order={4}>Feedback you&apos;ve given</Title>
         {givenLoading ? (
           <LoadingText />
+        ) : givenError ? (
+          <ErrorText>{apiErrorMessage(givenErrorValue, 'Failed to load feedback.')}</ErrorText>
         ) : (
           <FeedbackList
             feedback={given ?? []}
@@ -266,6 +289,12 @@ export function FeedbackPage() {
       <Modal opened={modalOpened} onClose={closeModal} title="Give feedback" centered>
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
+            {activeItem && (
+              <Text size="sm" c="dimmed">
+                For {activeItem.student_name} &middot; {activeItem.patient_name} &middot;{' '}
+                {formatDateTime(activeItem.appointment_start_time)}
+              </Text>
+            )}
             <Textarea
               label="What went well?"
               autosize

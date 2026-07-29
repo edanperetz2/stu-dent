@@ -1,13 +1,13 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.user import RoleEnum
 
 
 class MessageCreate(BaseModel):
-    body: str
+    body: str = Field(min_length=1, max_length=5_000)
 
 
 class MessageOut(BaseModel):
@@ -37,7 +37,7 @@ class ReadReceiptOut(BaseModel):
 
 
 class GroupCreate(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=200)
     participant_ids: list[uuid.UUID]
 
 

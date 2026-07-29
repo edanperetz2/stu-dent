@@ -226,6 +226,9 @@ def list_posts(
         )
         .where(ForumPost.deleted_at.is_(None))
         .order_by(ForumPost.created_at.desc())
+        # Defensive cap, not full pagination (out of scope for this fix) --
+        # posts are never hard-deleted, so this list grows monotonically.
+        .limit(500)
     )
     return [
         _post_out(post, likes, dislikes, comment_count, my_vote)

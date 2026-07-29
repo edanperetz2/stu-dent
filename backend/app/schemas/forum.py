@@ -2,17 +2,17 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ForumPostCreate(BaseModel):
-    title: str
-    body: str
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=10_000)
 
 
 class ForumPostUpdate(BaseModel):
-    title: str | None = None
-    body: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    body: str | None = Field(default=None, min_length=1, max_length=10_000)
 
 
 class ForumPostOut(BaseModel):
@@ -33,7 +33,7 @@ class ForumPostOut(BaseModel):
 
 
 class ForumCommentCreate(BaseModel):
-    body: str
+    body: str = Field(min_length=1, max_length=5_000)
 
 
 class ForumCommentOut(BaseModel):

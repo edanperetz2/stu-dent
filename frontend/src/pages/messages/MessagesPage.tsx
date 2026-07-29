@@ -265,7 +265,7 @@ export function MessagesPage() {
                 onClick={() => setSelected(item)}
                 rightSection={
                   summaryByKey.get(targetKey(item.target))?.has_unread ? (
-                    <Badge size="xs" circle color="red" />
+                    <Badge size="xs" circle color="red" aria-label="Unread" />
                   ) : undefined
                 }
               />
@@ -294,7 +294,7 @@ export function MessagesPage() {
                 onClick={() => setSelected(item)}
                 rightSection={
                   summaryByKey.get(targetKey(item.target))?.has_unread ? (
-                    <Badge size="xs" circle color="red" />
+                    <Badge size="xs" circle color="red" aria-label="Unread" />
                   ) : undefined
                 }
               />

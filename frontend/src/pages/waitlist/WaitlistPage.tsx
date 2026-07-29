@@ -8,7 +8,7 @@ import { cancelWaitlistEntry, listWaitlistEntries } from '../../api/waitlist'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
-import { LoadingText } from '../../components/StateText'
+import { ErrorText, LoadingText } from '../../components/StateText'
 import { formatDateTime } from '../../utils/dates'
 
 const STATUS_COLORS: Record<WaitlistStatus, string> = {
@@ -35,7 +35,12 @@ export function WaitlistPage() {
   const isPatient = principal?.role === 'patient'
   const canManageOwn = isStudent || isPatient
 
-  const { data: entries, isLoading } = useQuery({
+  const {
+    data: entries,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ['waitlist'],
     queryFn: () => listWaitlistEntries(token),
   })
@@ -71,9 +76,12 @@ export function WaitlistPage() {
 
       {isLoading ? (
         <LoadingText />
+      ) : isError ? (
+        <ErrorText>{apiErrorMessage(error, 'Failed to load the waitlist.')}</ErrorText>
       ) : sortedEntries.length === 0 ? (
         <Text c="dimmed">Nothing on the waitlist.</Text>
       ) : (
+        <Table.ScrollContainer minWidth={600}>
         <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
@@ -133,6 +141,7 @@ export function WaitlistPage() {
             ))}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       )}
     </Stack>
   )

@@ -1,3 +1,12 @@
+import threading
+from datetime import UTC, datetime
+
+from sqlalchemy.orm import Session
+
+from app.models.conversation import Conversation, ConversationKind, ConversationParticipant
+from app.models.user import RoleEnum, User
+from app.services.messaging import direct_key, get_or_create_conversation
+from tests.conftest import engine
 from tests.helpers import (
     auth_header,
     create_and_login_patient,
@@ -641,3 +650,109 @@ def test_thread_summary_marks_group_and_updates_last_message_time(client):
     summary = _summary_for(client, student2_token, f"group:{group['id']}")
     assert summary["has_unread"] is True
     assert summary["last_message_at"] == sent["created_at"]
+
+
+def test_get_or_create_conversation_rescues_concurrent_duplicate_insert():
+    """Real DB-level concurrency guarantee (same pattern as
+    test_appointment_conflicts.py::test_concurrent_overlapping_bookings_only_one_commits),
+    bypassing the client/db_session fixture entirely -- that fixture wraps
+    everything in one connection + SAVEPOINT rolled back at teardown, so
+    rows created through it are invisible to another connection, and the
+    fixture's own transaction can't observe two independent Sessions
+    racing anyway. This uses the real `engine` and two independent
+    `Session`s throughout (setup, the race itself, and cleanup) to prove
+    get_or_create_conversation's SAVEPOINT-based rescue actually works
+    under a real concurrent duplicate-key insert, not just the happy path
+    where the row already exists before the function is ever called.
+    """
+    setup_session = Session(bind=engine)
+    student_id = patient_id = None
+    try:
+        student = User(
+            email="msg-race-student@example.com",
+            hashed_password="x",
+            role=RoleEnum.student,
+            full_name="Race Student",
+        )
+        setup_session.add(student)
+        setup_session.flush()
+        patient = User(
+            email="msg-race-patient@example.com",
+            hashed_password="x",
+            role=RoleEnum.patient,
+            full_name="Race Patient",
+            owner_student_id=student.id,
+            owner_confirmed_at=datetime.now(UTC),
+        )
+        setup_session.add(patient)
+        setup_session.commit()
+        student_id, patient_id = student.id, patient.id
+    finally:
+        setup_session.close()
+
+    key = direct_key(student_id, patient_id)
+
+    barrier = threading.Barrier(2)
+    results: dict[str, str] = {}
+    conversation_ids: dict[str, str] = {}
+
+    def _attempt(name: str) -> None:
+        session = Session(bind=engine)
+        try:
+            barrier.wait()
+            conversation = get_or_create_conversation(
+                session,
+                kind=ConversationKind.direct,
+                key=key,
+                participant_ids=[student_id, patient_id],
+            )
+            session.commit()
+            results[name] = "ok"
+            conversation_ids[name] = str(conversation.id)
+        except Exception:
+            results[name] = "error"
+        finally:
+            session.close()
+
+    thread_a = threading.Thread(target=_attempt, args=("a",))
+    thread_b = threading.Thread(target=_attempt, args=("b",))
+    thread_a.start()
+    thread_b.start()
+    thread_a.join()
+    thread_b.join()
+
+    try:
+        assert results == {"a": "ok", "b": "ok"}
+        assert conversation_ids["a"] == conversation_ids["b"]
+
+        cleanup_session = Session(bind=engine)
+        try:
+            count = (
+                cleanup_session.query(Conversation).filter(Conversation.direct_key == key).count()
+            )
+            assert count == 1
+        finally:
+            cleanup_session.close()
+    finally:
+        teardown_session = Session(bind=engine)
+        try:
+            conversation_ids_to_delete = [
+                row.id
+                for row in teardown_session.query(Conversation).filter(
+                    Conversation.direct_key == key
+                )
+            ]
+            if conversation_ids_to_delete:
+                teardown_session.query(ConversationParticipant).filter(
+                    ConversationParticipant.conversation_id.in_(conversation_ids_to_delete)
+                ).delete(synchronize_session=False)
+                teardown_session.query(Conversation).filter(
+                    Conversation.id.in_(conversation_ids_to_delete)
+                ).delete(synchronize_session=False)
+            if patient_id is not None:
+                teardown_session.query(User).filter(User.id == patient_id).delete()
+            if student_id is not None:
+                teardown_session.query(User).filter(User.id == student_id).delete()
+            teardown_session.commit()
+        finally:
+            teardown_session.close()

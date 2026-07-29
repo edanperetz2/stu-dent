@@ -2,7 +2,18 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Enum, ForeignKey, Identity, Text, Uuid
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Identity,
+    Index,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +45,11 @@ class WaitlistEntry(TimestampMixin, Base):
     __tablename__ = "waitlist_entries"
     __table_args__ = (
         CheckConstraint("end_time > start_time", name="ck_waitlist_entries_time_order"),
+        UniqueConstraint("sequence", name="uq_waitlist_entries_sequence"),
+        # Backs recheck_waitlist_for_freed_slot's hot query (status='active'
+        # AND start_time < :end AND end_time > :start), which runs on every
+        # cancel/reject/expiry -- previously an unindexed full scan + sort.
+        Index("ix_waitlist_entries_status_start_time", "status", "start_time"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -239,7 +239,7 @@ export interface Report {
 }
 
 export interface RealtimeEvent {
-  event: 'notification' | 'message'
-  recipient_id: string
+  event: 'notification' | 'message' | 'connected'
+  recipient_id?: string
   [key: string]: unknown
 }

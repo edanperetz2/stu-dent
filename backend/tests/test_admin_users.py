@@ -61,6 +61,33 @@ def test_admin_cannot_delete_own_account(client):
     assert response.status_code == 400
 
 
+def test_admin_cannot_change_own_role(client):
+    admin_token = register_and_login(client, "admusr-admin6@example.com", role="admin")
+    admin_id = _get_user_id(client, admin_token, "admusr-admin6@example.com")
+
+    response = client.patch(
+        f"/admin/users/{admin_id}", json={"role": "student"}, headers=auth_header(admin_token)
+    )
+    assert response.status_code == 400
+
+    # The rejected request must not have partially applied before raising.
+    still_admin = client.get(f"/admin/users/{admin_id}", headers=auth_header(admin_token))
+    assert still_admin.json()["role"] == "admin"
+
+
+def test_admin_cannot_deactivate_own_account_via_patch(client):
+    admin_token = register_and_login(client, "admusr-admin7@example.com", role="admin")
+    admin_id = _get_user_id(client, admin_token, "admusr-admin7@example.com")
+
+    response = client.patch(
+        f"/admin/users/{admin_id}", json={"is_active": False}, headers=auth_header(admin_token)
+    )
+    assert response.status_code == 400
+
+    still_active = client.get(f"/admin/users/{admin_id}", headers=auth_header(admin_token))
+    assert still_active.json()["is_active"] is True
+
+
 def test_non_admin_cannot_delete_user(client):
     student_token = register_and_login(client, "admusr-student2@example.com", role="student")
     admin_token = register_and_login(client, "admusr-admin5@example.com", role="admin")

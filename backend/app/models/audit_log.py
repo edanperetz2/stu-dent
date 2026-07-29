@@ -11,11 +11,18 @@ from app.database import Base
 class AuditLog(Base):
     __tablename__ = "audit_log"
     __table_args__ = (
-        # Covers the login rate limiter's exact query shape (core/rate_limit.py:
-        # identifier + action + created_at >= window_start), run on every
-        # login attempt against a table that grows without bound.
+        # Covers both of core/rate_limit.py's query shapes, run on every
+        # login/registration attempt against a table that grows without
+        # bound: (a) the per-(identifier, ip) check filters all four
+        # columns as a full left-to-right prefix match; (b) the per-IP-only
+        # check (registration's mass-flood ceiling) filters only
+        # ip_address/action/created_at, skipping attempted_identifier --
+        # leading with ip_address still lets that query use this index via
+        # an Index Cond on ip_address with the rest applied as an in-index
+        # filter, rather than a full table scan either way.
         Index(
-            "ix_audit_log_identifier_action_created",
+            "ix_audit_log_ip_identifier_action_created",
+            "ip_address",
             "attempted_identifier",
             "action",
             "created_at",

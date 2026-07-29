@@ -148,13 +148,13 @@ def delete_patient(
             f"{format_dt(appointment.start_time)} was cancelled because the patient "
             "record was deleted."
         )
-        notify(
-            db,
-            notification_type=NotificationType.appointment_status_changed,
-            message=message,
-            recipient_id=appointment.student_id,
-            related_appointment_id=appointment.id,
-        )
+        # No notification to appointment.student_id: only the owning
+        # student can ever reach this route (_get_owned_patient requires
+        # it), and validate_participants guarantees every one of this
+        # patient's appointments has that same student -- so
+        # appointment.student_id is always current_user.id here. They just
+        # clicked delete; telling them "your appointment was cancelled" is
+        # notifying them about their own action.
         if appointment.attending_id is not None:
             notify(
                 db,
