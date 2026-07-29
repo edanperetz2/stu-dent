@@ -59,47 +59,73 @@ class _ClassifyResponse(BaseModel):
     date_range_phrase: str | None = None
 
 
-def _format_resource_utilization_plainly(items: list[dict]) -> list[str]:
+def _format_resource_utilization_plainly(items: list[dict]) -> str:
+    """One or two flowing sentences naming the standout resource(s) --
+    mirrors the structure _NARRATE_PROMPT_TEMPLATE asks the model for,
+    rather than a flat per-item bullet list.
+    """
     if not items:
-        return ["No room or equipment usage recorded in this period."]
-    lines = []
-    for item in items:
-        deviation = item["deviation_from_average"]
-        sign = "+" if deviation >= 0 else ""
-        lines.append(
-            f"{item['resource_name']} ({item['resource_type']}): "
-            f"{item['booked_hours']} booked hours across {item['appointment_count']} "
-            f"appointments ({sign}{deviation} vs. average)."
+        return "No room or equipment usage was recorded in this period."
+    if len(items) == 1:
+        item = items[0]
+        return (
+            f"{item['resource_name']} was the only resource used this period, booked for "
+            f"{item['booked_hours']} hours across {item['appointment_count']} appointments."
         )
-    return lines
+    most_used = max(items, key=lambda r: r["deviation_from_average"])
+    least_used = min(items, key=lambda r: r["deviation_from_average"])
+    if most_used["resource_name"] == least_used["resource_name"]:
+        return "Room and equipment usage was evenly spread across the board this period."
+    deviation = most_used["deviation_from_average"]
+    sign = "+" if deviation >= 0 else ""
+    return (
+        f"{most_used['resource_name']} was the most-used resource this period, booked for "
+        f"{most_used['booked_hours']} hours across {most_used['appointment_count']} "
+        f"appointments ({sign}{deviation} vs. average). {least_used['resource_name']} saw the "
+        f"least use, with {least_used['booked_hours']} hours across "
+        f"{least_used['appointment_count']} appointments."
+    )
 
 
-def _format_time_impact_plainly(items: list[dict]) -> list[str]:
+def _format_time_impact_plainly(items: list[dict]) -> str:
+    """One or two flowing sentences naming the actor with the most lost
+    time -- mirrors the structure _NARRATE_PROMPT_TEMPLATE asks the model
+    for, rather than a flat per-item bullet list.
+    """
     if not items:
-        return ["No no-shows or cancellations recorded in this period."]
-    lines = []
-    for item in items:
-        lines.append(
-            f"{item['actor_name']} ({item['actor_type']}): {item['no_show_count']} "
-            f"no-shows, {item['cancelled_count']} cancellations, "
-            f"{item['minutes_lost']} minutes lost."
+        return "No no-shows or cancellations were recorded in this period."
+    # Already sorted by minutes_lost, descending (see report_data.py).
+    top = items[0]
+    sentence = (
+        f"{top['actor_name']} ({top['actor_type']}) accounted for the most lost time: "
+        f"{top['no_show_count']} no-shows and {top['cancelled_count']} cancellations, "
+        f"totaling {top['minutes_lost']} minutes."
+    )
+    remaining = len(items) - 1
+    if remaining == 1:
+        sentence += " 1 other person was also affected by a cancellation or no-show this period."
+    elif remaining > 1:
+        sentence += (
+            f" {remaining} other people were also affected by cancellations or "
+            "no-shows this period."
         )
-    return lines
+    return sentence
 
 
 def _plain_english_fallback(data: dict[str, Any]) -> str:
     """Deterministic, human-readable stand-in for a model summary when
-    Ollama is unreachable or returns an unusable response -- formats the
-    same already-computed report_data.py numbers as short plain-English
-    lines instead of dumping the raw dict/UUID structure at the reader.
+    Ollama is unreachable or returns an unusable response -- reads like a
+    real narrated summary (built from the same already-computed
+    report_data.py numbers) instead of a raw dict/UUID dump or a flat
+    per-item bullet list.
     """
-    lines: list[str] = []
+    sentences: list[str] = []
     if "resource_utilization" in data:
-        lines.extend(_format_resource_utilization_plainly(data["resource_utilization"]))
+        sentences.append(_format_resource_utilization_plainly(data["resource_utilization"]))
     if "time_impact" in data:
-        lines.extend(_format_time_impact_plainly(data["time_impact"]))
-    body = "\n".join(f"- {line}" for line in lines)
-    return f"AI narration unavailable -- plain summary of the data:\n{body}"
+        sentences.append(_format_time_impact_plainly(data["time_impact"]))
+    body = " ".join(sentences)
+    return f"AI narration unavailable -- plain summary of the data: {body}"
 
 
 def _narrate(data: dict[str, Any], *, audience: str) -> tuple[str, ReportContentSource]:
