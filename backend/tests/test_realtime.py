@@ -296,3 +296,66 @@ def test_websocket_broadcasts_group_message_to_every_other_participant():
             cleanup_session.commit()
         finally:
             cleanup_session.close()
+
+
+def test_websocket_closes_its_db_session_right_after_auth_not_for_the_whole_connection(client):
+    """Regression test for a real bug found via a stuck Postgres lock during
+    unrelated migration work: `Depends(get_db)`'s session used to stay open
+    -- idle in transaction, from the one `db.get(User, ...)` auth lookup --
+    for the connection's entire lifetime, since FastAPI only tears a
+    generator dependency down when the endpoint function returns, and for a
+    WebSocket endpoint that's only once the connection actually closes. Any
+    client with the app open in a browser tab held that transaction open
+    for as long as the tab stayed open -- it blocked a schema migration's
+    `ALTER TABLE` outright during work on this file.
+
+    Captures the actual `Session` instance FastAPI injects (via a
+    dependency override, same as the other real-commit tests in this file)
+    and asserts it's no longer in an active transaction once the
+    connection is live -- not just eventually, after disconnect.
+    """
+    captured_sessions: list[Session] = []
+
+    def _capturing_get_db():
+        db = Session(bind=engine)
+        captured_sessions.append(db)
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = _capturing_get_db
+    student_id = None
+    try:
+        with TestClient(app) as real_client:
+            setup_session = Session(bind=engine)
+            try:
+                student = User(
+                    email="realtime-ws-session-leak@example.com",
+                    hashed_password="x",
+                    role=RoleEnum.student,
+                    full_name="Realtime WS Session Leak Check",
+                )
+                setup_session.add(student)
+                setup_session.commit()
+                student_id = student.id
+            finally:
+                setup_session.close()
+
+            token = create_access_token(subject=student_id, role=RoleEnum.student.value)
+
+            with real_client.websocket_connect("/ws") as websocket:
+                websocket.send_json({"token": token})
+                assert websocket.receive_json()["event"] == "connected"
+
+                assert len(captured_sessions) == 1
+                assert captured_sessions[0].in_transaction() is False
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        cleanup_session = Session(bind=engine)
+        try:
+            if student_id is not None:
+                cleanup_session.query(User).filter(User.id == student_id).delete()
+            cleanup_session.commit()
+        finally:
+            cleanup_session.close()

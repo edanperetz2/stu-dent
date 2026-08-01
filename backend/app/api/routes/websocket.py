@@ -59,8 +59,27 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db)
     if user is None or not user.is_active or user.deleted_at is not None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+    user_id = user.id
 
-    await manager.connect(user.id, websocket)
+    # Release the connection now, rather than holding it for the rest of
+    # this function -- FastAPI only tears a `Depends(get_db)` session down
+    # when the endpoint function returns, and for a WebSocket endpoint
+    # that's only once the connection actually closes. Left open, this
+    # session's transaction sat idle in transaction for the connection's
+    # entire lifetime: any client with the app open in a browser tab held
+    # it open for as long as the tab stayed open, which is a real resource
+    # leak (idle transactions can block autovacuum) and a real migration
+    # hazard -- it blocked a schema migration's `ALTER TABLE` outright
+    # during work on this file. Closing explicitly here (safe to call
+    # twice -- `get_db`'s own `finally: db.close()` still runs harmlessly
+    # once this function eventually returns) is deliberately not the same
+    # fix as dropping `Depends(get_db)` in favor of a module-level
+    # `SessionLocal` -- that would silently route this connection's DB
+    # access around `app.dependency_overrides[get_db]`, which is exactly
+    # how the test suite points it at the test database instead of dev.
+    db.close()
+
+    await manager.connect(user_id, websocket)
     # Accepting happens before auth now (see above), so a caller can no
     # longer infer "the connection is registered and ready to receive
     # events" just from the socket opening -- this ack gives them (and the
@@ -73,4 +92,4 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db)
     except WebSocketDisconnect:
         pass
     finally:
-        await manager.disconnect(user.id, websocket)
+        await manager.disconnect(user_id, websocket)
