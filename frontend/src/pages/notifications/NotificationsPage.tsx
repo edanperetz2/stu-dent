@@ -112,7 +112,11 @@ export function NotificationsPage() {
               withBorder
               p="sm"
               className={isLinkable ? 'list-item-enter cursor-pointer' : 'list-item-enter'}
-              bg={item.read_at ? undefined : 'var(--mantine-color-blue-0)'}
+              // The -light token (not a fixed shade like blue-0) is Mantine's
+              // own scheme-aware subtle-highlight variable -- blue-0 stayed a
+              // hardcoded pale color even in dark mode, an unread-highlight
+              // patch that clashed badly against the dark page.
+              bg={item.read_at ? undefined : 'var(--mantine-color-blue-light)'}
               onClick={isLinkable ? goToAppointment : undefined}
               onKeyDown={
                 isLinkable

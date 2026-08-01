@@ -294,8 +294,20 @@ export function MessagesPage() {
           a flex-1 thread pane doesn't fit a phone screen. Once a thread is
           selected the contact list hides (and the "Back" button below
           reappears) so only one pane shows at a time; both stay visible
-          side by side from "sm" up, unchanged from before. */}
-      <Box w={{ base: '100%', sm: 260 }} h="100%" hiddenFrom={selected ? 'sm' : undefined}>
+          side by side from "sm" up, unchanged from before.
+          `hiddenFrom`/`visibleFrom` only take a single fixed breakpoint --
+          they can't express "hidden below sm, but only when selected", so
+          the response has to come from the `display` style prop's own
+          per-breakpoint object instead (previously used `hiddenFrom={selected
+          ? 'sm' : undefined}`, which actually hides the panel AT and ABOVE
+          sm -- i.e. on desktop -- the opposite of the mobile-only behavior
+          this comment always described; the contact list vanished on a
+          normal desktop window the moment a thread was selected). */}
+      <Box
+        w={{ base: '100%', sm: 260 }}
+        h="100%"
+        display={{ base: selected ? 'none' : 'block', sm: 'block' }}
+      >
         <ScrollArea h="100%">
           <Stack gap={4}>
             <Text size="xs" fw={700} c="dimmed" mt="xs">
@@ -361,7 +373,11 @@ export function MessagesPage() {
         </ScrollArea>
       </Box>
 
-      <Stack flex={1} h="100%" hiddenFrom={!selected ? 'sm' : undefined}>
+      <Stack
+        flex={1}
+        h="100%"
+        display={{ base: selected ? 'flex' : 'none', sm: 'flex' }}
+      >
         <Group justify="space-between" align="flex-start">
           <Group gap="xs" align="flex-start">
             {selected && (
@@ -429,7 +445,10 @@ export function MessagesPage() {
                       className="list-item-enter"
                       ml={isMine ? '20%' : 0}
                       mr={isMine ? 0 : '20%'}
-                      bg={isMine ? 'var(--mantine-color-blue-0)' : undefined}
+                      // -light, not a fixed shade -- see NotificationsPage.tsx
+                      // for the same fix and why (blue-0 stayed pale even in
+                      // dark mode, unreadable against the dimmed message text).
+                      bg={isMine ? 'var(--mantine-color-blue-light)' : undefined}
                     >
                       <Text size="xs" fw={600}>
                         {message.sender_name}
