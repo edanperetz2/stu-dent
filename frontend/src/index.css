@@ -150,6 +150,63 @@ thead th {
   white-space: pre-wrap;
 }
 
+/* react-big-calendar ships its own stylesheet (AppointmentsCalendarView.tsx)
+   with light-mode-only hardcoded colors -- unlike every other color in this
+   app, it has no idea Mantine's dark mode exists. Confirmed live: off-range
+   day cells rendered a literal #e6e6e6 background (a stark light rectangle
+   against the dark page), "today" rendered a pale #eaf6ff, and the
+   Today/Back/Next toolbar buttons rendered dark gray text (#373a3c) on a
+   transparent background over the dark page -- effectively unreadable.
+   Scoped to Mantine's own dark-scheme attribute and built from Mantine's
+   theme tokens, not new hardcoded hex, so it can't drift out of sync with
+   the rest of the dark theme. */
+:root[data-mantine-color-scheme='dark'] .rbc-off-range-bg {
+  background: var(--mantine-color-dark-6);
+}
+
+:root[data-mantine-color-scheme='dark'] .rbc-off-range {
+  color: var(--mantine-color-dimmed);
+}
+
+:root[data-mantine-color-scheme='dark'] .rbc-today {
+  background: var(--mantine-primary-color-light);
+}
+
+:root[data-mantine-color-scheme='dark'] .rbc-toolbar button {
+  color: var(--mantine-color-text);
+  border-color: var(--mantine-color-dark-4);
+}
+
+:root[data-mantine-color-scheme='dark'] .rbc-toolbar button:hover {
+  background: var(--mantine-color-dark-5);
+}
+
+:root[data-mantine-color-scheme='dark'] .rbc-toolbar button.rbc-active,
+:root[data-mantine-color-scheme='dark'] .rbc-toolbar button.rbc-active:hover {
+  background: var(--mantine-primary-color-filled);
+  color: var(--mantine-color-white);
+  border-color: var(--mantine-primary-color-filled);
+}
+
+/* Agenda view (the narrow-screen fallback -- see AppointmentsCalendarView.tsx)
+   uses a plain <table>, same as react-big-calendar's other white-background
+   defaults; not directly screenshot-verified narrow-viewport (see the
+   resize-tool limitation noted elsewhere), but it's the identical
+   unthemed-library-CSS root cause, so it gets the same fix rather than being
+   left as a predictable next report. */
+:root[data-mantine-color-scheme='dark'] .rbc-agenda-view table.rbc-agenda-table {
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+}
+
+:root[data-mantine-color-scheme='dark'] .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  border-color: var(--mantine-color-dark-4);
+}
+
+:root[data-mantine-color-scheme='dark'] .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+  border-color: var(--mantine-color-dark-5);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .header-logo-link,
   .header-logout-button,
