@@ -25,6 +25,16 @@ def _notification_types(client, token):
     return [n["notification_type"] for n in body]
 
 
+def _find_notification(client, token, *, notification_type, appointment_id):
+    body = client.get("/notifications", headers=auth_header(token)).json()
+    return next(
+        n
+        for n in body
+        if n["notification_type"] == notification_type
+        and n["related_appointment_id"] == appointment_id
+    )
+
+
 def _seed_unread(db_session, *, notification_type, recipient_id, appointment_id, message="nag"):
     entry = notify(
         db_session,
@@ -415,3 +425,156 @@ def test_feedback_resolves_only_the_submitting_authors_reminder(client, db_sessi
     ).json()
     attending_match = next(n for n in attending_notifications if n["id"] == str(attending_entry.id))
     assert attending_match["read_at"] is None
+
+
+def test_accepting_resolves_the_students_own_accept_or_reject_notification(client):
+    student_token = register_and_login(client, "notif-s12@example.com", role="student")
+    patient_id, patient_token = create_and_login_patient(
+        client, student_token, email="notif-p12@example.com"
+    )
+
+    request = client.post(
+        "/appointments",
+        json={"start_time": START, "end_time": END},
+        headers=auth_header(patient_token),
+    ).json()
+
+    pending = _find_notification(
+        client,
+        student_token,
+        notification_type="appointment_created",
+        appointment_id=request["id"],
+    )
+    assert pending["read_at"] is None
+
+    room_id = create_default_room(client)
+    accept = client.post(
+        f"/appointments/{request['id']}/accept",
+        json={"room_id": room_id},
+        headers=auth_header(student_token),
+    )
+    assert accept.status_code == 200
+
+    resolved = _find_notification(
+        client,
+        student_token,
+        notification_type="appointment_created",
+        appointment_id=request["id"],
+    )
+    assert resolved["read_at"] is not None
+
+
+def test_approving_resolves_the_attendings_own_needs_approval_notification(client):
+    student_token = register_and_login(client, "notif-s13@example.com", role="student")
+    attending_token = register_and_login(client, "notif-a13@example.com", role="attending")
+    attending_id = _user_id(client, attending_token)
+    patient_id = create_patient(client, student_token)
+    room_id = create_default_room(client)
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "attending_id": attending_id,
+            "room_id": room_id,
+            "start_time": START,
+            "end_time": END,
+        },
+        headers=auth_header(student_token),
+    ).json()
+
+    pending = _find_notification(
+        client,
+        attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert pending["read_at"] is None
+
+    approve = client.post(
+        f"/appointments/{appointment['id']}/approve", headers=auth_header(attending_token)
+    )
+    assert approve.status_code == 200
+
+    resolved = _find_notification(
+        client,
+        attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert resolved["read_at"] is not None
+
+
+def test_rejecting_resolves_appointment_created_regardless_of_recipient(client):
+    student_token = register_and_login(client, "notif-s14@example.com", role="student")
+    attending_token = register_and_login(client, "notif-a14@example.com", role="attending")
+    attending_id = _user_id(client, attending_token)
+    patient_id = create_patient(client, student_token)
+    room_id = create_default_room(client)
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "attending_id": attending_id,
+            "room_id": room_id,
+            "start_time": START,
+            "end_time": END,
+        },
+        headers=auth_header(student_token),
+    ).json()
+
+    reject = client.post(
+        f"/appointments/{appointment['id']}/reject", headers=auth_header(attending_token)
+    )
+    assert reject.status_code == 200
+
+    # The rejecting attending's own copy is resolved (they just acted on it)...
+    attending_resolved = _find_notification(
+        client,
+        attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert attending_resolved["read_at"] is not None
+
+
+def test_cancelling_also_resolves_appointment_created(client):
+    student_token = register_and_login(client, "notif-s15@example.com", role="student")
+    attending_token = register_and_login(client, "notif-a15@example.com", role="attending")
+    attending_id = _user_id(client, attending_token)
+    patient_id = create_patient(client, student_token)
+    room_id = create_default_room(client)
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "attending_id": attending_id,
+            "room_id": room_id,
+            "start_time": START,
+            "end_time": END,
+        },
+        headers=auth_header(student_token),
+    ).json()
+
+    pending = _find_notification(
+        client,
+        attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert pending["read_at"] is None
+
+    cancel = client.post(
+        f"/appointments/{appointment['id']}/cancel", headers=auth_header(student_token)
+    )
+    assert cancel.status_code == 200
+
+    resolved = _find_notification(
+        client,
+        attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert resolved["read_at"] is not None

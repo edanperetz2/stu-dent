@@ -62,5 +62,15 @@ class Notification(TimestampMixin, Base):
     related_appointment_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("appointments.id"), nullable=True, index=True
     )
+    # patient_registration_request is the one notification type with no
+    # appointment behind it -- it's about a patient (a users row) wanting to
+    # be confirmed, not an appointment. Without a way to link it to that
+    # specific patient, resolve_notifications had no precise way to mark it
+    # read on confirm(), only either "all of this recipient's pending
+    # registration requests" (wrong if they have more than one pending) or
+    # nothing at all.
+    related_patient_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
+    )
 
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -13,6 +13,7 @@ class NotificationOut(BaseModel):
     notification_type: NotificationType
     message: str
     related_appointment_id: uuid.UUID | None
+    related_patient_id: uuid.UUID | None
     read_at: datetime | None
     created_at: datetime
 

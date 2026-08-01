@@ -400,6 +400,17 @@ def accept_appointment(
     recompute_status(appointment)
     flush_or_409(db)
 
+    # Resolves the accepting student's own "accept or reject it" nudge --
+    # scoped to them specifically, not the whole appointment: an attending
+    # assigned to this appointment may still have their own separate
+    # "needs your approval" copy pending, which accepting doesn't resolve.
+    resolve_notifications(
+        db,
+        related_appointment_id=appointment.id,
+        notification_type=NotificationType.appointment_created,
+        recipient_id=current_user.id,
+    )
+
     if room_changed and old_room_id is not None:
         # The old room is now free at this appointment's time -- a
         # waitlist entry that wanted it would otherwise never get
@@ -471,6 +482,15 @@ def approve_appointment(
     recompute_status(appointment)
     flush_or_409(db)
 
+    # Resolves the approving attending's own "needs your approval" nudge --
+    # scoped to them, same reasoning as accept_appointment above.
+    resolve_notifications(
+        db,
+        related_appointment_id=appointment.id,
+        notification_type=NotificationType.appointment_created,
+        recipient_id=current_user.id,
+    )
+
     approve_message = (
         f"Your appointment on {format_dt(appointment.start_time)} was approved and confirmed."
     )
@@ -527,6 +547,15 @@ def reject_appointment(
     appointment.status = AppointmentStatus.cancelled
     recheck_waitlist_after_cancellation(db, appointment)
     flush_or_409(db)
+
+    # Terminal -- nobody still has anything to approve/accept on this
+    # appointment, whichever of the two roles' own copy is still pending.
+    # Not scoped to a single recipient, unlike accept/approve above.
+    resolve_notifications(
+        db,
+        related_appointment_id=appointment.id,
+        notification_type=NotificationType.appointment_created,
+    )
 
     reject_message = f"Your appointment on {format_dt(appointment.start_time)} was rejected."
     if not is_owning_student:
@@ -598,6 +627,13 @@ def cancel_appointment(
         db,
         related_appointment_id=appointment.id,
         notification_type=NotificationType.appointment_needs_resolution,
+    )
+    # Terminal -- same reasoning as reject_appointment: nobody still has an
+    # accept/approve action pending on this appointment.
+    resolve_notifications(
+        db,
+        related_appointment_id=appointment.id,
+        notification_type=NotificationType.appointment_created,
     )
 
     cancel_message = f"Your appointment on {format_dt(appointment.start_time)} was cancelled."

@@ -100,6 +100,7 @@ def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db
                 "Confirm them to proceed."
             ),
             recipient_id=owner_student_id,
+            related_patient_id=user.id,
         )
 
     db.commit()

@@ -108,6 +108,7 @@ export interface Notification {
   notification_type: NotificationType
   message: string
   related_appointment_id: string | null
+  related_patient_id: string | null
   read_at: string | null
   created_at: string
 }

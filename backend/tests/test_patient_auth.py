@@ -212,6 +212,44 @@ def test_patient_self_registration_is_pending_until_student_confirms(client):
     assert allowed_response.status_code == 201
 
 
+def test_confirming_a_patient_resolves_only_that_patients_registration_notification(client):
+    student_token = register_and_login(client, "patauth-stud9b@example.com", role="student")
+    student_id = client.get("/users/me", headers=auth_header(student_token)).json()["id"]
+
+    register_patient(client, student_id, "patauth-selfreg2a@example.com", full_name="Pending A")
+    register_patient(client, student_id, "patauth-selfreg2b@example.com", full_name="Pending B")
+
+    patients = client.get("/patients", headers=auth_header(student_token)).json()
+    patient_a = next(p for p in patients if p["email"] == "patauth-selfreg2a@example.com")
+    patient_b = next(p for p in patients if p["email"] == "patauth-selfreg2b@example.com")
+
+    def _notifications():
+        return client.get("/notifications", headers=auth_header(student_token)).json()
+
+    entry_a = next(
+        n
+        for n in _notifications()
+        if n["notification_type"] == "patient_registration_request"
+        and n["related_patient_id"] == patient_a["id"]
+    )
+    entry_b = next(
+        n
+        for n in _notifications()
+        if n["notification_type"] == "patient_registration_request"
+        and n["related_patient_id"] == patient_b["id"]
+    )
+    assert entry_a["read_at"] is None
+    assert entry_b["read_at"] is None
+
+    confirm_patient(client, student_token, patient_a["id"])
+
+    refreshed_a = next(n for n in _notifications() if n["id"] == entry_a["id"])
+    refreshed_b = next(n for n in _notifications() if n["id"] == entry_b["id"])
+    assert refreshed_a["read_at"] is not None
+    # Patient B is still pending -- confirming A must not touch it.
+    assert refreshed_b["read_at"] is None
+
+
 def test_patient_registration_requires_valid_owner_student_id(client):
     response = register(
         client,

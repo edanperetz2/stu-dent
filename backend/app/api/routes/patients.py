@@ -14,7 +14,7 @@ from app.models.user import RoleEnum, User
 from app.schemas.patient import PatientCreate, PatientOut, PatientUpdate
 from app.services.audit import record_audit_log
 from app.services.formatting import format_dt
-from app.services.notifications import notify
+from app.services.notifications import notify, resolve_notifications
 from app.services.waitlist import recheck_waitlist_after_cancellation
 
 router = APIRouter(tags=["patients"])
@@ -188,6 +188,13 @@ def confirm_patient(
 
     if patient.owner_confirmed_at is None:
         patient.owner_confirmed_at = datetime.now(UTC)
+
+        resolve_notifications(
+            db,
+            related_patient_id=patient.id,
+            notification_type=NotificationType.patient_registration_request,
+            recipient_id=current_user.id,
+        )
 
         record_audit_log(
             db,
