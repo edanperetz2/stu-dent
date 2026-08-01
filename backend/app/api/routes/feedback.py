@@ -8,6 +8,7 @@ from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.appointment import Appointment
 from app.models.feedback import Feedback
+from app.models.notification import NotificationType
 from app.models.user import RoleEnum, User
 from app.schemas.feedback import FeedbackCreate, FeedbackOut, PendingFeedbackOut
 from app.services.audit import record_audit_log
@@ -17,6 +18,7 @@ from app.services.feedback import (
     list_feedback_received,
     list_pending_feedback,
 )
+from app.services.notifications import resolve_notifications
 from app.services.scheduling import is_visible_to_participant
 
 router = APIRouter(tags=["feedback"])
@@ -87,6 +89,16 @@ def create_feedback(
             status_code=status.HTTP_409_CONFLICT,
             detail="You've already given feedback for this appointment",
         ) from err
+
+    # Scoped to this author only -- the patient and attending each have
+    # their own independent pending/given state for the same appointment,
+    # so one submitting feedback must not resolve the other's reminder.
+    resolve_notifications(
+        db,
+        related_appointment_id=appointment.id,
+        notification_type=NotificationType.feedback_reminder,
+        recipient_id=current_user.id,
+    )
 
     record_audit_log(
         db,

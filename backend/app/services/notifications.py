@@ -1,5 +1,7 @@
 import uuid
+from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification, NotificationType
@@ -52,3 +54,54 @@ def notify(
     )
 
     return entry
+
+
+def resolve_notifications(
+    db: Session,
+    *,
+    related_appointment_id: uuid.UUID,
+    notification_type: NotificationType,
+    recipient_id: uuid.UUID | None = None,
+) -> None:
+    """Mark still-unread "nag until resolved" notifications
+    (appointment_needs_resolution, feedback_reminder) as read once the
+    thing they were nagging about actually happens, and push a refresh to
+    each affected recipient's connected client.
+
+    Without this, resolving the appointment/feedback from anywhere other
+    than the notification itself (e.g. the Appointments or Feedback page
+    directly) left the notification sitting there unread and now-false --
+    "still hasn't been marked completed" after it just was. `recipient_id`
+    scopes this to one specific person when the notification type can have
+    independent per-person outcomes (feedback_reminder: the patient and
+    the attending each have their own pending/given state for the same
+    appointment) -- omit it for types with exactly one recipient
+    (appointment_needs_resolution: only ever the owning student).
+
+    Deliberately not the same "notification" realtime event `notify()`
+    emits -- that event's payload is a fresh notification's own text, and
+    replaying it here would show a stale "still needs resolving" toast for
+    the exact moment it stopped being true. `notifications_resolved` is a
+    plain refresh signal with no message of its own.
+    """
+    stmt = select(Notification).where(
+        Notification.related_appointment_id == related_appointment_id,
+        Notification.notification_type == notification_type,
+        Notification.read_at.is_(None),
+    )
+    if recipient_id is not None:
+        stmt = stmt.where(Notification.recipient_id == recipient_id)
+
+    rows = list(db.scalars(stmt))
+    if not rows:
+        return
+
+    now = datetime.now(UTC)
+    affected_recipients: set[uuid.UUID] = set()
+    for row in rows:
+        row.read_at = now
+        affected_recipients.add(row.recipient_id)
+    db.flush()
+
+    for affected_recipient_id in affected_recipients:
+        publish(db, recipient_id=affected_recipient_id, event={"event": "notifications_resolved"})

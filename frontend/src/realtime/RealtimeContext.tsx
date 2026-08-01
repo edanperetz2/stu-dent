@@ -174,6 +174,17 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           // just became pending-feedback -- keep the nav badge and Feedback
           // page's pending list fresh without a manual refresh.
           queryClient.invalidateQueries({ queryKey: ['feedback'] })
+        } else if (data.event === 'notifications_resolved') {
+          // Fired when the thing an "appointment_needs_resolution" or
+          // "feedback_reminder" notification was nagging about got resolved
+          // from somewhere other than the notification itself (e.g.
+          // completing the appointment directly from the Appointments page)
+          // -- see services/notifications.py::resolve_notifications. No
+          // message of its own to toast, just a refresh so the now-stale
+          // "still needs resolving" notification and unread badge don't
+          // keep showing after the fact.
+          invalidateCoreQueries(queryClient)
+          queryClient.invalidateQueries({ queryKey: ['feedback'] })
         } else if (data.event === 'message') {
           // Broad prefix match: also refreshes the contacts/groups sidebar
           // lists, not just the open thread, since a new message can be the

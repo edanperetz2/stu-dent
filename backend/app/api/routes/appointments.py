@@ -18,7 +18,7 @@ from app.schemas.appointment import (
 )
 from app.services.audit import record_audit_log
 from app.services.formatting import format_dt
-from app.services.notifications import notify
+from app.services.notifications import notify, resolve_notifications
 from app.services.scheduling import (
     TERMINAL_STATUSES,
     AppointmentConflictError,
@@ -592,6 +592,14 @@ def cancel_appointment(
     recheck_waitlist_after_cancellation(db, appointment)
     flush_or_409(db)
 
+    # A cancelled appointment no longer "needs resolution" either --
+    # cancelling is itself a resolution, same as completing or no-showing it.
+    resolve_notifications(
+        db,
+        related_appointment_id=appointment.id,
+        notification_type=NotificationType.appointment_needs_resolution,
+    )
+
     cancel_message = f"Your appointment on {format_dt(appointment.start_time)} was cancelled."
     if not is_owning_student:
         notify(
@@ -645,6 +653,11 @@ def complete_appointment(
 
     appointment.status = AppointmentStatus.completed
     flush_or_409(db)
+    resolve_notifications(
+        db,
+        related_appointment_id=appointment.id,
+        notification_type=NotificationType.appointment_needs_resolution,
+    )
 
     record_audit_log(
         db,
@@ -675,6 +688,11 @@ def mark_no_show(
 
     appointment.status = AppointmentStatus.no_show
     flush_or_409(db)
+    resolve_notifications(
+        db,
+        related_appointment_id=appointment.id,
+        notification_type=NotificationType.appointment_needs_resolution,
+    )
 
     record_audit_log(
         db,
