@@ -1,10 +1,27 @@
 :root {
   color-scheme: light dark;
-  font: 18px/145% system-ui, 'Segoe UI', Roboto, sans-serif;
+  /* Was 18px -- cascaded into Mantine's own rem-based component scale
+     (which assumes a 16px root), so every Mantine component rendered
+     ~12.5% larger than its nominal size (e.g. a 14px "sm" text rendering
+     at 15.75px). 16px restores Mantine's sizes to their real values. */
+  font: 16px/145% system-ui, 'Segoe UI', Roboto, sans-serif;
 }
 
 body {
   margin: 0;
+}
+
+/* Table headers distinguished by more than weight -- smaller, dimmed, and
+   letter-spaced, so the eye anchors on them as structure rather than
+   competing with the data for attention. Targets the real <thead>/<th>
+   elements directly rather than a generated Mantine class name, so it
+   can't drift if Mantine's internal class names change between versions. */
+thead th {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mantine-color-dimmed);
 }
 
 .header-logo-link {
@@ -18,13 +35,16 @@ body {
 }
 
 .header-logo-link:hover {
-  background-color: var(--mantine-color-gray-1);
+  /* Scheme-aware (Mantine's own "default" variant hover token) -- the
+     previous hardcoded gray-1 was a light-mode-only value, invisible/wrong
+     in dark mode. */
+  background-color: var(--mantine-color-default-hover);
   box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
   transform: translateY(-1px) scale(1.02);
 }
 
 .header-logo-link:focus-visible {
-  outline: 2px solid var(--mantine-color-blue-6);
+  outline: 2px solid var(--mantine-primary-color-6);
   outline-offset: 2px;
 }
 
@@ -37,13 +57,13 @@ body {
 }
 
 .header-logout-button:hover {
-  background-color: var(--mantine-color-gray-1);
+  background-color: var(--mantine-color-default-hover);
   box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
   transform: translateY(-1px) scale(1.02);
 }
 
 .header-logout-button:focus-visible {
-  outline: 2px solid var(--mantine-color-blue-6);
+  outline: 2px solid var(--mantine-primary-color-6);
   outline-offset: 2px;
 }
 
@@ -51,6 +71,7 @@ body {
   margin-bottom: 2px;
   border-radius: var(--mantine-radius-md);
   cursor: pointer;
+  border-left: 3px solid transparent;
   transition:
     background-color 150ms ease,
     box-shadow 150ms ease,
@@ -58,21 +79,85 @@ body {
 }
 
 .app-nav-link:hover {
-  background-color: var(--mantine-color-gray-1);
+  background-color: var(--mantine-color-default-hover);
   box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
   transform: translateX(3px);
 }
 
 .app-nav-link:focus-visible {
-  outline: 2px solid var(--mantine-color-blue-6);
+  outline: 2px solid var(--mantine-primary-color-6);
   outline-offset: 2px;
+}
+
+/* Weight + a left rule, not color alone -- survives greyscale printing and
+   colour-blindness, unlike Mantine's default active styling (a background
+   tint) on its own. */
+.app-nav-link[data-active] {
+  font-weight: 700;
+  border-left-color: var(--mantine-primary-color-6);
+}
+
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: 0.5rem;
+  z-index: 1000;
+  padding: 0.5rem 1rem;
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  border-radius: var(--mantine-radius-md);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+  transition: top 150ms ease;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+/* A newly-inserted list item (a fresh row/card that just arrived via a
+   realtime-triggered refetch, or a freshly-loaded page) fades and slides in
+   instead of teleporting straight into place. Relies on React's key-based
+   reconciliation: a row whose key already existed is reused, not
+   remounted, so this only plays for genuinely new items -- an existing row
+   re-rendering with updated data is untouched. */
+@keyframes list-item-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.list-item-enter {
+  animation: list-item-enter 180ms ease-out;
+}
+
+/* Small, repeated inline-style patterns collapsed into shared classes
+   (cursor/whitespace aren't part of Mantine's style-props shorthand set,
+   unlike flex/miw/mah, which use those props directly instead of these). */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.text-nowrap {
+  white-space: nowrap;
+}
+
+.text-pre-wrap {
+  white-space: pre-wrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .header-logo-link,
   .header-logout-button,
-  .app-nav-link {
+  .app-nav-link,
+  .skip-link,
+  .list-item-enter {
     transition: none;
+    animation: none;
   }
 
   .header-logo-link:hover,

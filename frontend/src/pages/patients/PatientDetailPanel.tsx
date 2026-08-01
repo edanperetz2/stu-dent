@@ -108,8 +108,13 @@ export function PatientDetailPanel({ patient }: PatientDetailPanelProps) {
 
       <form onSubmit={form.onSubmit((values) => updateMutation.mutate(values))}>
         <Stack>
-          <TextInput label="Full name" {...form.getInputProps('full_name')} />
-          <TextInput label="Contact phone" {...form.getInputProps('contact_phone')} />
+          <TextInput label="Full name" autoComplete="name" {...form.getInputProps('full_name')} />
+          <TextInput
+            label="Contact phone"
+            type="tel"
+            autoComplete="tel"
+            {...form.getInputProps('contact_phone')}
+          />
           <Select
             label="Preferred time of day"
             data={PREFERRED_TIME_OPTIONS}

@@ -41,3 +41,13 @@ class LoginIn(BaseModel):
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class PasswordResetRequestIn(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirmIn(BaseModel):
+    token: str
+    # Same bounds as RegisterIn.password.
+    new_password: str = Field(min_length=8, max_length=128)

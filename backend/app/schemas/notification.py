@@ -15,3 +15,7 @@ class NotificationOut(BaseModel):
     related_appointment_id: uuid.UUID | None
     read_at: datetime | None
     created_at: datetime
+
+
+class UnreadCountOut(BaseModel):
+    count: int

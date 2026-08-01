@@ -1,11 +1,19 @@
 import { request } from './httpClient'
 import type { Notification } from './types'
 
-export function listNotifications(token: string, unreadOnly = false) {
+export function listNotifications(
+  token: string,
+  unreadOnly = false,
+  options: { limit?: number; offset?: number } = {},
+) {
   return request<Notification[]>('/notifications', {
     token,
-    query: { unread_only: unreadOnly },
+    query: { unread_only: unreadOnly, limit: options.limit, offset: options.offset },
   })
+}
+
+export function getUnreadNotificationCount(token: string) {
+  return request<{ count: number }>('/notifications/unread-count', { token })
 }
 
 export function markNotificationRead(token: string, notificationId: string) {

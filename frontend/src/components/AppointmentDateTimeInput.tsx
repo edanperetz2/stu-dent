@@ -14,6 +14,10 @@ interface AppointmentDateTimeInputProps {
   // "HH:mm" options -- see APPOINTMENT_START_TIME_OPTIONS /
   // APPOINTMENT_END_TIME_OPTIONS in src/utils/dates.ts.
   timeOptions: string[]
+  // Marks the date field with Mantine's usual required asterisk -- lets a
+  // form mark its actually-required fields instead of every optional one
+  // needing an "(optional)" suffix in its label.
+  required?: boolean
 }
 
 function splitValue(value: string | null | undefined): { date: string | null; time: string | null } {
@@ -45,6 +49,7 @@ export function AppointmentDateTimeInput({
   onChange,
   error,
   timeOptions,
+  required,
 }: AppointmentDateTimeInputProps) {
   const [date, setDate] = useState<string | null>(() => splitValue(value).date)
   const [time, setTime] = useState<string | null>(() => splitValue(value).time)
@@ -68,7 +73,13 @@ export function AppointmentDateTimeInput({
   return (
     <Stack gap={4}>
       <Group grow align="flex-start">
-        <DateInput label={label} value={date} onChange={handleDateChange} valueFormat="DD/MM/YYYY" />
+        <DateInput
+          label={label}
+          value={date}
+          onChange={handleDateChange}
+          valueFormat="DD/MM/YYYY"
+          withAsterisk={required}
+        />
         <Select label="Time" data={timeOptions} value={time} onChange={handleTimeChange} searchable />
       </Group>
       {error && (

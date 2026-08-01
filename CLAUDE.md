@@ -394,3 +394,209 @@ docker compose exec frontend npm run lint
   `utils/dates.ts`: 08:00–21:00 / 08:30–21:30) — tracking date and time
   in separate local state so picking one doesn't discard the other
   before both are set.
+- **Frontend UX/accessibility remediation (cross-phase, friend-review-driven,
+  13 milestones)**: **done**. Triggered by a friend's frontend-weighted
+  code review of the whole project (`docs/stu-dent-review.html`); two
+  independent verification passes confirmed 15 of 16 spot-checked claims
+  exactly or near-exactly true (the one inflated metric was a grep miscount,
+  not a real finding), so the review was trusted and acted on in full — the
+  user chose the broadest offered scope (P0 + P1 + P2 + visual + UX) plus
+  two features the review had flagged as "decide later": a real
+  forgot-password flow and a real dark mode (previously just
+  `color-scheme: light dark` in CSS with no Mantine wiring). Executed as 13
+  milestones, each implemented/tested/live-verified and stopped for
+  explicit go-ahead before the next, per this file's established milestone
+  workflow — no commits without being asked, same as always. In order:
+  **M1** shared primitives (`useMutationWithToast`, `PageHeader`,
+  `ClickableRow` — a real focusable button in its own cell instead of the
+  `role="button"`-on-`<Table.Tr>` hack 5 pages used, which broke the row's
+  implicit semantics and was keyboard-unreachable). **M2** real error states
+  (not silently-empty ones) rolled out to the 11 pages + 3 `AppLayout`
+  badge queries that were still missing `ErrorText`/retry. **M3**
+  session-expiry handling: `httpClient.ts` now redirects to `/login` on a
+  401 with the attempted destination preserved instead of retrying
+  pointlessly forever; `JWT_EXPIRE_MINUTES` raised 30→120 in
+  `.env.example` (shorter than a clinic shift, previously). **M4**
+  WebSocket resilience — exponential backoff with a cap, a manual
+  reconnect control once retries are exhausted, and a connection-status
+  pill in the header (the `isConnected` state had zero call sites before
+  this). **M5** sidebar nav rebuilt as real `<Link>`s with icons and
+  `aria-current`, replacing `onClick`-only items with no real `href` a
+  keyboard user couldn't reach at all. **M6** accessibility pass: `Alert
+  role="alert"` for form/page errors, ARIA-live status regions,
+  `ClickableRow` rolled out everywhere. **M7** forgot-password, built for
+  real: `password_reset_tokens` table, SHA-256-hashed single-use tokens
+  (not argon2 — reserved for low-entropy human passwords), two-layer
+  per-email+per-IP rate limiting, enumeration-resistant responses, email
+  delivered through the existing MailHog pipeline. **M8** theme system —
+  brand color derived from the logo hex instead of stock Mantine blue, a
+  real `defaultColorScheme="auto"` dark mode with an anti-FOUC inline
+  script (Mantine's own `<ColorSchemeScript>` doesn't apply to a
+  client-rendered SPA with no SSR), status-badge colors redesigned around
+  one uniform ink text color after hand-verifying several "obviously fine"
+  combinations actually failed WCAG AA contrast math. **M9** split the
+  901-line `AppointmentsListPage` into `PersonalAppointmentsTable`,
+  `ResourceAppointmentsTable`, `AppointmentsCalendarView`,
+  `resourceColors.ts`, and `useAppointmentActions` (504 lines left,
+  orchestration only). **M10** calendar `min`/`max`/`scrollToTime` bounds
+  (derived from the same time-option constants the booking form already
+  used, not hardcoded a second time) and a full New Appointment modal
+  rebuild — grouped `Fieldset`s, duration-shortcut chips that compute an
+  end time directly instead of a second manual pick, the AI describe box
+  moved behind a toggle instead of occupying the top of the modal, a
+  pinned submit footer; all 16 `<Modal>` call sites across the app given
+  an explicit `size` for the first time. **M11** server-side pagination —
+  `GET /appointments` gained date-range/status/limit/offset params (the
+  Calendar sub-view now only fetches what's on screen instead of
+  everything ever booked), notifications got real `useInfiniteQuery`
+  pagination (and, since the naive `.length`-of-a-page badge count would
+  have silently undercounted past the new page size, a proper `GET
+  /notifications/unread-count` endpoint instead), and
+  `list_conversation_messages` — which previously had no cap at all —
+  gained `limit`/`before_sequence`; `autoComplete` added across the real
+  gaps (RegisterPage, New Patient, patient/preferences phone fields); the
+  login page's Role dropdown removed (the backend already validates role
+  against the real account, so the picker could only ever turn a valid
+  login into a spurious failure). **M12** motion + P2 polish — shaped
+  `Skeleton` placeholders replacing bare "Loading…" text everywhere (`LoadingText`
+  itself deleted once unused), table row expansion switched from an
+  instant conditional render to an animated `Collapse` (with
+  `keepMounted={false}` so a collapsed `AppointmentDetailPanel` doesn't
+  stay mounted with live queries for every row at once), a
+  `prefers-reduced-motion`-aware fade-in for genuinely-new list rows,
+  search/status-filter/sort added to the Personal-lens appointments table,
+  and undo-toasts for **only** the actions where a delayed undo is
+  provably safe: deactivating a user and cancelling a waitlist entry
+  (pure status flips, no side effects) — appointment cancel/reject
+  deliberately kept its real confirm-modal instead, because cancelling
+  synchronously auto-promotes a *different* waitlist entry into a real
+  booking, and a delayed undo could then collide with that new
+  appointment; the waitlist-cancel undo needed a small new `POST
+  /waitlist/{id}/reactivate` endpoint since no un-cancel capability
+  existed. **M13** full regression + live verification closed the arc,
+  and caught two real bugs in the M12 work that a plain test-suite pass
+  wouldn't have: Mantine's own `<Modal>` close button ships with no
+  `aria-label` at all in this version (a screen reader hears bare
+  "button") — fixed once, for all 16 modals, via a `Modal.extend()`
+  theme-level default rather than 16 individual edits; and `UsersPage`'s
+  deactivate-then-undo toast fired both requests without waiting for the
+  first to settle, so a fast undo click could race the original request
+  and leave the UI showing the wrong state — fixed by having the undo
+  handler `await` the original `mutateAsync` before re-mutating (the
+  equivalent waitlist code turned out to already be safe, since that
+  toast was shown from `onSuccess`, not from the click handler itself).
+  Full live verification also covered a keyboard-only pass, a dark-mode
+  toggle check, forgot-password end-to-end through MailHog, session-expiry
+  triggered for real (temporarily set `JWT_EXPIRE_MINUTES=1`, confirmed
+  the redirect-with-banner flow, reverted), WebSocket reconnect (stopped
+  and restarted the `api` container mid-session, watched the
+  disconnect/reconnect indicator), and a full cross-role booking
+  walkthrough on the rebuilt modal (student books with an attending
+  assigned → attending approves → student completes).
+  **M14 (follow-up)**: after M13, a line-by-line cross-check of the actual
+  codebase against `docs/stu-dent-review.html` itself (not against this
+  plan) found 5 items the review asked for that M1-13 hadn't actually
+  landed. All 5 fixed: the calendar's fixed `height: 700` became a
+  viewport-derived height plus an Agenda view offered on narrow screens;
+  `PersonalAppointmentsTable` cut from 8 columns to 4 (Time/Status/People/
+  Where), dropping the viewer's own name (whichever of student/patient/
+  attending the signed-in principal is), day-grouping rows when
+  chronologically sorted, and replacing bare `'—'` with real absence
+  labels; the two hand-maintained `STATUS_BADGE_BACKGROUND`/
+  `STATUS_CALENDAR_COLOR` hex maps in `appointmentActions.ts` became one
+  hue-per-status table, generating both the pale badge and saturated
+  calendar shades via `theme.ts`'s `hslToHex` (now exported) — the
+  saturated shade's lightness is the max that clears WCAG AA (4.5:1)
+  against white text, found per-hue by binary search at module load rather
+  than hand-picked; this also caught a real, previously-unverified AA
+  failure (`proposed`'s shipped `#868e96` measured ~3.3:1) that the
+  earlier hand-fix (`#f59f00` → `#8a6100`) hadn't covered since it only
+  touched the two statuses the review specifically named. A new
+  `useListQuery` hook (`src/hooks/useListQuery.ts`) turns the
+  loading/isError/data ternary hand-copied across pages into one
+  discriminated union a page switches over — `result.data` only
+  type-checks inside the `'ready'` branch, so a page can't reach the list
+  while skipping the error branch and still compile; retrofitted onto the
+  8 pages whose primary query is a single plain `useQuery` driving the
+  page's main content (Patients, Forum, Rooms, Equipment, Users, Waitlist,
+  Preferences, Appointments) — `MessagesPage` (three independent queries
+  rendered separately), `NotificationsPage` (`useInfiniteQuery`, a
+  different data shape), `ForumPostCard` (its comments query is
+  conditional on being expanded, not page-level), and `RegisterPage` (its
+  students query feeds a `Select`'s placeholder/disabled state, not a
+  full-page render branch) were deliberately left alone rather than forced
+  into a shape that didn't fit. Inline `style={{}}` usage (19 occurrences
+  across 10 files, up from the review's cited 11) was triaged rather than
+  blanket-removed: repeated `cursor: pointer` and `white-space` patterns
+  collapsed into 3 small CSS classes; `flex`/`minWidth`/`maxHeight` cases
+  converted to Mantine's `flex`/`miw`/`mah` shorthand props; what's left
+  (dynamic per-row colors, a react-big-calendar library prop, `align-self`
+  and single-side `border`, neither of which Mantine exposes as a
+  shorthand) each got a one-line comment explaining why it stays inline,
+  down to 10 documented occurrences. Full regression green throughout
+  (tsc, oxlint, vitest — 98/98 across 28 files, up from 94 — and
+  `vite build`, no bundle-size warning).
+  **M15 (follow-up, scoped down)**: a second post-M13 review cross-check
+  found 3 more review action items not literally satisfied — before
+  implementing any of them, each was evaluated for actual benefit rather
+  than implemented on the review's say-so alone (a correction from how
+  M14 was approached). Verdict: server-side status filtering for
+  `/appointments` and a real infinite-scroll UI for the appointments List
+  sub-view were judged not worth doing — the endpoint is already bounded
+  (date-range for Calendar, a 500-row default `limit` for List) so
+  client-side filtering of what's already fetched is a lateral move at
+  best, and building real pagination UI without also moving the
+  client-side search/sort server-side would make the existing sort
+  feature *worse* (correct only within whatever page happened to be
+  loaded) — a real risk, not just unnecessary effort. Only the third item
+  was implemented: dedicated tests for the four pieces M9 extracted from
+  `AppointmentsListPage` (`PersonalAppointmentsTable`,
+  `ResourceAppointmentsTable`, `AppointmentsCalendarView`,
+  `useAppointmentActions`), none of which had any coverage of their own
+  before this — real regression protection for code the M14 table
+  redesign had just modified. 15 new tests (viewer's-own-name dropping,
+  day-grouping, absence labels, admin-vs-non-admin resource columns, the
+  409-conflict-opens-a-modal branch, the narrow-screen Agenda view, the
+  responsive height formula). Full regression green (tsc, oxlint, vitest
+  — 113/113 across 32 files — `vite build`).
+  **M16 (quality audit + fixes)**: after M15, three parallel agents did an
+  adversarial code-quality pass (not presence/absence) over everything
+  implemented across this whole review-remediation arc — tracing logic,
+  not grepping for keywords. Found 4 real, concrete defects, all fixed:
+  (1) status badges (`appointmentActions.ts`, `WaitlistPage.tsx`) were
+  hardcoded to a pale-background/dark-ink pairing regardless of theme, so
+  every badge rendered as a bright near-white pill in dark mode — both
+  now generate a dark-mode variant (reusing the already-AA-verified
+  saturated `STATUS_CALENDAR_COLOR` shade + white text) picked via
+  `useComputedColorScheme()`, and the shared contrast-math binary search
+  moved to `utils/colorContrast.ts` so `WaitlistPage`'s own 3-status table
+  doesn't hand-roll a second copy. (2) the narrow-screen Agenda calendar
+  view visually spans react-big-calendar's default 30 days, but the
+  underlying query was still scoped to the current week — days 8-30
+  silently showed nothing, indistinguishable from "no appointments";
+  fixed by passing `length={7}` to `<Calendar>` and adding a matching
+  `'agenda'` case to `getCalendarViewRange` (`resourceColors.ts`) so the
+  two can't drift apart again. (3) the backend closed the WebSocket with
+  the same code for "token genuinely rejected" and "no auth message
+  arrived within the 10s timeout" (`websocket.py`), but the frontend
+  treats that code as a hard session-expiry logout — a slow/congested
+  connection (not an actually-expired session) could log a user out;
+  the timeout/malformed-message path now closes with
+  `WS_1002_PROTOCOL_ERROR` instead, leaving `WS_1008_POLICY_VIOLATION`
+  for genuine rejection only (2 new backend tests assert the distinction
+  directly). (4) `UsersPage`'s Deactivate/Activate/Delete/role-change
+  actions all read one shared mutation's `isPending`/`variables` to decide
+  which row's spinner to show — correct for one action at a time, but two
+  different rows acted on within moments of each other could show a
+  stale/wrong spinner, since the shared mutation's state only reflects the
+  most recently fired call; fixed with per-row `Set<string>` pending-id
+  tracking (`togglePending`) independent of the mutation object's own
+  state. Two lower-severity findings from the same audit were reported but
+  deliberately left as-is: `useListQuery`'s unused `enabled` option (no
+  live call site passes it, so the theoretical gap it could cause isn't
+  reachable today) and the same shared-mutation display-state pattern
+  existing in `RoomsPage`/`EquipmentPage`/`WaitlistPage` too (not fixed
+  here since it wasn't the specific finding flagged — noted as a known
+  parallel, not addressed). Full regression green across both stacks:
+  backend pytest (297/297, including the 2 new websocket tests), ruff,
+  black; frontend tsc, oxlint, vitest (113/113), `vite build`.

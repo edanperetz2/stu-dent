@@ -1,13 +1,15 @@
 import { Button, Select, Stack, Text, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { getCurrentUser, updateCurrentUser, type UserSelfUpdateInput } from '../../api/auth'
 import { apiErrorMessage } from '../../api/httpClient'
 import type { PreferredTimeOfDay } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { LoadingText } from '../../components/StateText'
+import { FormSkeleton } from '../../components/Skeletons'
+import { ErrorText } from '../../components/StateText'
+import { useListQuery } from '../../hooks/useListQuery'
 
 const PREFERRED_TIME_OPTIONS: { value: PreferredTimeOfDay; label: string }[] = [
   { value: 'morning', label: 'Morning' },
@@ -19,10 +21,15 @@ export function PreferencesPage() {
   const token = useAuthToken()
   const queryClient = useQueryClient()
 
-  const { data: user, isLoading } = useQuery({
+  // Single-object query -- "empty" isn't a real state here, only
+  // loading/error/ready (the default array-length isEmpty check would never
+  // fire for a plain object anyway, but this documents that explicitly).
+  const userQuery = useListQuery({
     queryKey: ['users', 'me'],
     queryFn: () => getCurrentUser(token),
+    errorFallback: 'Failed to load your preferences.',
   })
+  const user = userQuery.status === 'ready' ? userQuery.data : undefined
 
   const form = useForm<UserSelfUpdateInput>({
     initialValues: { contact_phone: '', preferred_time_of_day: null },
@@ -55,7 +62,10 @@ export function PreferencesPage() {
     },
   })
 
-  if (isLoading) return <LoadingText />
+  if (userQuery.status === 'error') {
+    return <ErrorText onRetry={userQuery.retry}>{userQuery.message}</ErrorText>
+  }
+  if (userQuery.status === 'loading') return <FormSkeleton fields={2} />
 
   return (
     <Stack maw={420}>
@@ -68,7 +78,12 @@ export function PreferencesPage() {
       )}
       <form onSubmit={form.onSubmit((values) => updateMutation.mutate(values))}>
         <Stack>
-          <TextInput label="Contact phone" {...form.getInputProps('contact_phone')} />
+          <TextInput
+            label="Contact phone"
+            type="tel"
+            autoComplete="tel"
+            {...form.getInputProps('contact_phone')}
+          />
           <Select
             label="Preferred time of day"
             data={PREFERRED_TIME_OPTIONS}

@@ -8,6 +8,7 @@ from app.models.forum_comment_vote import ForumCommentVote
 from app.models.forum_post import ForumPost
 from app.models.forum_post_vote import ForumPostVote
 from app.models.notification import Notification, NotificationType
+from app.models.password_reset_token import PasswordResetToken
 from app.models.report import Report, ReportPeriodType
 from app.models.room import Room
 from app.models.user import PreferredTimeOfDay, RoleEnum, User
@@ -30,6 +31,7 @@ __all__ = [
     "Message",
     "Notification",
     "NotificationType",
+    "PasswordResetToken",
     "PreferredTimeOfDay",
     "Report",
     "ReportPeriodType",

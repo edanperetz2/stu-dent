@@ -197,6 +197,7 @@ export interface Message {
   sender_name: string
   body: string
   created_at: string
+  sequence: number
 }
 
 export interface Contact {

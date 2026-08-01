@@ -2,6 +2,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as authApi from '../../api/auth'
+import { ApiError } from '../../api/httpClient'
 import * as studentsApi from '../../api/students'
 import { renderWithProviders } from '../../test/renderWithProviders'
 import { resetAuthTestState } from '../../test/resetAuthTestState'
@@ -123,5 +124,32 @@ describe('RegisterPage', () => {
     expect(
       await screen.findByText(/Your student needs to confirm the connection/),
     ).toBeInTheDocument()
+  })
+
+  it('shows an error state, not "no students available", when the students request fails', async () => {
+    vi.mocked(studentsApi.listStudents).mockRejectedValue(new Error('network down'))
+
+    renderWithProviders(<RegisterPage />, { route: '/register' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Role' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Patient', hidden: true }))
+
+    expect(
+      await screen.findByText('Failed to load the list of students.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No students available yet')).not.toBeInTheDocument()
+  })
+
+  it('shows a real alert, not a plain red Text, when registration itself fails', async () => {
+    vi.mocked(authApi.registerUser).mockRejectedValue(new ApiError(409, 'Email already registered'))
+
+    renderWithProviders(<RegisterPage />, { route: '/register' })
+
+    await userEvent.type(screen.getByLabelText('Full name'), 'New Student')
+    await userEvent.type(screen.getByLabelText('Email'), 'taken@example.com')
+    await userEvent.type(screen.getByLabelText('Password'), 'password123')
+    await userEvent.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Email already registered')
   })
 })

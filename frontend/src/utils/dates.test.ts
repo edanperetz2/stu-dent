@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateTime, isoToMantineDateTime, mantineDateTimeToIso } from './dates'
+import {
+  addMinutesToMantineDateTime,
+  formatDateTime,
+  isoToMantineDateTime,
+  mantineDateTimeToIso,
+} from './dates'
 
 describe('mantineDateTimeToIso', () => {
   it('converts a Mantine local-time string into a valid ISO string', () => {
@@ -22,6 +27,16 @@ describe('isoToMantineDateTime', () => {
   it('formats an ISO string from the backend into the expected Mantine shape', () => {
     const local = isoToMantineDateTime(new Date(2026, 0, 5, 8, 5, 0).toISOString())
     expect(local).toBe('2026-01-05 08:05:00')
+  })
+})
+
+describe('addMinutesToMantineDateTime', () => {
+  it('adds minutes within the same day', () => {
+    expect(addMinutesToMantineDateTime('2026-07-15 09:30:00', 30)).toBe('2026-07-15 10:00:00')
+  })
+
+  it('rolls over into the next day when the addition crosses midnight', () => {
+    expect(addMinutesToMantineDateTime('2026-07-15 23:45:00', 30)).toBe('2026-07-16 00:15:00')
   })
 })
 

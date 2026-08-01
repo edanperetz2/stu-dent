@@ -15,7 +15,8 @@ import { apiErrorMessage } from '../../api/httpClient'
 import type { Feedback, PendingFeedback } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { EmptyText, ErrorText, LoadingText } from '../../components/StateText'
+import { CardListSkeleton } from '../../components/Skeletons'
+import { EmptyText, ErrorText } from '../../components/StateText'
 import { formatDateTime } from '../../utils/dates'
 
 interface GroupSpec {
@@ -161,6 +162,7 @@ export function FeedbackPage() {
     isLoading: pendingLoading,
     isError: pendingError,
     error: pendingErrorValue,
+    refetch: refetchPending,
   } = useQuery({
     queryKey: ['feedback', 'pending'],
     queryFn: () => listPendingFeedback(token),
@@ -172,6 +174,7 @@ export function FeedbackPage() {
     isLoading: givenLoading,
     isError: givenError,
     error: givenErrorValue,
+    refetch: refetchGiven,
   } = useQuery({
     queryKey: ['feedback', 'given'],
     queryFn: () => listFeedbackGiven(token),
@@ -183,6 +186,7 @@ export function FeedbackPage() {
     isLoading: receivedLoading,
     isError: receivedError,
     error: receivedErrorValue,
+    refetch: refetchReceived,
   } = useQuery({
     queryKey: ['feedback', 'received'],
     queryFn: () => listFeedbackReceived(token),
@@ -238,9 +242,11 @@ export function FeedbackPage() {
           grouped by patient.
         </Text>
         {receivedLoading ? (
-          <LoadingText />
+          <CardListSkeleton />
         ) : receivedError ? (
-          <ErrorText>{apiErrorMessage(receivedErrorValue, 'Failed to load feedback.')}</ErrorText>
+          <ErrorText onRetry={() => refetchReceived()}>
+            {apiErrorMessage(receivedErrorValue, 'Failed to load feedback.')}
+          </ErrorText>
         ) : (
           <FeedbackList
             feedback={received ?? []}
@@ -259,9 +265,9 @@ export function FeedbackPage() {
       <Stack gap="xs">
         <Title order={4}>Pending feedback</Title>
         {pendingLoading ? (
-          <LoadingText />
+          <CardListSkeleton count={2} />
         ) : pendingError ? (
-          <ErrorText>
+          <ErrorText onRetry={() => refetchPending()}>
             {apiErrorMessage(pendingErrorValue, 'Failed to load pending feedback.')}
           </ErrorText>
         ) : (
@@ -272,9 +278,11 @@ export function FeedbackPage() {
       <Stack gap="xs">
         <Title order={4}>Feedback you&apos;ve given</Title>
         {givenLoading ? (
-          <LoadingText />
+          <CardListSkeleton />
         ) : givenError ? (
-          <ErrorText>{apiErrorMessage(givenErrorValue, 'Failed to load feedback.')}</ErrorText>
+          <ErrorText onRetry={() => refetchGiven()}>
+            {apiErrorMessage(givenErrorValue, 'Failed to load feedback.')}
+          </ErrorText>
         ) : (
           <FeedbackList
             feedback={given ?? []}
@@ -286,7 +294,7 @@ export function FeedbackPage() {
         )}
       </Stack>
 
-      <Modal opened={modalOpened} onClose={closeModal} title="Give feedback" centered>
+      <Modal opened={modalOpened} onClose={closeModal} title="Give feedback" centered size="md">
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
             {activeItem && (

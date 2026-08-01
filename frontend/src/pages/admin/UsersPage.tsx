@@ -1,14 +1,17 @@
 import { Badge, Button, Group, Modal, Select, Stack, Table, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 import { deleteUser, listAllUsers, updateUser } from '../../api/admin'
 import { apiErrorMessage } from '../../api/httpClient'
 import type { Role } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
-import { LoadingText } from '../../components/StateText'
+import { TableSkeleton } from '../../components/Skeletons'
+import { ErrorText } from '../../components/StateText'
+import { showUndoToast } from '../../hooks/showUndoToast'
+import { useListQuery } from '../../hooks/useListQuery'
 
 const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'student', label: 'Student' },
@@ -16,6 +19,22 @@ const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'admin', label: 'Admin' },
   { value: 'patient', label: 'Patient' },
 ]
+
+/** Adds/removes one id from a Set-valued state setter -- used to track
+ * per-row pending state independently of `useMutation`'s own `isPending`/
+ * `variables`, which reflect only the single most-recently-fired call. One
+ * shared `updateMutation`/`deleteMutation` handles every row in this table,
+ * so two rows mutated within moments of each other would otherwise show a
+ * stale or wrong loading spinner -- each row's own membership in this Set
+ * survives regardless of what any other row does concurrently. */
+function togglePending(setPending: Dispatch<SetStateAction<Set<string>>>, id: string, present: boolean) {
+  setPending((prev) => {
+    const next = new Set(prev)
+    if (present) next.add(id)
+    else next.delete(id)
+    return next
+  })
+}
 
 export function UsersPage() {
   const token = useAuthToken()
@@ -26,11 +45,18 @@ export function UsersPage() {
     fullName: string
     newRole: Role
   } | null>(null)
+  const [pendingUpdateIds, setPendingUpdateIds] = useState<Set<string>>(new Set())
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set())
 
-  const { data: users, isLoading } = useQuery({
+  // isEmpty always false -- an empty user list still renders the (empty)
+  // table, same reasoning as RoomsPage/EquipmentPage.
+  const usersQuery = useListQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => listAllUsers(token),
+    errorFallback: 'Failed to load users.',
+    isEmpty: () => false,
   })
+  const users = usersQuery.status === 'ready' ? usersQuery.data : undefined
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
 
@@ -64,8 +90,10 @@ export function UsersPage() {
     <Stack>
       <Title order={2}>Users</Title>
 
-      {isLoading ? (
-        <LoadingText />
+      {usersQuery.status === 'error' ? (
+        <ErrorText onRetry={usersQuery.retry}>{usersQuery.message}</ErrorText>
+      ) : usersQuery.status === 'loading' ? (
+        <TableSkeleton columns={5} />
       ) : (
         <Table.ScrollContainer minWidth={700}>
         <Table highlightOnHover>
@@ -112,28 +140,49 @@ export function UsersPage() {
                   <Table.Td>
                     <Group gap="xs">
                       {user.is_active ? (
-                        <ConfirmButton
-                          label="Deactivate"
+                        <Button
+                          size="xs"
+                          variant="light"
                           color="red"
-                          message={`This will deactivate ${user.full_name}'s account.`}
-                          onConfirm={() =>
-                            updateMutation.mutate({ userId: user.id, is_active: false })
-                          }
-                          loading={
-                            updateMutation.isPending && updateMutation.variables?.userId === user.id
-                          }
-                        />
+                          loading={pendingUpdateIds.has(user.id)}
+                          onClick={() => {
+                            // Undo awaits this exact request before re-mutating --
+                            // otherwise a fast Undo click fires a second PATCH
+                            // while the first is still in flight, and whichever
+                            // response's cache-invalidation resolves last wins
+                            // the displayed state, regardless of click order.
+                            togglePending(setPendingUpdateIds, user.id, true)
+                            const deactivating = updateMutation
+                              .mutateAsync({ userId: user.id, is_active: false })
+                              .finally(() => togglePending(setPendingUpdateIds, user.id, false))
+                            showUndoToast({
+                              message: `${user.full_name}'s account was deactivated.`,
+                              onUndo: async () => {
+                                await deactivating.catch(() => {})
+                                togglePending(setPendingUpdateIds, user.id, true)
+                                updateMutation.mutate(
+                                  { userId: user.id, is_active: true },
+                                  { onSettled: () => togglePending(setPendingUpdateIds, user.id, false) },
+                                )
+                              },
+                            })
+                          }}
+                        >
+                          Deactivate
+                        </Button>
                       ) : (
                         <Button
                           size="xs"
                           variant="light"
                           color="green"
-                          loading={
-                            updateMutation.isPending && updateMutation.variables?.userId === user.id
-                          }
-                          onClick={() =>
-                            updateMutation.mutate({ userId: user.id, is_active: true })
-                          }
+                          loading={pendingUpdateIds.has(user.id)}
+                          onClick={() => {
+                            togglePending(setPendingUpdateIds, user.id, true)
+                            updateMutation.mutate(
+                              { userId: user.id, is_active: true },
+                              { onSettled: () => togglePending(setPendingUpdateIds, user.id, false) },
+                            )
+                          }}
                         >
                           Activate
                         </Button>
@@ -142,8 +191,13 @@ export function UsersPage() {
                         <ConfirmButton
                           label="Delete"
                           message={`This will soft-delete ${user.full_name}'s account. This can't be undone from here.`}
-                          onConfirm={() => deleteMutation.mutate(user.id)}
-                          loading={deleteMutation.isPending && deleteMutation.variables === user.id}
+                          onConfirm={() => {
+                            togglePending(setPendingDeleteIds, user.id, true)
+                            deleteMutation.mutate(user.id, {
+                              onSettled: () => togglePending(setPendingDeleteIds, user.id, false),
+                            })
+                          }}
+                          loading={pendingDeleteIds.has(user.id)}
                         />
                       )}
                     </Group>
@@ -160,6 +214,7 @@ export function UsersPage() {
         opened={!!pendingRoleChange}
         onClose={() => setPendingRoleChange(null)}
         title="Change role?"
+        size="sm"
       >
         <Stack>
           <Text size="sm">

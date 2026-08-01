@@ -28,7 +28,15 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db)
             websocket.receive_json(), timeout=_AUTH_TIMEOUT_SECONDS
         )
     except (TimeoutError, WebSocketDisconnect, ValueError):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        # Distinct from WS_1008_POLICY_VIOLATION below -- this path means no
+        # usable auth message arrived at all (a slow/congested connection
+        # timing out, a client disconnecting mid-handshake, or malformed
+        # JSON), not that a token was actually evaluated and rejected. The
+        # frontend (RealtimeContext.tsx) treats 1008 as a hard "your session
+        # expired" and logs the user out instead of retrying -- conflating
+        # this with a real rejection meant a merely slow connection could
+        # trigger an unwanted logout.
+        await websocket.close(code=status.WS_1002_PROTOCOL_ERROR)
         return
 
     token = auth_message.get("token") if isinstance(auth_message, dict) else None

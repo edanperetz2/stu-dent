@@ -1,0 +1,1906 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stu-Dent — Frontend Review</title>
+<style>
+/* ============================================================
+   Stu-Dent frontend review — clinical editorial audit
+   Palette drawn from the project's own logo: navy ink, surgical teal.
+   ============================================================ */
+:root {
+  --paper:      #f7f4ef;
+  --paper-2:    #fffdfa;
+  --paper-3:    #efeae1;
+  --ink:        #16202b;
+  --ink-2:      #45525f;
+  --ink-3:      #7a8794;
+  --rule:       #ddd6ca;
+  --teal:       #0b6e6e;
+  --teal-soft:  #d6ebe9;
+  --navy:       #1b3a5c;
+  --p0:         #a8231c;
+  --p0-soft:    #f8e0dd;
+  --p1:         #a56a08;
+  --p1-soft:    #faedd4;
+  --p2:         #3f6b8a;
+  --p2-soft:    #e2edf4;
+  --good:       #14683f;
+  --good-soft:  #dcefe3;
+
+  --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --measure: 74ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:      #14181d;
+    --paper-2:    #1b2026;
+    --paper-3:    #242a31;
+    --ink:        #e8e4dc;
+    --ink-2:      #b0b8c0;
+    --ink-3:      #7f8a95;
+    --rule:       #333b44;
+    --teal:       #4fc4bd;
+    --teal-soft:  #123330;
+    --navy:       #8fb8dd;
+    --p0:         #f2857c;
+    --p0-soft:    #3a1a18;
+    --p1:         #e0b458;
+    --p1-soft:    #35290f;
+    --p2:         #8ab6d6;
+    --p2-soft:    #16242e;
+    --good:       #63c894;
+    --good-soft:  #10281c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16.5px/1.65 var(--sans);
+  letter-spacing: -0.005em;
+  padding: 0 clamp(1rem, 5vw, 4rem) 8rem;
+}
+
+/* Subtle paper grain, gone in dark mode where it reads as noise */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .5;
+  background-image: radial-gradient(var(--rule) .5px, transparent .5px);
+  background-size: 22px 22px;
+}
+@media (prefers-color-scheme: dark) { body::before { opacity: .16; } }
+
+.wrap { max-width: 1080px; margin: 0 auto; position: relative; z-index: 1; }
+
+/* ---------------- masthead ---------------- */
+.masthead {
+  padding: clamp(3rem, 9vw, 6rem) 0 2rem;
+  border-bottom: 2px solid var(--ink);
+}
+.kicker {
+  font: 600 .72rem/1 var(--mono);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-bottom: 1.6rem;
+}
+h1 {
+  font: 400 clamp(2.6rem, 7.5vw, 4.6rem)/1.02 var(--serif);
+  letter-spacing: -0.025em;
+  margin: 0 0 1rem;
+}
+h1 em { font-style: italic; color: var(--teal); }
+.standfirst {
+  font: 400 clamp(1.05rem, 2.1vw, 1.25rem)/1.5 var(--serif);
+  color: var(--ink-2);
+  max-width: 60ch;
+  margin: 0 0 2rem;
+}
+.meta {
+  display: flex; flex-wrap: wrap; gap: .5rem 2rem;
+  font: .78rem/1.5 var(--mono);
+  color: var(--ink-3);
+  padding-bottom: 1.4rem;
+}
+.meta b { color: var(--ink-2); font-weight: 600; }
+.meta a { color: var(--teal); text-underline-offset: 3px; }
+
+/* ---------------- verdict ---------------- */
+.verdict {
+  margin: 2.5rem 0 0;
+  padding: 1.9rem 2rem;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--teal);
+}
+.verdict p { margin: 0; font: 400 1.2rem/1.55 var(--serif); max-width: 66ch; }
+.verdict p + p { margin-top: .9rem; color: var(--ink-2); font-size: 1.05rem; }
+
+/* ---------------- stats ---------------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  margin: 3.5rem 0;
+}
+.stat { background: var(--paper-2); padding: 1.3rem 1.4rem; }
+.stat .n {
+  font: 400 2.3rem/1 var(--serif);
+  letter-spacing: -0.03em;
+  display: block;
+  margin-bottom: .35rem;
+}
+.stat .l {
+  font: 500 .7rem/1.35 var(--mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.stat.is-p0 .n { color: var(--p0); }
+.stat.is-p1 .n { color: var(--p1); }
+.stat.is-p2 .n { color: var(--p2); }
+
+/* ---------------- sections ---------------- */
+section { margin: 5rem 0 0; scroll-margin-top: 2rem; }
+h2 {
+  font: 400 clamp(1.8rem, 4vw, 2.5rem)/1.1 var(--serif);
+  letter-spacing: -0.02em;
+  margin: 0 0 .4rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--ink);
+  display: flex;
+  align-items: baseline;
+  gap: .9rem;
+}
+h2 .num {
+  font: 500 .7rem/1 var(--mono);
+  color: var(--teal);
+  letter-spacing: .1em;
+  flex: none;
+}
+.lede { color: var(--ink-2); max-width: var(--measure); margin: 0 0 2rem; }
+h3 {
+  font: 600 1.12rem/1.35 var(--sans);
+  letter-spacing: -0.012em;
+  margin: 2.6rem 0 .7rem;
+}
+p, li { max-width: var(--measure); }
+p { margin: 0 0 1.05rem; }
+ul, ol { margin: 0 0 1.05rem; padding-left: 1.3rem; }
+li { margin-bottom: .5rem; }
+li::marker { color: var(--ink-3); }
+strong { font-weight: 650; }
+a { color: var(--teal); }
+
+code {
+  font: .855em/1.4 var(--mono);
+  background: var(--paper-3);
+  padding: .13em .4em;
+  border-radius: 3px;
+  word-break: break-word;
+}
+blockquote {
+  margin: 1.4rem 0;
+  padding: .9rem 1.3rem;
+  border-left: 3px solid var(--p0);
+  background: var(--p0-soft);
+  font: italic 1.05rem/1.5 var(--serif);
+  color: var(--ink);
+  max-width: var(--measure);
+}
+
+/* ---------------- tables ---------------- */
+.tbl-scroll { overflow-x: auto; margin: 1.4rem 0 2rem; }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: .93rem; }
+th, td { text-align: left; padding: .7rem .9rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  font: 600 .7rem/1.3 var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--ink);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td:first-child { white-space: nowrap; }
+
+/* ---------------- findings ---------------- */
+.finding {
+  margin: 2.5rem 0;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+}
+.finding > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.15rem 1.5rem;
+  border-bottom: 1px solid var(--rule);
+  flex-wrap: wrap;
+}
+.tag {
+  font: 700 .68rem/1 var(--mono);
+  letter-spacing: .08em;
+  padding: .42em .6em;
+  border-radius: 3px;
+  flex: none;
+  margin-top: .15rem;
+}
+.tag.p0 { background: var(--p0-soft); color: var(--p0); }
+.tag.p1 { background: var(--p1-soft); color: var(--p1); }
+.tag.p2 { background: var(--p2-soft); color: var(--p2); }
+.tag.ok { background: var(--good-soft); color: var(--good); }
+.finding > header h3 { margin: 0; font-size: 1.14rem; flex: 1 1 16rem; }
+.finding .body { padding: 1.4rem 1.5rem .4rem; }
+.finding .body > :last-child { margin-bottom: 1.1rem; }
+.where {
+  font: .76rem/1.5 var(--mono);
+  color: var(--ink-3);
+  padding: .75rem 1.5rem;
+  border-top: 1px dashed var(--rule);
+  background: var(--paper);
+}
+.where b { color: var(--ink-2); font-weight: 600; }
+
+.actions { background: var(--paper); border-top: 1px solid var(--rule); padding: 1.2rem 1.5rem; }
+.actions h4 {
+  font: 600 .7rem/1 var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin: 0 0 .8rem;
+}
+.actions ol { margin: 0; padding-left: 1.25rem; }
+.actions li { font-size: .95rem; }
+
+/* ---------------- before / after ---------------- */
+.ba { margin: 2rem 0 2.6rem; }
+.ba-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 1.15rem;
+}
+.panel { border: 1px solid var(--rule); background: var(--paper-2); display: flex; flex-direction: column; }
+.panel > figcaption {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .65rem .9rem;
+  font: 600 .7rem/1 var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--rule);
+}
+.panel.before > figcaption { color: var(--p0); background: var(--p0-soft); }
+.panel.after  > figcaption { color: var(--good); background: var(--good-soft); }
+.panel .note {
+  padding: .7rem .9rem;
+  font-size: .84rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  border-top: 1px dashed var(--rule);
+  margin-top: auto;
+}
+
+/* --- the app mockup: a faithful mini Stu-Dent --- */
+.mock {
+  --m-bg:   #ffffff;
+  --m-ink:  #212529;
+  --m-dim:  #868e96;
+  --m-line: #dee2e6;
+  --m-blue: #228be6;
+  background: var(--m-bg);
+  color: var(--m-ink);
+  font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+.mock * { box-sizing: border-box; }
+.mock-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--m-line);
+  gap: 8px;
+}
+.logo { display: flex; align-items: center; gap: 5px; font-weight: 800; font-size: 11px; color: #12557f; letter-spacing: -.02em; }
+.logo .glyph {
+  width: 19px; height: 19px; border-radius: 5px;
+  background: linear-gradient(150deg, #1a7f8e, #12557f);
+  display: grid; place-items: center;
+  color: #fff; font-size: 10px; font-weight: 700;
+}
+.mock-head .who { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--m-ink); }
+.mock-head .who .out { color: var(--m-dim); }
+.mock-body { display: flex; min-height: 178px; }
+.mock-nav { width: 108px; flex: none; border-right: 1px solid var(--m-line); padding: 7px 5px; }
+.mock-nav a {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 4px;
+  padding: 5px 7px; border-radius: 4px;
+  color: var(--m-ink); text-decoration: none; font-size: 11px;
+}
+.mock-nav a.on { background: #e7f5ff; color: #1971c2; font-weight: 600; }
+/* Faithful to the real app: the sidebar has NO active-page state (see P1-7),
+   so every "before" panel renders its nav flat regardless of the .on class. */
+.panel.before .mock-nav a.on { background: none; color: var(--m-ink); font-weight: 400; }
+.mock-nav a .dot {
+  background: #fa5252; color: #fff; border-radius: 99px;
+  font-size: 9px; padding: 0 4px; min-width: 14px; text-align: center; font-weight: 700;
+}
+.mock-main { flex: 1; padding: 11px 13px; min-width: 0; }
+.mock-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 11px; flex-wrap: wrap; }
+.mock-title h4 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.seg { display: inline-flex; background: #f1f3f5; border-radius: 5px; padding: 2px; gap: 2px; }
+.seg span { padding: 3px 8px; border-radius: 4px; font-size: 10px; color: var(--m-dim); }
+.seg span.on { background: #fff; color: var(--m-ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.btn-b { background: var(--m-blue); color: #fff; border-radius: 5px; padding: 5px 10px; font-size: 10.5px; font-weight: 600; display: inline-block; }
+.btn-o { border: 1px solid var(--m-line); border-radius: 5px; padding: 4px 9px; font-size: 10.5px; display: inline-block; background: #fff; }
+
+.mock .empty { color: var(--m-dim); font-size: 12px; padding: 5px 0; }
+.mock .err {
+  border: 1px solid #ffc9c9; background: #fff5f5; border-radius: 6px;
+  padding: 10px 12px; display: flex; gap: 9px; align-items: flex-start;
+}
+.mock .err .ico { color: #e03131; font-weight: 700; flex: none; line-height: 1.3; }
+.mock .err .t { font-weight: 650; color: #c92a2a; margin-bottom: 2px; font-size: 11.5px; }
+.mock .err .d { color: #a13a3a; font-size: 11px; margin-bottom: 8px; line-height: 1.45; }
+
+.mock table { width: 100%; border-collapse: collapse; min-width: 0; font-size: 10.5px; }
+.mock th, .mock td { padding: 4px 6px; border-bottom: 1px solid #f1f3f5; text-align: left; white-space: nowrap; }
+.mock th { color: var(--m-dim); font-weight: 600; font-size: 9.5px; text-transform: none; letter-spacing: 0; border-bottom: 1px solid var(--m-line); }
+.pill { border-radius: 99px; padding: 1px 6px; font-size: 9px; font-weight: 700; display: inline-block; }
+.pill.ok  { background: #d3f9d8; color: #2b8a3e; }
+.pill.wait{ background: #fff3bf; color: #a67806; }
+
+.sk { background: linear-gradient(90deg,#f1f3f5 25%,#e9ecef 37%,#f1f3f5 63%); background-size: 400% 100%; border-radius: 4px; height: 9px; animation: sh 1.4s ease infinite; }
+@keyframes sh { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+
+.conn { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 7px; border-radius: 99px; background: #fff4e6; color: #d9480f; font-weight: 600; }
+.conn .led { width: 6px; height: 6px; border-radius: 99px; background: #fd7e14; animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .conn .led { animation: none; } }
+
+.fld { margin-bottom: 8px; }
+.fld label { display: block; font-size: 10px; font-weight: 600; margin-bottom: 3px; }
+.fld .in {
+  border: 1px solid var(--m-line); border-radius: 5px;
+  padding: 5px 8px; font-size: 10.5px; color: var(--m-dim); background: #fff;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.fld .hint { font-size: 9px; color: #2b8a3e; margin-top: 2px; font-weight: 600; }
+.fld.bad .in { border-color: #ffc9c9; }
+.fld.bad .hint { color: #c92a2a; }
+.mock-auth { padding: 14px 16px; max-width: 260px; margin: 0 auto; }
+.mock-auth .ttl { text-align: center; font-weight: 700; font-size: 14px; margin: 6px 0 11px; }
+.banner {
+  background: #fff9db; border: 1px solid #ffe066; border-radius: 6px;
+  padding: 7px 9px; font-size: 10.5px; color: #8c6d1f; margin-bottom: 11px; line-height: 1.45;
+}
+
+/* ---------------- swatches & specimens ---------------- */
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: .6rem; margin: 1.2rem 0 1.8rem; }
+.sw { border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--paper-2); }
+.sw .chip { height: 52px; }
+.sw .lab { padding: .45rem .55rem; font: .68rem/1.35 var(--mono); }
+.sw .lab b { display: block; color: var(--ink); font-weight: 600; letter-spacing: .02em; }
+.sw .lab span { color: var(--ink-3); }
+
+.specimen { border: 1px solid var(--rule); background: var(--paper-2); padding: 1.1rem 1.3rem; margin: 1rem 0 1.6rem; }
+.specimen .row { display: flex; align-items: baseline; gap: 1rem; padding: .5rem 0; border-bottom: 1px dashed var(--rule); flex-wrap: wrap; }
+.specimen .row:last-child { border-bottom: none; }
+.specimen .row .tagname { font: 600 .66rem/1 var(--mono); color: var(--teal); letter-spacing: .08em; min-width: 5.5rem; flex: none; text-transform: uppercase; }
+.specimen .row .spec { font: .68rem/1 var(--mono); color: var(--ink-3); margin-left: auto; flex: none; }
+
+/* metric strip inside a finding */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin: 1.2rem 0 1.4rem; }
+.metrics div { background: var(--paper-2); padding: .8rem .9rem; }
+.metrics b { display: block; font: 400 1.6rem/1 var(--serif); color: var(--p1); margin-bottom: .2rem; }
+.metrics span { font: .66rem/1.3 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+
+/* scope/effort line under a proposal */
+.scope {
+  display: flex; flex-wrap: wrap; gap: .4rem .9rem;
+  font: .7rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3); padding: .7rem 1.5rem; background: var(--paper);
+  border-top: 1px dashed var(--rule);
+}
+.scope b { color: var(--teal); font-weight: 600; }
+
+/* extra mock bits for the design sections */
+.mock .badge-old { background: #e9ecef; color: #495057; border-radius: 99px; padding: 2px 7px; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; display: inline-block; }
+.mock .badge-new { border-radius: 4px; padding: 2px 7px 2px 5px; font-size: 9.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.mock .badge-new .d { width: 5px; height: 5px; border-radius: 99px; flex: none; }
+.mock .ico-n { width: 13px; height: 13px; flex: none; opacity: .75; }
+.mock-nav a .ico-n { margin-right: 5px; }
+.mock-nav a { justify-content: flex-start; }
+.mock-nav a .sp { margin-left: auto; }
+.chipset { display: flex; gap: 4px; flex-wrap: wrap; }
+.chipset span { border: 1px solid var(--m-line); border-radius: 99px; padding: 2px 8px; font-size: 9.5px; background: #fff; }
+.chipset span.on { background: #0f7d8c; border-color: #0f7d8c; color: #fff; font-weight: 600; }
+.grp { border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 9px; margin-bottom: 7px; }
+.grp .gt { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #868e96; margin-bottom: 6px; }
+
+/* ---------------- callouts / lists ---------------- */
+.good-list { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin: 1.6rem 0 2rem; }
+.good-list > div { background: var(--paper-2); padding: 1.05rem 1.3rem; }
+.good-list h4 { margin: 0 0 .35rem; font-size: .98rem; font-weight: 650; display: flex; gap: .55rem; align-items: baseline; }
+.good-list h4::before { content: "✓"; color: var(--good); font-weight: 700; flex: none; }
+.good-list p { margin: 0; font-size: .92rem; color: var(--ink-2); }
+
+.order { counter-reset: o; list-style: none; padding: 0; margin: 1.5rem 0; }
+.order li {
+  counter-increment: o;
+  position: relative;
+  padding: .85rem 0 .85rem 3.3rem;
+  border-bottom: 1px solid var(--rule);
+  max-width: var(--measure);
+}
+.order li::before {
+  content: counter(o);
+  position: absolute; left: 0; top: .8rem;
+  width: 2.2rem; height: 2.2rem;
+  display: grid; place-items: center;
+  border: 1px solid var(--teal); color: var(--teal);
+  border-radius: 50%;
+  font: 500 .85rem/1 var(--mono);
+}
+.order li:last-child { border-bottom: none; }
+
+pre {
+  background: var(--paper-3);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--teal);
+  padding: .9rem 1.1rem;
+  overflow-x: auto;
+  font: .84rem/1.6 var(--mono);
+  margin: 1.2rem 0;
+}
+pre code { background: none; padding: 0; }
+
+footer {
+  margin-top: 6rem; padding-top: 1.6rem;
+  border-top: 2px solid var(--ink);
+  font: .82rem/1.6 var(--mono);
+  color: var(--ink-3);
+}
+footer p { max-width: var(--measure); }
+
+@media print {
+  body { background: #fff; padding: 0; }
+  body::before { display: none; }
+  .finding, .panel, .stat { break-inside: avoid; }
+  section { break-before: auto; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="kicker">Code review · Frontend focus</div>
+  <h1>Stu&#8209;Dent<br><em>frontend review</em></h1>
+  <p class="standfirst">
+    A dental teaching-clinic scheduling system. The backend is the stronger half; the
+    frontend handles the happy path well and the failure path barely at all.
+  </p>
+  <div class="meta">
+    <span><b>Repo</b> <a href="https://github.com/edanperetz2/stu-dent">edanperetz2/stu-dent</a></span>
+    <span><b>Reviewed</b> 31 Jul 2026</span>
+    <span><b>Scope</b> Whole project, frontend-weighted</span>
+    <span><b>Changes made</b> None — review only</span>
+  </div>
+</header>
+
+<div class="verdict">
+  <p>This is a strong project. The domain modelling, the conflict engine, and the
+  restraint shown around the AI features are all better than the average student
+  project — in places better than production code I've seen.</p>
+  <p>Every frontend issue below shares one root cause: <strong>the UI was built for the
+  path where everything works.</strong> When a request fails, the app doesn't say so — it
+  says you have no data. That single pattern accounts for the two most serious findings,
+  and fixing it is mostly a matter of using a component that already exists in the codebase.</p>
+</div>
+
+<div class="stats">
+  <div class="stat is-p0"><span class="n">4</span><span class="l">P0 · fix first</span></div>
+  <div class="stat is-p1"><span class="n">7</span><span class="l">P1 · before demo</span></div>
+  <div class="stat is-p2"><span class="n">9</span><span class="l">P2 · polish</span></div>
+  <div class="stat"><span class="n">6,197</span><span class="l">Frontend LOC</span></div>
+  <div class="stat"><span class="n">45</span><span class="l">Frontend tests</span></div>
+  <div class="stat"><span class="n">285</span><span class="l">Backend tests</span></div>
+</div>
+
+<!-- ============================================ -->
+<section id="project">
+  <h2><span class="num">01</span> What the project is</h2>
+  <p class="lede">Worth stating precisely, because the domain is what makes the
+  engineering interesting.</p>
+
+  <p>Dental students must perform real treatments on real patients to graduate,
+  supervised by an <strong>attending</strong> — a senior dentist who mentors and approves
+  procedures. Today that coordination happens over WhatsApp and spreadsheets. Stu-Dent
+  replaces it.</p>
+
+  <p>The hard part is that booking one appointment means simultaneously reserving
+  <strong>five</strong> things — the student, the patient, the attending, a room, and a
+  piece of equipment — any of which can collide with another booking. That constraint
+  drives most of the architecture.</p>
+
+  <h3>Roles</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Role</th><th>Can do</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Student</strong></td><td>Book and edit appointments, manage own patients, forum, direct messages, reports</td></tr>
+      <tr><td><strong>Attending</strong></td><td>Approve student requests, view own schedule, leave feedback on students, reports</td></tr>
+      <tr><td><strong>Patient</strong></td><td>Request appointments, message their student, leave feedback, set scheduling preferences</td></tr>
+      <tr><td><strong>Admin</strong></td><td>Manage users, rooms and equipment; clinic-wide resource calendar; moderate the forum</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Stack</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Layer</th><th>Choice</th></tr></thead>
+    <tbody>
+      <tr><td>Backend</td><td>Python 3.12 · FastAPI · SQLAlchemy 2 (sync) · Pydantic v2 · Alembic · pytest</td></tr>
+      <tr><td>Database</td><td>PostgreSQL 16 — picked for exclusion constraints that make double-booking impossible at the DB level</td></tr>
+      <tr><td>Frontend</td><td>React 19 · Vite · TypeScript · Mantine v9 · TanStack Query v5 · React Router v7 · react-big-calendar</td></tr>
+      <tr><td>Realtime</td><td>WebSockets over Postgres <code>LISTEN/NOTIFY</code>, so background-worker events also reach clients</td></tr>
+      <tr><td>AI</td><td>Local Ollama (<code>llama3.2</code>) — tightly fenced, see below</td></tr>
+      <tr><td>Infra</td><td>Docker Compose: <code>api</code>, <code>db</code>, <code>frontend</code>, <code>mailhog</code>, <code>worker</code>, <code>ollama</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section id="good">
+  <h2><span class="num">02</span> What's genuinely good</h2>
+  <p class="lede">Not padding. These are decisions worth keeping, and worth knowing are
+  strong so they don't get "refactored away" later.</p>
+
+  <div class="good-list">
+    <div>
+      <h4>The conflict engine is properly built</h4>
+      <p><code>find_conflicts</code> runs targeted per-resource queries so the app can tell you
+      <em>which</em> of the five resources blocked you — instead of surfacing a generic
+      Postgres constraint error with no way to know which of 5 constraints fired. The
+      DB-level exclusion constraints stay underneath as a genuine race-condition net.</p>
+    </div>
+    <div>
+      <h4>The waitlist design is the best idea in the project</h4>
+      <p>You don't "join a waitlist" from a form. You join it because a real booking attempt
+      failed, and the entry records why. First-come-first-served ordering uses a monotonic
+      <code>sequence</code> column — a correct diagnosis, since <code>created_at</code> ties
+      inside a single transaction.</p>
+    </div>
+    <div>
+      <h4>The AI trust boundary is drawn in the right place</h4>
+      <p>The model never sees the database, never writes a query, and never books anything.
+      It extracts candidate names and a date phrase; every ID and date is then resolved
+      deterministically against real rows and server time. Unsupported questions get
+      "I can't answer that yet" rather than a confident guess.</p>
+    </div>
+    <div>
+      <h4>Medical confidentiality was actually considered</h4>
+      <p><code>redact_conflicts_for_patient</code> stops a patient from learning that their own
+      student is busy treating someone else — while students, attendings and admins viewing
+      the identical data still see the real cause. That's a real privacy threat model, and
+      most student projects don't have one.</p>
+    </div>
+    <div>
+      <h4>Code hygiene is clean</h4>
+      <p><code>tsc -b</code> passes with zero errors. <code>oxlint</code> reports 4 warnings, all
+      trivial fast-refresh notes. Every finding below is design- or UX-level, not a
+      correctness bug the tooling should have caught.</p>
+    </div>
+    <div>
+      <h4>The comments explain <em>why</em></h4>
+      <p>Unusually thorough, and they document reasoning and rejected alternatives rather
+      than restating the code. This is rare and genuinely valuable — it's how I was able to
+      review the project this quickly.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section id="p0">
+  <h2><span class="num">03</span> Critical findings</h2>
+  <p class="lede">Four issues. The first two are really one defect seen from two angles, and
+  fixing them together is the highest-value work available in this codebase. The fourth was
+  found by inspecting the running app, not by reading source.</p>
+
+  <!-- P0-1 -->
+  <article class="finding">
+    <header>
+      <span class="tag p0">P0-1</span>
+      <h3>A failed request is displayed as "you have no data"</h3>
+    </header>
+    <div class="body">
+      <p>When a list query fails, the page renders its <em>empty state</em> instead of an
+      error. A student whose session has expired, or who is on a flaky clinic wifi, is told
+      their schedule is empty — while it sits intact on the server.</p>
+
+      <p>The codebase already knows about this. <code>components/StateText.tsx</code> exports an
+      <code>ErrorText</code> component whose own docstring says several pages "rendered their
+      empty-state text for a failed request too, indistinguishable from genuinely having no
+      data." <strong>That fix reached only 3 of 14 pages.</strong> The other 11 still
+      destructure <code>{ data, isLoading }</code> and never check <code>isError</code>.</p>
+
+      <p>Verified live in a browser with every API call returning 401:</p>
+      <blockquote>No appointments yet. Click "New Appointment" to create one.</blockquote>
+    </div>
+    <div class="where">
+      <b>Where</b> · Fixed in: <code>WaitlistPage</code>, <code>FeedbackPage</code>, <code>ReportsPage</code>.
+      Still affected: <code>AppointmentsListPage</code>, <code>PatientsListPage</code>,
+      <code>MessagesPage</code>, <code>NotificationsPage</code>, <code>ForumListPage</code>,
+      <code>ForumPostCard</code>, <code>PreferencesPage</code>, <code>RegisterPage</code>,
+      admin <code>UsersPage</code> / <code>RoomsPage</code> / <code>EquipmentPage</code>, and
+      <code>AppLayout</code>'s three badge queries.
+    </div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Audit all 14 pages for a <code>useQuery</code> destructure that omits <code>isError</code>.</li>
+        <li>Adopt one ordering convention everywhere — <strong>error → loading → empty → data</strong> — and hold it in review.</li>
+        <li>Give <code>ErrorText</code> a retry affordance, not just red text: a "Try again" button wired to the query's <code>refetch</code>.</li>
+        <li>Add a shared <code>useListQuery</code> wrapper (or a lint rule) so a new page physically cannot forget the error branch.</li>
+        <li>Add one test per page asserting a rejected query renders the <em>error</em> state and not the empty state. This is what keeps it fixed.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- BEFORE / AFTER 1 -->
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · what happens today</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">Dana Levi <span class="out">Log out</span></div>
+          </div>
+          <div class="mock-body">
+            <nav class="mock-nav">
+              <a class="on">Appointments</a><a>Patients</a><a>Waitlist</a>
+              <a>Forum</a><a>Messages</a><a>Notifications</a>
+            </nav>
+            <div class="mock-main">
+              <div class="mock-title">
+                <h4>Appointments</h4>
+                <span class="btn-b">New Appointment</span>
+              </div>
+              <div class="seg" style="margin-bottom:10px">
+                <span class="on">List</span><span>Calendar</span>
+              </div>
+              <p class="empty">No appointments yet. Click "New Appointment" to create one.</p>
+            </div>
+          </div>
+        </div>
+        <p class="note">The request returned <strong>401</strong>. Nothing on screen says so.
+        Dana has 12 appointments this week and is being invited to book her first.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · distinguish failure from emptiness</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">Dana Levi <span class="out">Log out</span></div>
+          </div>
+          <div class="mock-body">
+            <nav class="mock-nav">
+              <a class="on">Appointments</a><a>Patients</a><a>Waitlist</a>
+              <a>Forum</a><a>Messages</a><a>Notifications</a>
+            </nav>
+            <div class="mock-main">
+              <div class="mock-title">
+                <h4>Appointments</h4>
+                <span class="btn-b">New Appointment</span>
+              </div>
+              <div class="seg" style="margin-bottom:10px">
+                <span class="on">List</span><span>Calendar</span>
+              </div>
+              <div class="err">
+                <span class="ico">!</span>
+                <div>
+                  <div class="t">Couldn't load your appointments</div>
+                  <div class="d">Your session expired. Your appointments are safe — log in again to see them.</div>
+                  <span class="btn-o">Try again</span>
+                  <span class="btn-b" style="margin-left:4px">Log in</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="note">States the failure, reassures about the data, and offers both
+        recoveries. Announced via <code>role="alert"</code> so screen readers get it too.</p>
+      </figure>
+    </div>
+  </div>
+
+  <!-- P0-2 -->
+  <article class="finding">
+    <header>
+      <span class="tag p0">P0-2</span>
+      <h3>Nothing in the app handles an expired session</h3>
+    </header>
+    <div class="body">
+      <p><code>JWT_EXPIRE_MINUTES=30</code>, there is no refresh token, and the only
+      <code>logout()</code> call in the entire codebase is the manual button in the header.
+      <code>httpClient.ts</code> never inspects a 401.</p>
+      <p>So thirty minutes into any session every request starts failing — and because of
+      P0-1, the user sees false empty states with no hint that logging in again would fix it.
+      Thirty minutes is shorter than a clinic shift.</p>
+      <p>A page <em>reload</em> does recover, because the bootstrap effect clears the bad token
+      and bounces to login. That's exactly why this is easy to miss in testing and unpleasant
+      in real use: the bug only appears if you leave a tab open, which is what real users do
+      all day.</p>
+    </div>
+    <div class="where">
+      <b>Where</b> · <code>src/api/httpClient.ts</code> (no 401 branch) ·
+      <code>src/auth/AuthContext.tsx</code> · <code>.env.example:10</code>
+    </div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Handle 401 centrally in <code>httpClient.ts</code> — one place, not per page.</li>
+        <li>On 401: clear stored auth, redirect to <code>/login</code>, and show an explicit
+        "Your session expired — please log in again". Never fail silently.</li>
+        <li>Remember the attempted destination and return the user there after re-login.</li>
+        <li>Decide session length deliberately: raise the expiry, add refresh tokens, or warn
+        before expiry with an extend option. <strong>Pick one and write down why</strong> —
+        it's a product decision, not a config default.</li>
+        <li>Stop TanStack Query retrying 401s. It currently retries 3× with backoff, so the
+        user waits several seconds before even the wrong message appears.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- BEFORE / AFTER 2 -->
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · minute 31</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">Dana Levi <span class="out">Log out</span></div>
+          </div>
+          <div class="mock-body">
+            <nav class="mock-nav">
+              <a class="on">Patients</a><a>Appointments</a><a>Waitlist</a><a>Messages</a>
+            </nav>
+            <div class="mock-main">
+              <div class="mock-title"><h4>Patients</h4><span class="btn-b">New Patient</span></div>
+              <p class="empty">No patients yet. Click "New Patient" to add one.</p>
+              <p class="empty" style="margin-top:14px;font-size:11px">Notifications · <em>No notifications.</em></p>
+              <p class="empty" style="font-size:11px">Messages · <em>No contacts yet.</em></p>
+            </div>
+          </div>
+        </div>
+        <p class="note">Every page reports emptiness at once. The account looks wiped.
+        The only thing that actually happened is that a token aged past 30 minutes.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · say what happened</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who"><span class="out">Signed out</span></div>
+          </div>
+          <div class="mock-auth">
+            <div class="banner"><strong>Your session expired.</strong> Log in again — we'll
+            take you straight back to Patients.</div>
+            <div class="ttl">Stu-Dent</div>
+            <div class="fld">
+              <label>Email</label>
+              <div class="in">dana@stu-dent.demo</div>
+              <div class="hint">autocomplete="email" — autofilled</div>
+            </div>
+            <div class="fld">
+              <label>Password</label>
+              <div class="in">••••••••<span>👁</span></div>
+              <div class="hint">autocomplete="current-password"</div>
+            </div>
+            <div class="btn-b" style="display:block;text-align:center;margin-top:9px">Log in</div>
+          </div>
+        </div>
+        <p class="note">Explains the cause, preserves the destination, and lets a password
+        manager do the work. Also folds in P1-4 — the missing <code>autoComplete</code>.</p>
+      </figure>
+    </div>
+  </div>
+
+  <!-- P0-3 -->
+  <article class="finding">
+    <header>
+      <span class="tag p0">P0-3</span>
+      <h3>The WebSocket reconnects forever against a dead token</h3>
+    </header>
+    <div class="body">
+      <p><code>RealtimeContext</code> reconnects on a fixed 3-second timer with no backoff and
+      no attempt cap. When the token expires the server closes the socket immediately, so the
+      client opens a new one every 3 seconds — indefinitely.</p>
+      <p>The same happens when the backend is simply down: every open tab hammers it once a
+      second-and-a-half on average, precisely while it's trying to come back up.</p>
+    </div>
+    <div class="where"><b>Where</b> · <code>src/realtime/RealtimeContext.tsx</code> — <code>RECONNECT_DELAY_MS = 3000</code>, <code>socket.onclose</code></div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Add exponential backoff with jitter and a ceiling around 30 seconds.</li>
+        <li>Cap consecutive failures, then stop and offer a manual "Reconnect" control.</li>
+        <li>Treat an auth-failure close code differently from a network drop — an expired
+        token should route into the P0-2 flow, not the retry loop.</li>
+        <li>Wrap the <code>onmessage</code> <code>JSON.parse</code> in try/catch; one malformed
+        frame currently throws inside the handler.</li>
+      </ol>
+    </div>
+  </article>
+  <article class="finding">
+    <header><span class="tag p0">P0-4</span><h3>The entire sidebar navigation is unreachable by keyboard</h3></header>
+    <div class="body">
+      <p>Mantine's <code>&lt;NavLink&gt;</code> renders an <code>&lt;a&gt;</code>, but this code
+      passes it an <code>onClick</code> handler and <strong>no <code>to</code> or
+      <code>href</code></strong>. An anchor without an <code>href</code> is not focusable, and no
+      <code>tabIndex</code> is supplied to compensate. All eight items are therefore inert to the
+      keyboard — they respond only to a mouse click.</p>
+
+      <p>Measured in the running app, logged in as a student:</p>
+      <pre><code>totalFocusableOnPage:  28
+anyInsideNavbar:        0
+
+tab order → "Toggle navigation" → logo → "Log out" → page content
+            (all 8 nav items skipped entirely)</code></pre>
+
+      <p>A keyboard-only user can reach the burger, the logo and the logout button, and then
+      lands in the page body. <strong>They cannot move between pages at all.</strong> This is a
+      <strong>WCAG 2.1.1 Keyboard (Level&nbsp;A)</strong> failure — the most fundamental
+      accessibility requirement there is.</p>
+
+      <p>Two related defects ride along in the same six lines. There is <strong>no active
+      state</strong>: <code>NavLink</code>'s <code>active</code> prop is never passed and
+      <code>useLocation</code> is never called, so no page is ever marked current
+      (<code>aria-current</code> is <code>null</code> on all eight). And because there's no
+      <code>href</code>, Cmd/Ctrl-click can't open a page in a new tab, middle-click does
+      nothing, and there's no "copy link address".</p>
+
+      <p>All three vanish with the same fix, which is already demonstrated <em>in the same
+      file</em> — the header logo uses <code>component={Link}</code> correctly. This is an
+      oversight, not a misunderstanding.</p>
+    </div>
+    <div class="where"><b>Where</b> · <code>src/layouts/AppLayout.tsx:164–186</code> — compare with the correct <code>component={Link}</code> usage at line 122. <b>Verified</b> · live DOM inspection, seeded stack, student role</div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Pass <code>component={Link}</code> and <code>to={link.to}</code> so each item renders a
+        real, focusable anchor. Keep the <code>onClick</code> only for closing the mobile drawer.</li>
+        <li>Re-test with the keyboard alone: Tab must reach all eight items and Enter must
+        navigate. Treat this as the acceptance criterion, not the code change.</li>
+        <li>Derive <code>active</code> from the current location and pass it, so the current page
+        is visibly marked.</li>
+        <li>Make the active style more than colour — weight or a left rule too — so it survives
+        colour-blindness and greyscale printing.</li>
+        <li>Add <code>aria-current="page"</code> to the active item.</li>
+        <li>Add a "skip to main content" link while you're in this file; it's the standard
+        companion fix and it's ten minutes.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- BEFORE / AFTER 4 -->
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · every item looks the same</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">Dana Levi <span class="out">Log out</span></div>
+          </div>
+          <div class="mock-body" style="min-height:158px">
+            <nav class="mock-nav">
+              <a class="on">Appointments</a><a>Patients</a><a>Waitlist</a><a>Forum</a>
+              <a>Messages <span class="dot">3</span></a><a>Notifications <span class="dot">7</span></a>
+            </nav>
+            <div class="mock-main">
+              <div class="mock-title"><h4>Waitlist</h4></div>
+              <p class="empty" style="font-size:11px">You're on the Waitlist page. The sidebar
+              gives no indication of that.</p>
+            </div>
+          </div>
+        </div>
+        <p class="note">Rendered faithfully: no highlight anywhere. Also none of these are
+        anchors, so Cmd-click can't open Patients in a second tab.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · mark the current page, use real anchors</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">Dana Levi <span class="out">Log out</span></div>
+          </div>
+          <div class="mock-body" style="min-height:158px">
+            <nav class="mock-nav">
+              <a>Appointments</a><a>Patients</a>
+              <a class="on" style="border-left:3px solid #1971c2;border-radius:0 4px 4px 0">Waitlist</a>
+              <a>Forum</a>
+              <a>Messages <span class="dot">3</span></a><a>Notifications <span class="dot">7</span></a>
+            </nav>
+            <div class="mock-main">
+              <div class="mock-title"><h4>Waitlist</h4></div>
+              <p class="empty" style="font-size:11px">Position is obvious at a glance, and every
+              item is a real link.</p>
+            </div>
+          </div>
+        </div>
+        <p class="note">Weight <em>and</em> a left rule, not colour alone — so it survives
+        greyscale and colour-blindness. Plus <code>aria-current="page"</code>.</p>
+      </figure>
+    </div>
+  </div>
+
+</section>
+
+<!-- ============================================ -->
+<section id="p1">
+  <h2><span class="num">04</span> High priority</h2>
+  <p class="lede">Worth clearing before the demo. None are large.</p>
+
+  <article class="finding">
+    <header><span class="tag p1">P1-1</span><h3>Users can't tell when live updates have stopped</h3></header>
+    <div class="body">
+      <p><code>RealtimeContext</code> tracks <code>isConnected</code> and exports a
+      <code>useRealtime()</code> hook — and <strong>nothing in the app consumes either</strong>.
+      It is dead code. When the socket drops, the app quietly serves stale data.</p>
+      <p>This matters more here than in most apps. The entire point of the realtime layer is
+      that an auto-promoted waitlist booking appears without a refresh. If the socket is down,
+      the user is looking at a schedule that may be wrong and has no way to know.</p>
+    </div>
+    <div class="where"><b>Where</b> · <code>src/realtime/RealtimeContext.tsx:132</code> — <code>useRealtime</code> has zero call sites</div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Surface connection state in the header — visible only when disconnected or reconnecting, so it's silent when healthy.</li>
+        <li>Offer a manual refresh in the disconnected state.</li>
+        <li>On reconnect, invalidate the relevant query caches so the user catches up on what they missed.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- BEFORE / AFTER 3 -->
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · silent staleness</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">Dana Levi <span class="out">Log out</span></div>
+          </div>
+          <div class="mock-body" style="min-height:150px">
+            <nav class="mock-nav"><a class="on">Appointments</a><a>Waitlist</a><a>Messages</a></nav>
+            <div class="mock-main">
+              <div class="mock-title"><h4>Appointments</h4></div>
+              <table>
+                <thead><tr><th>Start</th><th>Patient</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>09:00</td><td>Y. Cohen</td><td><span class="pill ok">confirmed</span></td></tr>
+                  <tr><td>10:30</td><td>M. Azoulay</td><td><span class="pill wait">awaiting</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <p class="note">Socket died four minutes ago. A waitlist entry was promoted into a
+        real 11:00 booking since. Nothing here hints that this table is out of date.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · use the state you already track</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">
+              <span class="conn"><span class="led"></span> Reconnecting</span>
+              Dana Levi <span class="out">Log out</span>
+            </div>
+          </div>
+          <div class="mock-body" style="min-height:150px">
+            <nav class="mock-nav"><a class="on">Appointments</a><a>Waitlist</a><a>Messages</a></nav>
+            <div class="mock-main">
+              <div class="mock-title"><h4>Appointments</h4><span class="btn-o">Refresh</span></div>
+              <table>
+                <thead><tr><th>Start</th><th>Patient</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>09:00</td><td>Y. Cohen</td><td><span class="pill ok">confirmed</span></td></tr>
+                  <tr><td>10:30</td><td>M. Azoulay</td><td><span class="pill wait">awaiting</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <p class="note">One pill, only when it matters, plus a manual refresh.
+        <code>isConnected</code> already exists — this is wiring, not new machinery.</p>
+      </figure>
+    </div>
+  </div>
+
+  <article class="finding">
+    <header><span class="tag p1">P1-2</span><h3>Every list fetches every row, forever</h3></header>
+    <div class="body">
+      <p>There is no pagination, limit, offset or cursor anywhere in <code>src/api/</code>.
+      <code>AppointmentsListPage</code> fetches the complete appointment list and filters and
+      sorts it client-side — including fetching cancelled appointments purely to discard them.
+      Same for messages, notifications, forum posts and the resource schedule.</p>
+      <p>Fine with seeded demo data. A clinic with a year of history will feel it.</p>
+    </div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Add server-side pagination, starting with appointments, notifications and messages.</li>
+        <li>Make the appointments query date-range scoped — the calendar already knows which week or month is on screen.</li>
+        <li>Move status filtering server-side.</li>
+        <li>Add infinite scroll or explicit paging once the API supports it.</li>
+      </ol>
+    </div>
+  </article>
+
+  <article class="finding">
+    <header><span class="tag p1">P1-3</span><h3>Dark mode is declared but not implemented</h3></header>
+    <div class="body">
+      <p><code>index.css</code> sets <code>color-scheme: light dark</code>, which tells the
+      browser to paint native controls, scrollbars and form widgets dark when the OS is dark.
+      But <code>MantineProvider</code> is called with <strong>no props at all</strong> — no theme,
+      no <code>defaultColorScheme</code> — there's no <code>&lt;ColorSchemeScript&gt;</code> in
+      <code>index.html</code>, and no toggle anywhere.</p>
+      <p>On a dark-mode Mac, Mantine renders everything light while the browser renders native
+      chrome dark. The custom CSS compounds it: hover states are hardcoded to
+      <code>--mantine-color-gray-1</code>, a light-mode value.</p>
+      <p>Both answers are fine here. The current in-between state is the only bad one.</p>
+    </div>
+    <div class="where"><b>Where</b> · <code>src/index.css:2</code> · <code>src/App.tsx</code> · <code>index.html</code></div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li><strong>Decide</strong> whether dark mode is in scope.</li>
+        <li>If no — delete <code>color-scheme: light dark</code>. One line, done.</li>
+        <li>If yes — add <code>&lt;ColorSchemeScript&gt;</code>, set <code>defaultColorScheme</code>,
+        add a toggle, and replace the hardcoded gray hovers with scheme-aware tokens.</li>
+        <li>Either way, replace the <strong>18 hardcoded hex colours</strong> in
+        <code>.ts</code>/<code>.tsx</code> with theme tokens — the status and resource palettes
+        in <code>AppointmentsListPage</code> duplicate Mantine values by hand and will drift.</li>
+      </ol>
+    </div>
+  </article>
+
+  <article class="finding">
+    <header><span class="tag p1">P1-4</span><h3>No <code>autoComplete</code> on any of the 19 form inputs</h3></header>
+    <div class="body">
+      <p>Zero occurrences across the codebase. Password managers can't reliably fill the login
+      form, browser autofill doesn't offer saved emails, and mobile keyboards don't optimise.
+      This is the cheapest win in the whole review — an afternoon, immediately noticeable.</p>
+    </div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Add <code>autoComplete="email"</code> / <code>"current-password"</code> / <code>"new-password"</code> to login and register.</li>
+        <li>Add the right values to patient and profile forms (<code>name</code>, <code>tel</code>).</li>
+        <li>Add <code>type="email"</code> / <code>type="tel"</code> for better mobile keyboards.</li>
+        <li>Verify by actually saving a credential in a password manager and logging back in.</li>
+      </ol>
+    </div>
+  </article>
+
+  <article class="finding">
+    <header><span class="tag p1">P1-5</span><h3>Nothing is announced to screen readers</h3></header>
+    <div class="body">
+      <p>No <code>aria-live</code> region and no <code>role="alert"</code> anywhere. Every error,
+      success and status change is visual-only. Mantine's <code>&lt;Alert&gt;</code> is never used —
+      errors are plain red <code>&lt;Text&gt;</code>, which is both low visual weight and invisible
+      to assistive tech.</p>
+      <p>There <em>is</em> real accessibility effort here: keyboard handlers on clickable table
+      rows, <code>aria-label</code> on icon-only buttons, <code>prefers-reduced-motion</code>
+      support. But read alongside <strong>P0-4</strong> — where the entire primary navigation is
+      keyboard-unreachable — a pattern emerges: the accessibility work went into individual
+      components, and nothing verified the app as a whole. Rows were made keyboard-operable
+      while the nav that gets you to them was not.</p>
+      <p>That's the more useful takeaway than any single fix: <strong>add one end-to-end
+      keyboard pass</strong> to the routine, rather than more per-component attributes.</p>
+    </div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Wrap form and page errors in Mantine <code>&lt;Alert&gt;</code> with <code>role="alert"</code>.</li>
+        <li>Add a polite <code>aria-live</code> region for async status changes (saved, cancelled, promoted).</li>
+        <li>Check that toast notifications are actually announced.</li>
+        <li>Replace <code>role="button"</code> on <code>&lt;Table.Tr&gt;</code> (5 pages) — it overrides
+        the implicit <code>row</code> role and breaks table semantics. Put a real focusable control
+        in a cell instead.</li>
+        <li>Do one keyboard-only pass and one screen-reader pass over the booking flow. Booking
+        is the core action; it should be the most accessible thing in the app.</li>
+      </ol>
+    </div>
+  </article>
+
+  <article class="finding">
+    <header><span class="tag p1">P1-6</span><h3><code>AppointmentsListPage</code> is a 901-line component</h3></header>
+    <div class="body">
+      <p>It holds roughly 15 <code>useState</code>, 6 <code>useQuery</code>, 3 mutations, 3 modals,
+      two view modes (list / calendar) × two lenses (personal / resources) × four roles —
+      rendered through a four-branch nested ternary spanning about 200 lines.</p>
+      <p>To be fair: the logic is correct and the comments are excellent. The problem is size,
+      not quality. It's simply the file most likely to break under future edits and the hardest
+      to test.</p>
+    </div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Extract the list table, the resource table and the calendar into sibling components.</li>
+        <li>Move the create / interpret / waitlist mutation cluster into a <code>useAppointmentActions</code> hook.</li>
+        <li>Pull the resource-colour and lens logic (<code>hashResourceColor</code>,
+        <code>combinedResourceOptions</code>, <code>resourceCalendarEvents</code>) into its own
+        module — it's self-contained and unit-testable.</li>
+        <li>Replace the nested ternary with early returns or a small view-resolver map.</li>
+        <li>Add tests to each extracted piece as it comes out. Do the split <em>because</em> it
+        enables tests, not for tidiness alone.</li>
+      </ol>
+    </div>
+  </article>
+
+  <article class="finding">
+    <header><span class="tag p1">P1-7</span><h3>The calendar opens at midnight, in a clinic that opens at eight</h3></header>
+    <div class="body">
+      <p>The app only permits bookings between <strong>08:00 and 21:30</strong> — that's what
+      <code>APPOINTMENT_START_TIME_OPTIONS</code> and <code>_END_TIME_OPTIONS</code> generate, and
+      the form offers nothing outside it. But the calendar renders the full 24 hours: the
+      <code>&lt;Calendar&gt;</code> is given no <code>min</code>, no <code>max</code> and no
+      <code>scrollToTime</code>.</p>
+      <p>So roughly <strong>44% of the grid is dead space that can never contain an
+      appointment</strong> — eight empty hours above the clinic day and two and a half below —
+      and every visit to the week or day view lands the user at 00:00, needing a scroll to reach
+      any real content. Spotted immediately on opening the seeded app: a 13:00 booking was
+      below the fold.</p>
+      <p>react-big-calendar takes <code>min</code> and <code>max</code> props directly. This is
+      a two-line fix that reclaims almost half the screen.</p>
+    </div>
+    <div class="where"><b>Where</b> · <code>src/pages/appointments/AppointmentsListPage.tsx:774–796</code> · bounds already defined in <code>src/utils/dates.ts:58–61</code></div>
+    <div class="actions">
+      <h4>Actions</h4>
+      <ol>
+        <li>Pass <code>min</code> and <code>max</code> to <code>&lt;Calendar&gt;</code>, derived
+        from the same constants the booking form uses — don't hardcode 8 and 21 a second time,
+        or the two will drift.</li>
+        <li>Set <code>scrollToTime</code> to the start of the working day so the view opens
+        somewhere useful.</li>
+        <li>Consider whether clinic hours should be configurable by an admin rather than a
+        constant in <code>utils/dates.ts</code> — the app already has admin-managed rooms and
+        equipment, so hours are the odd one out.</li>
+      </ol>
+    </div>
+  </article>
+
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · 44% unusable, opens at 00:00</figcaption>
+        <div class="mock">
+          <div class="mock-main" style="padding:10px 12px">
+            <div style="display:flex;gap:0;font-size:9px;color:#868e96">
+              <div style="width:36px;flex:none">
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">00:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">01:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">02:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">03:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">04:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">05:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">06:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">07:00</div>
+                <div style="height:13px;border-bottom:1px solid #dee2e6">08:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">…</div>
+              </div>
+              <div style="flex:1;position:relative">
+                <div style="height:104px;background:repeating-linear-gradient(-45deg,#fff5f5,#fff5f5 4px,#ffe3e3 4px,#ffe3e3 8px);border-bottom:1px solid #dee2e6"></div>
+                <div style="height:26px;border-bottom:1px solid #f1f3f5"></div>
+                <div style="position:absolute;top:34px;left:6px;font-size:8.5px;color:#c92a2a;font-weight:700">8 hours no booking can ever occupy</div>
+              </div>
+            </div>
+            <div style="margin-top:6px;padding:4px 6px;background:#fff5f5;border:1px solid #ffc9c9;border-radius:4px;font-size:9.5px;color:#c92a2a">
+              ↓ your 13:00 appointment is below the fold
+            </div>
+          </div>
+        </div>
+        <p class="note">Bookable hours are 08:00–21:30, but the grid renders 00:00–24:00 and
+        opens scrolled to midnight.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · bound the grid to clinic hours</figcaption>
+        <div class="mock">
+          <div class="mock-main" style="padding:10px 12px">
+            <div style="display:flex;gap:0;font-size:9px;color:#868e96">
+              <div style="width:36px;flex:none">
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">08:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">09:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">10:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">11:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">12:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">13:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">14:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">15:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">16:00</div>
+                <div style="height:13px;border-bottom:1px solid #f1f3f5">17:00</div>
+              </div>
+              <div style="flex:1;position:relative">
+                <div style="height:65px;border-bottom:1px solid #f1f3f5"></div>
+                <div style="position:absolute;top:65px;left:4px;right:4px;height:24px;background:#2f9e44;border-radius:3px;color:#fff;font-size:8.5px;padding:3px 5px;font-weight:600">Y. Cohen · confirmed</div>
+                <div style="height:65px"></div>
+              </div>
+            </div>
+            <div style="margin-top:6px;padding:4px 6px;background:#ebfbee;border:1px solid #b2f2bb;border-radius:4px;font-size:9.5px;color:#2b8a3e">
+              Same screen height, the whole clinic day visible
+            </div>
+          </div>
+        </div>
+        <p class="note">Two props — <code>min</code> and <code>max</code>, derived from the
+        constants the booking form already uses so the two can't drift.</p>
+      </figure>
+    </div>
+  </div>
+
+</section>
+
+<!-- ============================================ -->
+<section id="p2">
+  <h2><span class="num">05</span> Polish</h2>
+  <p class="lede">Lower stakes, but several are quick and visible.</p>
+
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>#</th><th>Issue</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Appointments table has no search, sort or status filter</td><td>Add filter controls — a real clinic list is unusable without them</td></tr>
+      <tr><td>2</td><td>Every page shows plain "Loading..." text</td><td>Use Mantine <code>&lt;Skeleton&gt;</code> shaped like the page to stop layout shift</td></tr>
+      <tr><td>3</td><td>Login has a <strong>Role</strong> dropdown</td><td>Remove it. The backend validates role against the real account, so it can only ever cause a wrong-choice failure. Pure friction</td></tr>
+      <tr><td>4</td><td>No "forgot password" link or flow</td><td>Decide if it's in scope; if not, list it in the README's limitations</td></tr>
+      <tr><td>5</td><td>Calendar fixed at 700px; tables need 700–800px min-width</td><td>Make calendar height responsive; consider a card layout on narrow screens</td></tr>
+      <tr><td>6</td><td>Hebrew logo, entirely English UI</td><td>Decide the target language. If Hebrew, that means i18n <em>and</em> RTL — scope it deliberately rather than letting it drift</td></tr>
+      <tr><td>7</td><td>Frontend tests ~6× lighter than backend</td><td>45 cases / 6.2k LOC vs 285 / 8k LOC. Prioritise the booking flow, conflict modal and role-based nav</td></tr>
+      <tr><td>8</td><td>Stale comment cites a removed <code>/appointments/{id}</code> route</td><td>Delete it — it contradicts a correct comment 200 lines above in the same file</td></tr>
+      <tr><td>9</td><td><code>ErrorBoundary</code> only <code>console.error</code>s</td><td>Fine for a course project; note as a known limitation</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <!-- BEFORE / AFTER 4 -->
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · "Loading..."</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">Dana Levi <span class="out">Log out</span></div>
+          </div>
+          <div class="mock-body" style="min-height:132px">
+            <nav class="mock-nav"><a class="on">Appointments</a><a>Patients</a><a>Waitlist</a></nav>
+            <div class="mock-main">
+              <div class="mock-title"><h4>Appointments</h4></div>
+              <p class="empty">Loading...</p>
+            </div>
+          </div>
+        </div>
+        <p class="note">Bare text, then the full table snaps in — everything below jumps.
+        No hint of how much is coming.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · skeleton in the shape of the answer</figcaption>
+        <div class="mock">
+          <div class="mock-head">
+            <div class="logo"><span class="glyph">S</span> STU-DENT</div>
+            <div class="who">Dana Levi <span class="out">Log out</span></div>
+          </div>
+          <div class="mock-body" style="min-height:132px">
+            <nav class="mock-nav"><a class="on">Appointments</a><a>Patients</a><a>Waitlist</a></nav>
+            <div class="mock-main">
+              <div class="mock-title"><h4>Appointments</h4></div>
+              <table>
+                <thead><tr><th>Start</th><th>Patient</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><div class="sk" style="width:38px"></div></td><td><div class="sk" style="width:56px"></div></td><td><div class="sk" style="width:44px"></div></td></tr>
+                  <tr><td><div class="sk" style="width:38px"></div></td><td><div class="sk" style="width:48px"></div></td><td><div class="sk" style="width:40px"></div></td></tr>
+                  <tr><td><div class="sk" style="width:38px"></div></td><td><div class="sk" style="width:60px"></div></td><td><div class="sk" style="width:46px"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <p class="note">Same geometry as the loaded table, so nothing shifts when data lands.
+        Honours <code>prefers-reduced-motion</code>.</p>
+      </figure>
+    </div>
+  </div>
+
+  <!-- BEFORE / AFTER 5 -->
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · login as built</figcaption>
+        <div class="mock">
+          <div class="mock-auth">
+            <div class="ttl">Stu-Dent</div>
+            <div class="fld bad">
+              <label>Email</label>
+              <div class="in">you@example.com</div>
+              <div class="hint">no autoComplete — password manager can't fill</div>
+            </div>
+            <div class="fld bad">
+              <label>Password</label>
+              <div class="in">••••••••<span>👁</span></div>
+              <div class="hint">no autoComplete</div>
+            </div>
+            <div class="fld bad">
+              <label>Role</label>
+              <div class="in">Any <span>⌄</span></div>
+              <div class="hint">a choice the user shouldn't have to make</div>
+            </div>
+            <div class="btn-b" style="display:block;text-align:center;margin-top:9px">Log in</div>
+            <p style="text-align:center;font-size:10px;margin:8px 0 0">Don't have an account? <span style="color:#228be6">Register</span></p>
+          </div>
+        </div>
+        <p class="note">The Role field can only ever hurt: the backend validates the real role
+        anyway, so picking wrong just fails the login for no reason.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · fewer decisions, more help</figcaption>
+        <div class="mock">
+          <div class="mock-auth">
+            <div class="ttl">Stu-Dent</div>
+            <div class="fld">
+              <label>Email</label>
+              <div class="in">dana@stu-dent.demo</div>
+              <div class="hint">autocomplete="email" · type="email"</div>
+            </div>
+            <div class="fld">
+              <label>Password</label>
+              <div class="in">••••••••<span>👁</span></div>
+              <div class="hint">autocomplete="current-password"</div>
+            </div>
+            <p style="text-align:right;font-size:10px;margin:0 0 8px"><span style="color:#228be6">Forgot password?</span></p>
+            <div class="btn-b" style="display:block;text-align:center">Log in</div>
+            <p style="text-align:center;font-size:10px;margin:8px 0 0">Don't have an account? <span style="color:#228be6">Register</span></p>
+          </div>
+        </div>
+        <p class="note">Role dropped, autofill enabled, recovery path present. Two fields and
+        a button — the role is resolved server-side where it already was.</p>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section id="implementation">
+  <h2><span class="num">06</span> How the frontend is built</h2>
+  <p class="lede">The code as code — how efficient it is, how much it reuses, and how clean
+  it reads. Separate from whether it behaves correctly, which sections 03–05 cover.</p>
+
+  <h3>Efficiency is already handled — genuinely</h3>
+  <p>This deserves saying first, because it's the part most student projects get wrong and
+  this one didn't:</p>
+  <ul>
+    <li>All ~19 routes are <code>React.lazy()</code> behind <code>&lt;Suspense&gt;</code>, which
+    took the main bundle from <strong>657KB to 355KB</strong> and killed Vite's chunk-size
+    warning.</li>
+    <li><code>AuthContext</code>'s context value is memoised, so it doesn't re-render every
+    consumer on unrelated state changes.</li>
+    <li>The heavy appointments page memoises its derived lists (<code>visibleAppointments</code>,
+    both event builders, the resource-colour map) rather than recomputing per render.</li>
+    <li>TanStack Query with a 30-second <code>staleTime</code>, and WebSocket events wired to
+    cache invalidation instead of a second parallel state layer. That's the right instinct.</li>
+  </ul>
+  <p>The remaining efficiency gap is <strong>data volume, not rendering</strong> — see P1-2.
+  Fetching every appointment ever and filtering client-side will outgrow any amount of
+  memoisation.</p>
+
+  <h3>Reusability is the real weakness</h3>
+  <p>Seven shared components exist for 6,197 lines. The result is the same three-part pattern
+  written out by hand across fifteen pages:</p>
+
+  <div class="metrics">
+    <div><b>52</b><span>useMutation blocks</span></div>
+    <div><b>59</b><span>notifications.show calls</span></div>
+    <div><b>36</b><span>invalidateQueries calls</span></div>
+    <div><b>12</b><span>pages repeating the header block</span></div>
+    <div><b>6</b><span>copies of one keyboard handler</span></div>
+    <div><b>7</b><span>shared components total</span></div>
+  </div>
+
+  <p>Nearly every mutation in the app is the identical triad: call the endpoint, then on
+  success invalidate a query key and show a green toast, then on error show a red toast via
+  <code>apiErrorMessage</code>. Written out 52 times.</p>
+
+  <p>This is the kind of duplication that isn't a bug today and becomes one later — it's
+  exactly how P0-1 happened. The error-state fix reached three pages and stopped, because
+  there was no single place to make it. <strong>Consolidating these isn't tidiness; it's how
+  you stop a fix from reaching only a fifth of the app.</strong></p>
+
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · the same triad, 52 times</figcaption>
+        <div class="mock">
+          <div class="mock-main" style="padding:11px 12px">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">RoomsPage</div><div class="sk" style="width:100%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:80%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:90%;height:5px;animation:none;background:#ffd8d8"></div></div>
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">UsersPage</div><div class="sk" style="width:100%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:80%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:90%;height:5px;animation:none;background:#ffd8d8"></div></div>
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">ForumPost</div><div class="sk" style="width:100%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:80%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:90%;height:5px;animation:none;background:#ffd8d8"></div></div>
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">Messages</div><div class="sk" style="width:100%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:80%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:90%;height:5px;animation:none;background:#ffd8d8"></div></div>
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">Feedback</div><div class="sk" style="width:100%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:80%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:90%;height:5px;animation:none;background:#ffd8d8"></div></div>
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">+10 more</div><div class="sk" style="width:100%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:80%;height:5px;margin-bottom:3px;animation:none;background:#ffd8d8"></div><div class="sk" style="width:90%;height:5px;animation:none;background:#ffd8d8"></div></div>
+            </div>
+            <div style="margin-top:8px;padding:5px 7px;background:#fff5f5;border:1px solid #ffc9c9;border-radius:4px;font-size:9.5px;color:#c92a2a">
+              Fix the error handling here and you must remember 15 places
+            </div>
+          </div>
+        </div>
+        <p class="note">Each red band is <code>mutationFn</code> / <code>onSuccess</code>
+        invalidate&nbsp;+&nbsp;toast / <code>onError</code> toast — copied, not shared.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · one helper, fifteen call sites</figcaption>
+        <div class="mock">
+          <div class="mock-main" style="padding:11px 12px">
+            <div class="grp" style="border-color:#b2f2bb;background:#ebfbee">
+              <div class="gt" style="color:#2b8a3e">useMutationWithToast · one place</div>
+              <div class="sk" style="width:100%;height:5px;margin-bottom:3px;animation:none;background:#8ce99a"></div>
+              <div class="sk" style="width:70%;height:5px;animation:none;background:#8ce99a"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">RoomsPage</div><div class="sk" style="width:60%;height:5px;animation:none;background:#c5f6d0"></div></div>
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">UsersPage</div><div class="sk" style="width:60%;height:5px;animation:none;background:#c5f6d0"></div></div>
+              <div class="grp" style="margin:0;padding:6px"><div class="gt" style="margin-bottom:4px">ForumPost</div><div class="sk" style="width:60%;height:5px;animation:none;background:#c5f6d0"></div></div>
+            </div>
+            <div style="margin-top:8px;padding:5px 7px;background:#ebfbee;border:1px solid #b2f2bb;border-radius:4px;font-size:9.5px;color:#2b8a3e">
+              Fix it once and every page gets it
+            </div>
+          </div>
+        </div>
+        <p class="note">Same behaviour, one definition. The error-state convention from P0-1
+        becomes structurally impossible to skip.</p>
+      </figure>
+    </div>
+  </div>
+
+  <article class="finding">
+    <header><span class="tag p1">TASK</span><h3>Extract three shared primitives</h3></header>
+    <div class="body">
+      <p>Ordered by lines removed per hour spent. None of these change behaviour.</p>
+      <ol>
+        <li><strong><code>useMutationWithToast</code></strong> — takes the mutation function,
+        the query keys to invalidate, and success/error messages. Absorbs the bulk of 52
+        blocks and all 59 toast calls.</li>
+        <li><strong><code>&lt;PageHeader title actions&gt;</code></strong> — the
+        <code>&lt;Group justify="space-between"&gt;&lt;Title order={2}&gt;</code> + buttons
+        block currently retyped on 12 pages. Also the natural home for breadcrumbs later.</li>
+        <li><strong><code>&lt;ClickableRow&gt;</code></strong> — one component owning the
+        click handler, the <code>Enter</code>/<code>Space</code> handling, focus styling and
+        ARIA. Replaces 6 hand-copied handlers, and is where the P1-5 role fix lands once
+        instead of five times.</li>
+      </ol>
+      <p>A fourth is worth considering but is a bigger call: <code>RoomsPage</code> and
+      <code>EquipmentPage</code> are 224 and 182 lines of near-parallel CRUD. A shared
+      <code>ResourceAdminPage</code> would collapse them, though they have diverged enough
+      that this needs judgement rather than a mechanical merge.</p>
+    </div>
+    <div class="scope">
+      <span><b>Scope</b> ~600 lines removed</span>
+      <span><b>Risk</b> low — no behaviour change</span>
+      <span><b>Unblocks</b> P0-1, P1-5</span>
+    </div>
+  </article>
+
+  <h3>Cleanliness</h3>
+  <p>Strong overall. <code>tsc -b</code> is clean, <code>oxlint</code> shows four trivial
+  warnings, naming is consistent, and the comments are the best I've seen in a project this
+  size — they explain rejected alternatives, not just what the line does.</p>
+  <p>Three small blemishes: <strong>11 inline <code>style={{}}</code> escapes</strong> that
+  bypass the design system, the 901-line page from P1-6, and one stale comment contradicting
+  another in the same file. All minor next to what's right.</p>
+</section>
+
+<!-- ============================================ -->
+<section id="visual">
+  <h2><span class="num">07</span> Visual design</h2>
+  <p class="lede">The app currently looks like <em>unstyled Mantine</em> — which is a specific
+  look, and not a neutral one. Below is what to change, in the order that buys the most.</p>
+
+  <h3>The single biggest win: the brand colour is absent from the product</h3>
+  <p><code>&lt;MantineProvider&gt;</code> is called with <strong>no props at all</strong>. The
+  primary colour is therefore stock <code>#228be6</code> — Mantine's factory blue, the same
+  blue on every Mantine demo. Meanwhile the logo, sitting in the top-left of every page, is
+  teal and navy.</p>
+  <p>So the one piece of visual identity the project has is contradicted by every button in
+  it. Adopting a theme derived from the logo is a <strong>single-file change</strong> that
+  re-skins the entire app, because every component already reads from the theme.</p>
+
+  <div class="swatches">
+    <div class="sw"><div class="chip" style="background:#228be6"></div><div class="lab"><b>#228be6</b><span>current primary<br>stock Mantine</span></div></div>
+    <div class="sw"><div class="chip" style="background:#0f7d8c"></div><div class="lab"><b>#0f7d8c</b><span>proposed primary<br>from the logo</span></div></div>
+    <div class="sw"><div class="chip" style="background:#103f5c"></div><div class="lab"><b>#103f5c</b><span>ink / headings<br>logo navy</span></div></div>
+    <div class="sw"><div class="chip" style="background:#2b8a3e"></div><div class="lab"><b>#2b8a3e</b><span>confirmed</span></div></div>
+    <div class="sw"><div class="chip" style="background:#c77a09"></div><div class="lab"><b>#c77a09</b><span>awaiting</span></div></div>
+    <div class="sw"><div class="chip" style="background:#b02a2a"></div><div class="lab"><b>#b02a2a</b><span>cancelled</span></div></div>
+  </div>
+
+  <p class="note" style="max-width:var(--measure);color:var(--ink-2);font-size:.93rem">
+  One caution: check the status colours against contrast requirements once chosen. The current
+  yellow <code>#f59f00</code> on white fails AA for small text, and it's used for
+  <code>awaiting_confirmation</code> — one of the most common states.</p>
+
+  <h3>Typography: one size doing three jobs</h3>
+  <p>The base font is 18px (set in <code>index.css</code>), which cascades into Mantine's
+  scale. Measured on the live appointments table, <strong>the table header and the table body
+  render at the same 15.75px</strong> — headers are distinguished only by weight, in pure
+  black. There is no size, colour, or letter-spacing separation, so the eye has nothing to
+  anchor to when scanning a wide table.</p>
+  <p>The typeface is the raw system stack. That's a safe default, not a decision.</p>
+
+  <div class="specimen">
+    <div class="row"><span class="tagname">Now · H2</span><span style="font:700 29px/1 -apple-system,sans-serif">Appointments</span><span class="spec">29.25px / 700</span></div>
+    <div class="row"><span class="tagname">Now · TH</span><span style="font:700 15.75px/1 -apple-system,sans-serif;color:#000">Start</span><span class="spec">15.75px / 700 / #000</span></div>
+    <div class="row"><span class="tagname">Now · TD</span><span style="font:400 15.75px/1 -apple-system,sans-serif">27/07/26 13:00</span><span class="spec">15.75px / 400 — same size as TH</span></div>
+  </div>
+  <div class="specimen" style="border-left:3px solid var(--good)">
+    <div class="row"><span class="tagname">Proposed · H2</span><span style="font:600 26px/1 -apple-system,sans-serif;letter-spacing:-.02em;color:#103f5c">Appointments</span><span class="spec">26px / 600 / navy</span></div>
+    <div class="row"><span class="tagname">Proposed · TH</span><span style="font:600 11px/1 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:#868e96">START</span><span class="spec">11px / 600 / uppercase / dimmed</span></div>
+    <div class="row"><span class="tagname">Proposed · TD</span><span style="font:400 14px/1 -apple-system,sans-serif">27 Jul · 13:00</span><span class="spec">14px / 400 — clearly subordinate</span></div>
+  </div>
+  <p>Dropping the base to 16px and giving table headers a smaller, dimmed, letter-spaced
+  treatment buys back roughly a column of horizontal space <em>and</em> makes the hierarchy
+  legible. The 18px base is the reason the eight-column table feels cramped.</p>
+
+  <h3>Raw database values are reaching the screen</h3>
+  <p>Status badges render the enum verbatim: <code>awaiting_confirmation</code>,
+  <code>no_show</code>. Mantine's badge uppercases them, so a patient sees
+  <strong>AWAITING_CONFIRMATION</strong>. <code>appointmentActions.ts</code> maps every status
+  to a colour but nothing maps it to a human label.</p>
+  <p>Notably, <strong>the function to fix this already exists</strong> —
+  <code>humanizeFieldName</code> in <code>httpClient.ts</code> does exactly this
+  transformation for validation errors, and was simply never reused here. This is the
+  reusability problem from section 06 showing up as a visual defect.</p>
+
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · enum values, shouting</figcaption>
+        <div class="mock">
+          <div class="mock-main" style="padding:12px">
+            <table>
+              <thead><tr><th>Start</th><th>End</th><th>Status</th><th>Student</th><th>Patient</th><th>Room</th></tr></thead>
+              <tbody>
+                <tr><td>27/07/26 13:00</td><td>27/07/26 13:30</td><td><span class="badge-old" style="background:#ffe8cc;color:#d9480f">no_show</span></td><td>Demo Student 1</td><td>Demo Patient 4</td><td>—</td></tr>
+                <tr><td>30/07/26 13:00</td><td>30/07/26 13:30</td><td><span class="badge-old" style="background:#d3f9d8;color:#2b8a3e">confirmed</span></td><td>Demo Student 1</td><td>Demo Patient 4</td><td>—</td></tr>
+                <tr><td>04/08/26 13:00</td><td>04/08/26 13:30</td><td><span class="badge-old" style="background:#fff3bf;color:#a67806">awaiting_confirmation</span></td><td>Demo Student 1</td><td>Demo Patient 1</td><td>—</td></tr>
+              </tbody>
+            </table>
+            <div style="margin-top:7px;font-size:9px;color:#c92a2a">Student column repeats your own name on every row · end date repeats the start date · dashes everywhere</div>
+          </div>
+        </div>
+        <p class="note">Six columns of equal weight. The patient — arguably the most important
+        field — reads no louder than a dash.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · human labels, real hierarchy</figcaption>
+        <div class="mock">
+          <div class="mock-main" style="padding:12px">
+            <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#868e96;margin-bottom:4px">MON 27 JULY</div>
+            <table>
+              <thead><tr><th style="font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:#adb5bd">Time</th><th style="font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:#adb5bd">Patient</th><th style="font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:#adb5bd">Status</th><th style="font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:#adb5bd">Room</th></tr></thead>
+              <tbody>
+                <tr><td style="color:#868e96">13:00–13:30</td><td style="font-weight:650">Demo Patient 4</td><td><span class="badge-new" style="background:#fff0e6;color:#c2410c"><span class="d" style="background:#ea580c"></span>No-show</span></td><td style="color:#adb5bd">Not set</td></tr>
+              </tbody>
+            </table>
+            <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#868e96;margin:8px 0 4px">THU 30 JULY</div>
+            <table>
+              <tbody>
+                <tr><td style="color:#868e96;width:64px">13:00–13:30</td><td style="font-weight:650">Demo Patient 4</td><td><span class="badge-new" style="background:#e9f8ed;color:#1a7f37"><span class="d" style="background:#2b8a3e"></span>Confirmed</span></td><td style="color:#adb5bd">Not set</td></tr>
+                <tr><td style="color:#868e96">13:00–13:30</td><td style="font-weight:650">Demo Patient 1</td><td><span class="badge-new" style="background:#fdf5e3;color:#a16207"><span class="d" style="background:#c77a09"></span>Awaiting confirmation</span></td><td style="color:#adb5bd">Not set</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p class="note">Grouped by day, times collapsed to a range, own name dropped, patient
+        emphasised, "—" replaced with meaning. Four columns instead of eight.</p>
+      </figure>
+    </div>
+  </div>
+
+  <article class="finding">
+    <header><span class="tag p1">TASK</span><h3>Visual work, in order of value</h3></header>
+    <div class="body">
+      <ol>
+        <li><strong>Create a theme file</strong> with a primary derived from the logo, a navy
+        ink colour, and named status colours. One file; every component picks it up. Check the
+        chosen status colours for AA contrast — the current yellow fails.</li>
+        <li><strong>Add a status label map</strong> next to the existing
+        <code>STATUS_COLORS</code>, or reuse <code>humanizeFieldName</code>. Never render an
+        enum.</li>
+        <li><strong>Set a real type scale.</strong> Drop the base to 16px; give table headers a
+        small, dimmed, letter-spaced treatment so they stop competing with data.</li>
+        <li><strong>Cut the appointments table from eight columns to four or five.</strong>
+        Drop the viewer's own name, collapse start/end into one time range, group rows by day,
+        and replace "—" with a real absence label.</li>
+        <li><strong>Replace the 18 hardcoded hex values</strong> with theme tokens (also
+        required by P1-3).</li>
+      </ol>
+    </div>
+    <div class="scope">
+      <span><b>Scope</b> 1 new theme file + ~6 touched</span>
+      <span><b>Risk</b> low</span>
+      <span><b>Effect</b> re-skins the whole app</span>
+    </div>
+  </article>
+</section>
+
+<!-- ============================================ -->
+<section id="ux">
+  <h2><span class="num">08</span> Experience and interaction</h2>
+  <p class="lede">Navigation, the booking flow, modals, icons and motion — judged by driving
+  the real app as a student, not by reading the source.</p>
+
+  <h3>Icons: the library is installed and 88% unused</h3>
+  <p><code>@tabler/icons-react</code> is a dependency and appears in <strong>3 files out of
+  roughly 25</strong> — the forum vote buttons, one admin page, and one shared component. The
+  navigation, every button, and every status are text-only.</p>
+  <p>This matters most in the sidebar, where a student scans eight identical-looking text
+  labels many times a day. Icons plus the active state from P0-4 turn that into a glance
+  instead of a read.</p>
+
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · eight text labels</figcaption>
+        <div class="mock">
+          <div class="mock-body" style="min-height:172px">
+            <nav class="mock-nav" style="width:120px">
+              <a class="on">Appointments</a><a>Patients</a><a>Waitlist</a><a>Forum</a>
+              <a>Messages <span class="dot sp">2</span></a><a>Notifications</a><a>Feedback</a><a>Reports</a>
+            </nav>
+            <div class="mock-main"><div class="mock-title"><h4>Appointments</h4></div>
+            <p class="empty" style="font-size:10.5px">No icons, no current-page marker, no grouping — eight items of identical visual weight.</p></div>
+          </div>
+        </div>
+        <p class="note">Also unreachable by keyboard — see P0-4. The two problems share a fix.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · icons, grouping, position</figcaption>
+        <div class="mock">
+          <div class="mock-body" style="min-height:172px">
+            <nav class="mock-nav" style="width:120px">
+              <div style="font-size:8px;font-weight:700;letter-spacing:.08em;color:#adb5bd;padding:3px 7px 2px">CLINIC</div>
+              <a class="on" style="border-left:3px solid #0f7d8c;border-radius:0 4px 4px 0;background:#e6f4f5;color:#0b5c68"><svg class="ico-n" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>Appointments</a>
+              <a><svg class="ico-n" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Patients</a>
+              <a><svg class="ico-n" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Waitlist</a>
+              <div style="font-size:8px;font-weight:700;letter-spacing:.08em;color:#adb5bd;padding:6px 7px 2px">COMMUNITY</div>
+              <a><svg class="ico-n" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Forum</a>
+              <a><svg class="ico-n" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H5.2L4 17.5z"/></svg>Messages <span class="dot sp">2</span></a>
+              <a><svg class="ico-n" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M13.7 21a2 2 0 0 1-3.4 0"/></svg>Notifications</a>
+            </nav>
+            <div class="mock-main"><div class="mock-title"><h4>Appointments</h4></div>
+            <p class="empty" style="font-size:10.5px">Shape and position carry the meaning before the words are read.</p></div>
+          </div>
+        </div>
+        <p class="note">Two groups, an icon per item, and a marked current page — the same
+        eight destinations, scannable at a glance.</p>
+      </figure>
+    </div>
+  </div>
+
+  <h3>The booking modal is the app's core flow, and its hardest screen</h3>
+  <p>Measured live at a 1440×900 viewport: the modal is <strong>495px wide and 810px tall,
+  contains 18 input elements, and its "Request" button sits below the fold.</strong> The
+  primary action of the primary flow is not visible when the dialogue opens.</p>
+  <p>Three structural problems compound it. The optional AI "describe it in your own words"
+  box occupies the <em>top</em> of the modal, pushing the real form down. There is no grouping
+  — patient, timing, resources and notes read as one flat list of eight fields. And time is
+  entered as four separate controls, with no way to say "30 minutes" — the overwhelmingly
+  common case.</p>
+  <p>Sixteen modals across the app declare no <code>size</code> at all, so they all inherit
+  the same default width regardless of content.</p>
+
+  <div class="ba">
+    <div class="ba-grid">
+      <figure class="panel before">
+        <figcaption>Before · 18 inputs, submit below the fold</figcaption>
+        <div class="mock">
+          <div class="mock-auth" style="max-width:none;padding:11px 13px">
+            <div style="font-weight:700;font-size:12px;margin-bottom:8px">New Appointment</div>
+            <div class="fld bad"><label>Describe it in your own words (optional)</label><div class="in" style="height:26px;align-items:flex-start">e.g. book Jane with Dr. Smith…</div></div>
+            <div class="btn-o" style="width:100%;text-align:center;color:#adb5bd;margin-bottom:7px">Interpret</div>
+            <div class="fld"><label>Patient</label><div class="in">Select<span>⌄</span></div></div>
+            <div style="display:flex;gap:5px"><div class="fld" style="flex:1"><label>Start time</label><div class="in">&nbsp;</div></div><div class="fld" style="flex:1"><label>Time</label><div class="in">⌄</div></div></div>
+            <div style="display:flex;gap:5px"><div class="fld" style="flex:1"><label>End time</label><div class="in">&nbsp;</div></div><div class="fld" style="flex:1"><label>Time</label><div class="in">⌄</div></div></div>
+            <div class="fld"><label>Attending (optional)</label><div class="in">&nbsp;<span>⌄</span></div></div>
+            <div style="border-top:2px dashed #ffc9c9;margin:6px -13px;padding:5px 13px 0;background:#fff5f5;font-size:9px;color:#c92a2a;font-weight:600">▾ fold — Room, Equipment, Notes and the Request button are below here</div>
+          </div>
+        </div>
+        <p class="note">The AI helper — optional — takes the most valuable position on screen,
+        above the form it assists.</p>
+      </figure>
+
+      <figure class="panel after">
+        <figcaption>After · grouped, wider, action always visible</figcaption>
+        <div class="mock">
+          <div class="mock-auth" style="max-width:none;padding:11px 13px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div style="font-weight:700;font-size:12px">New Appointment</div>
+              <div class="btn-o" style="font-size:9px;padding:2px 7px">✨ Describe instead</div>
+            </div>
+            <div class="grp">
+              <div class="gt">Who</div>
+              <div class="fld" style="margin:0"><div class="in">Demo Patient 1<span>⌄</span></div></div>
+            </div>
+            <div class="grp">
+              <div class="gt">When</div>
+              <div style="display:flex;gap:5px;margin-bottom:6px"><div class="in" style="flex:1">Thu 30 Jul</div><div class="in" style="width:66px">13:00</div></div>
+              <div class="chipset"><span class="on">30 min</span><span>45 min</span><span>1 hr</span><span>Custom</span></div>
+            </div>
+            <div class="grp">
+              <div class="gt">Where <span style="font-weight:400;text-transform:none;letter-spacing:0">· room required</span></div>
+              <div class="fld" style="margin:0"><div class="in">Operatory 1<span>⌄</span></div></div>
+            </div>
+            <div style="border-top:1px solid #e9ecef;margin:0 -13px;padding:8px 13px 0;display:flex;gap:6px;align-items:center">
+              <span style="font-size:9px;color:#868e96;flex:1">Attending, equipment &amp; notes — optional</span>
+              <div class="btn-b">Request</div>
+            </div>
+          </div>
+        </div>
+        <p class="note">Four groups, a duration shortcut instead of a second timestamp, optional
+        fields collapsed, and a pinned footer so the action never leaves the screen.</p>
+      </figure>
+    </div>
+  </div>
+
+  <h3>Motion</h3>
+  <p>What exists is thoughtful: hover transitions on the logo, logout button and nav links, all
+  correctly wrapped in a <code>prefers-reduced-motion</code> block. Someone considered this.</p>
+  <p>What's missing is motion where it would carry meaning rather than decorate. Route changes
+  snap. Table rows expand instantly with no height transition, so the eye loses its place.
+  Toasts appear and vanish abruptly. And with no skeletons (P2-2), every load is a hard cut
+  from "Loading…" to a full table.</p>
+  <p>The useful principle: <strong>animate things that change position or state, not things
+  that are merely decorative.</strong> An expanding row, a promoted waitlist entry, and a
+  newly arrived appointment are all worth 150–200ms. A hover lift is not the priority.</p>
+
+  <article class="finding">
+    <header><span class="tag p1">TASK</span><h3>Experience work, in order of value</h3></header>
+    <div class="body">
+      <ol>
+        <li><strong>Rebuild the booking modal</strong> — widen it, group the fields into
+        who / when / where / optional, add duration shortcuts, collapse optional fields, and
+        pin the submit button to a footer. Move the AI box behind a "describe instead" toggle
+        so it stops outranking the form.</li>
+        <li><strong>Add icons to the sidebar</strong> and group the items; ship it together
+        with the P0-4 keyboard and active-state fix, since it's the same six lines.</li>
+        <li><strong>Give every modal an explicit <code>size</code></strong> — 16 currently
+        inherit the default regardless of content.</li>
+        <li><strong>Add transitions to row expansion and list insertion</strong> (150–200ms),
+        so realtime updates and expanding rows don't teleport.</li>
+        <li><strong>Replace destructive-action confirm modals with an undo toast</strong> where
+        the action is reversible. The <code>ConfirmButton</code> guard is correct for real
+        deletions, but it currently interrupts routine actions too.</li>
+        <li><strong>Reconsider the "(optional)" labels.</strong> Marking the three required
+        fields is quieter than marking the five optional ones.</li>
+      </ol>
+    </div>
+    <div class="scope">
+      <span><b>Scope</b> 1 rebuilt modal + ~5 touched files</span>
+      <span><b>Risk</b> medium — the booking flow is load-bearing</span>
+      <span><b>Test</b> re-run the cross-role booking walkthrough after</span>
+    </div>
+  </article>
+</section>
+
+<!-- ============================================ -->
+<section id="order">
+  <h2><span class="num">09</span> Suggested order</h2>
+  <p class="lede">Sequenced by value per hour, not by severity alone.</p>
+
+  <ol class="order">
+    <li><strong>P0-1 and P0-2 together.</strong> They're the same user-facing failure from two
+    angles and share a fix. Biggest improvement available for the least work, and
+    <code>ErrorText</code> already exists.</li>
+    <li><strong>P0-4 — keyboard-reachable navigation.</strong> Realistically a one-line prop
+    change, and it lifts the app over a WCAG Level&nbsp;A bar it currently fails outright.
+    Cheapest severity reduction in the list.</li>
+    <li><strong>P0-3 — WebSocket backoff.</strong> Small, contained, and prevents a
+    self-inflicted load problem on your own backend.</li>
+    <li><strong>P1-4 — <code>autoComplete</code>.</strong> An afternoon. Immediately noticeable
+    to anyone who uses a password manager, which is everyone grading it.</li>
+    <li><strong>P1-3 — the dark-mode decision.</strong> Possibly a one-line deletion. Just don't
+    leave it half-declared.</li>
+    <li><strong>P1-1 then P1-5.</strong> Connection indicator (wiring an existing value), then
+    the accessibility pass.</li>
+    <li><strong>P1-6 before P1-2.</strong> Split the component first — pagination is much easier
+    to land in a page that's already been broken up.</li>
+  </ol>
+</section>
+
+<!-- ============================================ -->
+<section id="running">
+  <h2><span class="num">10</span> Running it</h2>
+  <p class="lede">Recorded here because it cost time — the README's PowerShell instructions
+  are correct, but the demo credentials are only discoverable by reading the seeder.</p>
+
+  <pre><code>cp .env.example .env
+docker compose up --build
+docker compose exec api python -m app.seed_demo</code></pre>
+
+  <p>Then the frontend is on <code>:5173</code>, the API on <code>:8000</code>, Swagger on
+  <code>/docs</code>, and MailHog on <code>:8025</code>. The AI features need one extra step —
+  <code>docker compose exec ollama ollama pull llama3.2</code> — and degrade gracefully without
+  it, which is a nice touch.</p>
+
+  <h3>Demo accounts</h3>
+  <p>All share the password <code>DemoPass123!</code>:</p>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>Role</th><th>Email</th></tr></thead>
+    <tbody>
+      <tr><td>Admin</td><td><code>admin@stu-dent.demo</code></td></tr>
+      <tr><td>Student</td><td><code>student1@stu-dent.demo</code></td></tr>
+      <tr><td>Attending</td><td><code>attending1@stu-dent.demo</code></td></tr>
+      <tr><td>Patient (confirmed)</td><td><code>patient1@stu-dent.demo</code></td></tr>
+      <tr><td>Patient (pending)</td><td><code>patient5@stu-dent.demo</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><strong>Suggestion:</strong> put this table in the README. Right now the only way to find
+  it is to read <code>seed_demo.py</code> to the bottom, and anyone evaluating the project will
+  hit that wall first.</p>
+</section>
+
+<footer>
+  <p><strong>Method.</strong> Full read of the frontend source and a structural read of the
+  backend. <code>tsc -b</code> and <code>oxlint</code> run locally. P0-1 reproduced in a real
+  browser against the Vite dev server with <code>fetch</code> stubbed to return 401 on data
+  endpoints, simulating the 30-minute token expiry.</p>
+  <p><strong>Live verification.</strong> The full Docker Compose stack was subsequently built and
+  seeded (<code>app.seed_demo</code>), and the findings re-checked against real data as
+  <code>student1@stu-dent.demo</code>. P0-4 was found this way and not from source — it took DOM
+  inspection of the running app to see that all eight nav items render as
+  <code>&lt;a&gt;</code> with no <code>href</code> and no <code>tabIndex</code>, and so never
+  enter the tab order. Ollama was left un-pulled; the AI paths degraded to warnings exactly as
+  documented, which incidentally confirms that graceful-degradation claim.</p>
+  <p><strong>No changes were made to the repository.</strong> Review only — no commits, no
+  branches, no pushes.</p>
+</footer>
+
+</div>
+</body>
+</html>

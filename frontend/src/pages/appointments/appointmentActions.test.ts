@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Appointment, AppointmentStatus } from '../../api/types'
 import type { Principal } from '../../auth/AuthContext'
-import { getAvailableActions } from './appointmentActions'
+import { BRAND_INK } from '../../theme'
+import { getAvailableActions, statusBadgeStyle, statusLabel } from './appointmentActions'
 
 const STUDENT_ID = 'student-1'
 const ATTENDING_ID = 'attending-1'
@@ -172,5 +173,67 @@ describe('getAvailableActions', () => {
   it('does not offer approve/reject when no attending is assigned', () => {
     const noAttending = makeAppointment({ status: 'confirmed', attending_id: null })
     expect(names(noAttending, assignedAttending)).toEqual([])
+  })
+})
+
+describe('statusLabel', () => {
+  it('humanizes every status into a real label, not the raw snake_case enum', () => {
+    const statuses: AppointmentStatus[] = [
+      'proposed',
+      'awaiting_confirmation',
+      'confirmed',
+      'cancelled',
+      'completed',
+      'no_show',
+      'rescheduling_requested',
+    ]
+    const labels = statuses.map(statusLabel)
+    expect(labels).toEqual([
+      'Proposed',
+      'Awaiting confirmation',
+      'Confirmed',
+      'Cancelled',
+      'Completed',
+      'No show',
+      'Rescheduling requested',
+    ])
+    // None of them still contain the raw underscore.
+    for (const label of labels) expect(label).not.toContain('_')
+  })
+})
+
+describe('statusBadgeStyle', () => {
+  it('uses a uniform ink text color across every status, verified elsewhere to pass WCAG AA', () => {
+    const statuses: AppointmentStatus[] = [
+      'proposed',
+      'awaiting_confirmation',
+      'confirmed',
+      'cancelled',
+      'completed',
+      'no_show',
+      'rescheduling_requested',
+    ]
+    for (const status of statuses) {
+      expect(statusBadgeStyle(status).color).toBe(BRAND_INK)
+    }
+  })
+
+  it('gives each status a distinct background so they stay visually distinguishable', () => {
+    const statuses: AppointmentStatus[] = [
+      'proposed',
+      'awaiting_confirmation',
+      'confirmed',
+      'cancelled',
+      'completed',
+      'no_show',
+    ]
+    const backgrounds = new Set(statuses.map((s) => statusBadgeStyle(s).backgroundColor))
+    expect(backgrounds.size).toBe(statuses.length)
+  })
+
+  it('gives the two "needs attending action" statuses the same background', () => {
+    expect(statusBadgeStyle('awaiting_confirmation').backgroundColor).toBe(
+      statusBadgeStyle('rescheduling_requested').backgroundColor,
+    )
   })
 })

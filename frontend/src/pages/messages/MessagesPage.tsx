@@ -18,7 +18,7 @@ import {
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listAttendings } from '../../api/attendings'
 import { apiErrorMessage } from '../../api/httpClient'
@@ -38,13 +38,16 @@ import {
 import { listStudents } from '../../api/students'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { EmptyText, LoadingText } from '../../components/StateText'
+import { ChatSkeleton, ListRowsSkeleton } from '../../components/Skeletons'
+import { EmptyText, ErrorText } from '../../components/StateText'
 import { formatDateTime } from '../../utils/dates'
 
 interface Selection {
   target: MessageTarget
   label: string
 }
+
+const MESSAGE_PAGE_SIZE = 50
 
 /** Unread threads first, then most-recent-activity first; threads with no
  * activity yet (e.g. a just-created group with no messages) sort last,
@@ -83,12 +86,24 @@ export function MessagesPage() {
   const canCreateGroup = principal?.role === 'student' || principal?.role === 'attending'
   const selectedKey = selected ? targetKey(selected.target) : null
 
-  const { data: contacts, isLoading: contactsLoading } = useQuery({
+  const {
+    data: contacts,
+    isLoading: contactsLoading,
+    isError: contactsError,
+    error: contactsErrorValue,
+    refetch: refetchContacts,
+  } = useQuery({
     queryKey: ['messages', 'contacts'],
     queryFn: () => listContacts(token),
   })
 
-  const { data: groups, isLoading: groupsLoading } = useQuery({
+  const {
+    data: groups,
+    isLoading: groupsLoading,
+    isError: groupsError,
+    error: groupsErrorValue,
+    refetch: refetchGroups,
+  } = useQuery({
     queryKey: ['messages', 'groups'],
     queryFn: () => listGroups(token),
   })
@@ -103,11 +118,29 @@ export function MessagesPage() {
     return map
   }, [threadSummaries])
 
-  const { data: messages, isLoading: messagesLoading } = useQuery({
+  const {
+    data: messagesData,
+    isLoading: messagesLoading,
+    isError: messagesError,
+    error: messagesErrorValue,
+    refetch: refetchMessages,
+    fetchPreviousPage,
+    hasPreviousPage,
+    isFetchingPreviousPage,
+  } = useInfiniteQuery({
     queryKey: ['messages', 'thread', selectedKey],
-    queryFn: () => listMessages(token, selected!.target),
+    queryFn: ({ pageParam }) =>
+      listMessages(token, selected!.target, { beforeSequence: pageParam, limit: MESSAGE_PAGE_SIZE }),
     enabled: !!selected,
+    initialPageParam: undefined as number | undefined,
+    // Each page arrives oldest-first (chat order) -- fetchPreviousPage
+    // prepends an even-older page ahead of it, so pages.flat() stays in
+    // the right order without any client-side re-sorting.
+    getPreviousPageParam: (firstPage) =>
+      firstPage.length === MESSAGE_PAGE_SIZE ? firstPage[0].sequence : undefined,
+    getNextPageParam: () => undefined,
   })
+  const messages = messagesData?.pages.flat()
 
   const markReadMutation = useMutation({
     mutationFn: (target: MessageTarget) => markRead(token, target),
@@ -268,9 +301,14 @@ export function MessagesPage() {
             <Text size="xs" fw={700} c="dimmed" mt="xs">
               CONTACTS
             </Text>
-            {contactsLoading && <LoadingText />}
-            {!contactsLoading && sortedContactItems.length === 0 && (
-              <EmptyText>No contacts yet.</EmptyText>
+            {contactsError ? (
+              <ErrorText onRetry={() => refetchContacts()}>
+                {apiErrorMessage(contactsErrorValue, 'Failed to load contacts.')}
+              </ErrorText>
+            ) : contactsLoading ? (
+              <ListRowsSkeleton />
+            ) : (
+              sortedContactItems.length === 0 && <EmptyText>No contacts yet.</EmptyText>
             )}
             {sortedContactItems.map((item) => (
               <NavLink
@@ -297,9 +335,14 @@ export function MessagesPage() {
                 </Button>
               )}
             </Group>
-            {groupsLoading && <LoadingText />}
-            {!groupsLoading && sortedGroupItems.length === 0 && (
-              <EmptyText>No group chats yet.</EmptyText>
+            {groupsError ? (
+              <ErrorText onRetry={() => refetchGroups()}>
+                {apiErrorMessage(groupsErrorValue, 'Failed to load group chats.')}
+              </ErrorText>
+            ) : groupsLoading ? (
+              <ListRowsSkeleton count={3} />
+            ) : (
+              sortedGroupItems.length === 0 && <EmptyText>No group chats yet.</EmptyText>
             )}
             {sortedGroupItems.map((item) => (
               <NavLink
@@ -355,9 +398,26 @@ export function MessagesPage() {
           <>
             <ScrollArea flex={1}>
               <Stack gap="xs">
-                {messagesLoading && <LoadingText />}
-                {!messagesLoading && messages?.length === 0 && (
-                  <EmptyText>No messages yet.</EmptyText>
+                {messagesError ? (
+                  <ErrorText onRetry={() => refetchMessages()}>
+                    {apiErrorMessage(messagesErrorValue, 'Failed to load messages.')}
+                  </ErrorText>
+                ) : messagesLoading ? (
+                  <ChatSkeleton />
+                ) : (
+                  messages?.length === 0 && <EmptyText>No messages yet.</EmptyText>
+                )}
+                {hasPreviousPage && (
+                  <Button
+                    variant="subtle"
+                    size="xs"
+                    onClick={() => fetchPreviousPage()}
+                    loading={isFetchingPreviousPage}
+                    // No Mantine shorthand for align-self.
+                    style={{ alignSelf: 'center' }}
+                  >
+                    Load earlier messages
+                  </Button>
                 )}
                 {messages?.map((message) => {
                   const isMine = message.sender_id === principal?.id
@@ -366,6 +426,7 @@ export function MessagesPage() {
                       key={message.id}
                       withBorder
                       p="sm"
+                      className="list-item-enter"
                       ml={isMine ? '20%' : 0}
                       mr={isMine ? 0 : '20%'}
                       bg={isMine ? 'var(--mantine-color-blue-0)' : undefined}
@@ -406,6 +467,7 @@ export function MessagesPage() {
         opened={groupModalOpened}
         onClose={groupModalHandlers.close}
         title="New group chat"
+        size="md"
       >
         <form onSubmit={groupForm.onSubmit(() => createGroupMutation.mutate())}>
           <Stack>

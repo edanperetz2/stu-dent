@@ -20,8 +20,26 @@ export interface AppointmentUpdateInput {
   notes?: string | null
 }
 
-export function listAppointments(token: string) {
-  return request<Appointment[]>('/appointments', { token })
+export interface ListAppointmentsOptions {
+  /** ISO 8601 strings -- start_time >= startAfter and < startBefore. */
+  startAfter?: string
+  startBefore?: string
+  excludeCancelled?: boolean
+  limit?: number
+  offset?: number
+}
+
+export function listAppointments(token: string, options: ListAppointmentsOptions = {}) {
+  return request<Appointment[]>('/appointments', {
+    token,
+    query: {
+      start_after: options.startAfter,
+      start_before: options.startBefore,
+      exclude_cancelled: options.excludeCancelled,
+      limit: options.limit,
+      offset: options.offset,
+    },
+  })
 }
 
 export function getAppointment(token: string, appointmentId: string) {

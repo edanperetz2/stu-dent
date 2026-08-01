@@ -23,6 +23,8 @@ Localhost-first, fully Dockerized, zero paid services.
 - **Notifications & email**: in-app notifications with a live unread-count
   badge, mirrored to email via MailHog for local testing, for reminders,
   cancellations, expirations, and unresolved/pending-feedback nags.
+  Forgot-password also sends its reset link by email — see
+  [Password reset](#password-reset) below.
 - **Forum**: a student community feed — posts, comments, and voting.
 - **Messaging**: direct messages between a patient and their student,
   student/attending group chats, and a shared inbox for admin.
@@ -81,6 +83,15 @@ docker compose exec ollama ollama pull llama3.2
 Both features degrade gracefully (a plain warning / raw-data fallback,
 never an error) if Ollama is unreachable or the model isn't pulled yet.
 
+## Password reset
+
+The login page's "Forgot password?" link sends a reset-link email through
+MailHog — open http://localhost:8025 after requesting one to read it and
+follow the link (no real email account or SMTP setup needed locally). The
+token expires after 30 minutes and is single-use; requesting a reset
+for an email that isn't registered still returns a generic success message
+(no account-enumeration signal) and simply sends nothing.
+
 ## Running database migrations
 
 Migrations run automatically on `api` container start. To run them manually
@@ -113,8 +124,16 @@ empty app. Safe to re-run — idempotent, no-ops if already seeded.
 docker compose exec api python -m app.seed_demo
 ```
 
-Prints every seeded account's login at the end (one shared password for
-all of them).
+Prints every seeded account's login at the end. All accounts share one
+password: `DemoPass123!`.
+
+| Role | Email(s) | Notes |
+| --- | --- | --- |
+| Admin | `admin@stu-dent.demo` | |
+| Student | `student1@stu-dent.demo`, `student2@stu-dent.demo`, `student3@stu-dent.demo` | |
+| Attending | `attending1@stu-dent.demo`, `attending2@stu-dent.demo` | |
+| Patient | `patient1@stu-dent.demo` – `patient4@stu-dent.demo` | confirmed |
+| Patient | `patient5@stu-dent.demo` | pending — not yet confirmed by their owning student, to demonstrate that flow |
 
 ## Linting
 
@@ -171,3 +190,13 @@ then update the `@sha256:...` suffix everywhere that image is referenced.
   pending until the chosen student calls `POST /patients/{id}/confirm`.
   An unconfirmed patient can log in and view their own profile but is
   blocked from booking appointments or messaging until confirmed.
+- The top-level `ErrorBoundary` (`frontend/src/components/ErrorBoundary.tsx`)
+  catches an otherwise-fatal render error and shows a "Something went
+  wrong" screen instead of a permanent blank page, but only logs to the
+  browser console (`console.error`) — there's no remote error-reporting
+  service wired up, so a real user hitting an uncaught error in production
+  is invisible to the team unless they report it themselves.
+- The logo/wordmark is in Hebrew while the rest of the UI is English —
+  a deliberate cosmetic choice, not the start of real internationalization.
+  There's no i18n/RTL support anywhere else in the app, and none is
+  planned.

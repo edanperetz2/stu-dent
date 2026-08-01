@@ -49,8 +49,15 @@ export function createGroup(token: string, title: string, participantIds: string
   })
 }
 
-export function listMessages(token: string, target: MessageTarget) {
-  return request<Message[]>(targetPath(target), { token })
+export function listMessages(
+  token: string,
+  target: MessageTarget,
+  options: { beforeSequence?: number; limit?: number } = {},
+) {
+  return request<Message[]>(targetPath(target), {
+    token,
+    query: { before_sequence: options.beforeSequence, limit: options.limit },
+  })
 }
 
 export function sendMessage(token: string, target: MessageTarget, body: string) {

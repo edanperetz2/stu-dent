@@ -44,7 +44,7 @@ export function ConflictResolutionModal({
   cancelsExistingAppointment,
 }: ConflictResolutionModalProps) {
   return (
-    <Modal opened={opened} onClose={onClose} title="This request isn't available" centered>
+    <Modal opened={opened} onClose={onClose} title="This request isn't available" centered size="sm">
       <Text size="sm" mb="xs">
         The requested time conflicts with an existing booking:
       </Text>

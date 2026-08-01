@@ -19,6 +19,10 @@ class MessageOut(BaseModel):
     sender_name: str
     body: str
     created_at: datetime
+    # Exposed so the frontend can page further back with `before_sequence`
+    # -- created_at alone can tie within one transaction (see the model's
+    # own comment), so it isn't a safe pagination cursor on its own.
+    sequence: int
 
 
 class ContactOut(BaseModel):

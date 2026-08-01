@@ -1,33 +1,26 @@
-import { Anchor, Button, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Anchor, Button, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { apiErrorMessage } from '../../api/httpClient'
-import type { Role } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 
 interface LoginFormValues {
   email: string
   password: string
-  role: Role | ''
 }
 
-const ROLE_OPTIONS: { value: Role | ''; label: string }[] = [
-  { value: '', label: 'Any' },
-  { value: 'student', label: 'Student' },
-  { value: 'attending', label: 'Attending' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'patient', label: 'Patient' },
-]
-
 export function LoginPage() {
-  const { login } = useAuth()
+  const { login, sessionExpired } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const from = (location.state as { from?: Location } | null)?.from
+
   const form = useForm<LoginFormValues>({
-    initialValues: { email: '', password: '', role: '' },
+    initialValues: { email: '', password: '' },
     validate: {
       email: (value) => (value.includes('@') ? null : 'Enter a valid email'),
       password: (value) => (value.length > 0 ? null : 'Password is required'),
@@ -38,8 +31,12 @@ export function LoginPage() {
     setError(null)
     setSubmitting(true)
     try {
-      await login(values.email, values.password, values.role || undefined)
-      navigate('/appointments')
+      // No role picker -- the backend already validates the account's real
+      // role server-side, so a frontend guess could only ever turn a valid
+      // login into a spurious failure, never let someone log in under the
+      // wrong role.
+      await login(values.email, values.password)
+      navigate(from ? `${from.pathname}${from.search}` : '/appointments', { replace: true })
     } catch (err) {
       setError(apiErrorMessage(err, 'Login failed'))
     } finally {
@@ -50,18 +47,32 @@ export function LoginPage() {
   return (
     <form onSubmit={form.onSubmit(handleSubmit)}>
       <Stack>
-        <TextInput label="Email" placeholder="you@example.com" {...form.getInputProps('email')} />
-        <PasswordInput label="Password" {...form.getInputProps('password')} />
-        <Select
-          label="Role"
-          data={ROLE_OPTIONS}
-          allowDeselect={false}
-          {...form.getInputProps('role')}
+        {sessionExpired && (
+          <Alert color="yellow" role="alert">
+            Your session expired. Log in again to continue where you left off.
+          </Alert>
+        )}
+        <TextInput
+          label="Email"
+          placeholder="you@example.com"
+          autoComplete="email"
+          type="email"
+          {...form.getInputProps('email')}
         />
+        <PasswordInput
+          label="Password"
+          autoComplete="current-password"
+          {...form.getInputProps('password')}
+        />
+        <Text size="sm" ta="right">
+          <Anchor component={Link} to="/forgot-password">
+            Forgot password?
+          </Anchor>
+        </Text>
         {error && (
-          <Text c="red" size="sm">
+          <Alert color="red" role="alert">
             {error}
-          </Text>
+          </Alert>
         )}
         <Button type="submit" loading={submitting} fullWidth>
           Log in

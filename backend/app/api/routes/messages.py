@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -95,6 +95,8 @@ def _authorized_peer(db: Session, other_user_id: uuid.UUID, current_user: User) 
 @router.get("/direct/{other_user_id}", response_model=list[MessageOut])
 def list_direct_messages(
     other_user_id: uuid.UUID,
+    before_sequence: int | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Message]:
@@ -104,7 +106,7 @@ def list_direct_messages(
     )
     if existing is None:
         return []
-    return list_conversation_messages(db, existing.id)
+    return list_conversation_messages(db, existing.id, before_sequence=before_sequence, limit=limit)
 
 
 @router.post(
@@ -174,7 +176,10 @@ def mark_direct_unread(
 
 @router.get("/admin", response_model=list[MessageOut])
 def list_own_admin_messages(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    before_sequence: int | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> list[Message]:
     if current_user.role == RoleEnum.admin:
         raise HTTPException(
@@ -186,7 +191,7 @@ def list_own_admin_messages(
     )
     if existing is None:
         return []
-    return list_conversation_messages(db, existing.id)
+    return list_conversation_messages(db, existing.id, before_sequence=before_sequence, limit=limit)
 
 
 @router.post("/admin", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
@@ -258,6 +263,8 @@ def mark_own_admin_unread(
 @router.get("/admin-inbox/{owner_id}", response_model=list[MessageOut])
 def list_admin_inbox_messages(
     owner_id: uuid.UUID,
+    before_sequence: int | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Message]:
@@ -267,7 +274,7 @@ def list_admin_inbox_messages(
     existing = db.scalar(select(Conversation).where(Conversation.direct_key == admin_key(owner_id)))
     if existing is None:
         return []
-    return list_conversation_messages(db, existing.id)
+    return list_conversation_messages(db, existing.id, before_sequence=before_sequence, limit=limit)
 
 
 @router.post(
@@ -411,11 +418,15 @@ def _get_group_or_404(db: Session, conversation_id: uuid.UUID, current_user: Use
 @router.get("/groups/{conversation_id}", response_model=list[MessageOut])
 def list_group_messages(
     conversation_id: uuid.UUID,
+    before_sequence: int | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Message]:
     _get_group_or_404(db, conversation_id, current_user)
-    return list_conversation_messages(db, conversation_id)
+    return list_conversation_messages(
+        db, conversation_id, before_sequence=before_sequence, limit=limit
+    )
 
 
 @router.post(

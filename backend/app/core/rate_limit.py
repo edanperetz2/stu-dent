@@ -100,3 +100,30 @@ def enforce_registration_rate_limit(db: Session, *, email: str, ip_address: str 
     )
     if per_ip_count >= settings.registration_rate_limit_max_attempts_per_ip:
         _raise_too_many()
+
+
+def enforce_password_reset_rate_limit(db: Session, *, email: str, ip_address: str | None) -> None:
+    """Same two-layer shape as enforce_registration_rate_limit -- a tight
+    per-(email, IP) check plus a much higher per-IP-only ceiling. Recorded
+    under `password_reset_request` regardless of whether the email actually
+    matches a real account (see the route), so this also doubles as the
+    limiter for someone probing which emails have accounts.
+    """
+    per_email_count = _count_recent(
+        db,
+        ip_address=ip_address,
+        action="password_reset_request",
+        window_minutes=settings.password_reset_rate_limit_window_minutes,
+        identifier=email,
+    )
+    if per_email_count >= settings.password_reset_rate_limit_max_attempts:
+        _raise_too_many()
+
+    per_ip_count = _count_recent(
+        db,
+        ip_address=ip_address,
+        action="password_reset_request",
+        window_minutes=settings.password_reset_rate_limit_window_minutes,
+    )
+    if per_ip_count >= settings.password_reset_rate_limit_max_attempts_per_ip:
+        _raise_too_many()

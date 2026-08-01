@@ -1,86 +1,63 @@
-import 'react-big-calendar/lib/css/react-big-calendar.css'
-
 import {
-  Badge,
+  ActionIcon,
   Button,
   Chip,
+  Collapse,
+  Fieldset,
   Group,
   Modal,
-  SegmentedControl,
   Select,
+  SegmentedControl,
+  Skeleton,
   Stack,
-  Table,
   Text,
   Textarea,
+  TextInput,
   Title,
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
-import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import dayjs from 'dayjs'
-import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Calendar, dayjsLocalizer, type Formats, type SlotInfo, type View } from 'react-big-calendar'
+import { IconSortAscending, IconSortDescending } from '@tabler/icons-react'
+import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { SlotInfo, View } from 'react-big-calendar'
 import { useSearchParams } from 'react-router-dom'
-import {
-  createAppointment,
-  listAppointments,
-  type AppointmentCreateInput,
-} from '../../api/appointments'
+import { listAppointments, type AppointmentCreateInput } from '../../api/appointments'
 import { listAttendings } from '../../api/attendings'
 import { listActiveEquipment } from '../../api/equipment'
-import { apiErrorMessage, ApiError } from '../../api/httpClient'
 import { listPatients } from '../../api/patients'
 import { getResourcesSchedule } from '../../api/resources'
 import { listActiveRooms } from '../../api/rooms'
-import { interpretSchedulingRequest } from '../../api/schedulingAssistant'
-import type { Appointment, AppointmentStatus, ConflictReason } from '../../api/types'
-import { joinWaitlist } from '../../api/waitlist'
+import type { Appointment, AppointmentStatus } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
 import { ConflictResolutionModal } from '../../components/ConflictResolutionModal'
-import { EmptyText, LoadingText } from '../../components/StateText'
-import { AppointmentDetailPanel } from './AppointmentDetailPanel'
-import { STATUS_COLORS } from './appointmentActions'
+import { TableSkeleton } from '../../components/Skeletons'
+import { EmptyText, ErrorText } from '../../components/StateText'
+import { useListQuery } from '../../hooks/useListQuery'
 import {
+  addMinutesToMantineDateTime,
   APPOINTMENT_END_TIME_OPTIONS,
   APPOINTMENT_START_TIME_OPTIONS,
   formatDateTime,
   isoToMantineDateTime,
   mantineDateTimeToIso,
 } from '../../utils/dates'
-
-// react-big-calendar's eventPropGetter needs a real CSS color, not a
-// Mantine theme key -- these are the hex values behind STATUS_COLORS above.
-const STATUS_CSS_COLORS: Record<AppointmentStatus, string> = {
-  proposed: '#868e96',
-  awaiting_confirmation: '#f59f00',
-  confirmed: '#2f9e44',
-  cancelled: '#e03131',
-  completed: '#1971c2',
-  no_show: '#e8590c',
-  rescheduling_requested: '#f59f00',
-}
-
-const localizer = dayjsLocalizer(dayjs)
-
-// dayjsLocalizer's own defaults use dayjs's localized-time token ('LT'),
-// which in the default English locale is 12-hour with AM/PM -- override
-// with plain dd/mm + 24h tokens instead (Israel-based app). Agenda-view
-// format keys are intentionally left at their defaults since Agenda isn't
-// one of this calendar's enabled `views` below.
-const CALENDAR_FORMATS: Formats = {
-  timeGutterFormat: 'HH:mm',
-  dayFormat: 'ddd DD/MM',
-  dayHeaderFormat: 'dddd DD/MM/YYYY',
-  dayRangeHeaderFormat: ({ start, end }, culture, localizer) =>
-    `${localizer!.format(start, 'DD/MM', culture)} – ${localizer!.format(end, 'DD/MM', culture)}`,
-  eventTimeRangeFormat: ({ start, end }, culture, localizer) =>
-    `${localizer!.format(start, 'HH:mm', culture)} – ${localizer!.format(end, 'HH:mm', culture)}`,
-  selectRangeFormat: ({ start, end }, culture, localizer) =>
-    `${localizer!.format(start, 'HH:mm', culture)} – ${localizer!.format(end, 'HH:mm', culture)}`,
-}
+import { AppointmentDetailPanel } from './AppointmentDetailPanel'
+import { AppointmentsCalendarView } from './AppointmentsCalendarView'
+import { statusLabel } from './appointmentActions'
+import { PersonalAppointmentsTable } from './PersonalAppointmentsTable'
+import { ResourceAppointmentsTable } from './ResourceAppointmentsTable'
+import {
+  buildCombinedResourceOptions,
+  buildPersonalCalendarEvents,
+  buildResourceCalendarEvents,
+  getCalendarViewRange,
+  hashResourceColor,
+  type CalendarEventItem,
+} from './resourceColors'
+import { useAppointmentActions, type CreateFormValues } from './useAppointmentActions'
 
 // What the calendar/list view is currently showing: the signed-in user's own
 // appointments (default, status-colored), or a clinic-wide resource view --
@@ -92,100 +69,58 @@ const CALENDAR_FORMATS: Formats = {
 // already has -- same shape, full detail, no anonymization.
 type CalendarLens = 'personal' | 'resources'
 
-// A stable palette so each resource gets a distinct color -- looked up by
-// hashing the resourceId (see hashResourceColor) rather than by its
-// position in a list, so a resource's color never shifts just because
-// another resource was added, deactivated, or reactivated. Paired arrays
-// (same key = same color) since Mantine's <Chip color> wants a theme color
-// name but react-big-calendar's eventPropGetter needs a real CSS hex value.
-const RESOURCE_COLOR_NAMES = [
-  'gray',
-  'orange',
-  'blue',
-  'green',
-  'red',
-  'grape',
-  'cyan',
-  'pink',
-  'yellow',
-  'teal',
-] as const
-const RESOURCE_COLOR_HEX: Record<(typeof RESOURCE_COLOR_NAMES)[number], string> = {
-  gray: '#868e96',
-  orange: '#f59f00',
-  blue: '#1971c2',
-  green: '#2f9e44',
-  red: '#e03131',
-  grape: '#9c36b5',
-  cyan: '#0c8599',
-  pink: '#c2255c',
-  yellow: '#f08c00',
-  teal: '#0ca678',
+// Duration shortcut chips on the New Appointment modal's "When" fieldset --
+// 'custom' falls back to a second explicit end-time picker; the three
+// preset minute counts drive addMinutesToMantineDateTime directly off
+// whatever start time is picked, so the end time never needs a second
+// manual entry for the common cases.
+type DurationMode = '30' | '45' | '60' | 'custom'
+const DURATION_MINUTES: Record<Exclude<DurationMode, 'custom'>, number> = {
+  '30': 30,
+  '45': 45,
+  '60': 60,
 }
 
-export function hashResourceColor(resourceId: string): (typeof RESOURCE_COLOR_NAMES)[number] {
-  let hash = 0
-  for (let i = 0; i < resourceId.length; i++) {
-    hash = (hash * 31 + resourceId.charCodeAt(i)) | 0
-  }
-  return RESOURCE_COLOR_NAMES[Math.abs(hash) % RESOURCE_COLOR_NAMES.length]
-}
+// 'cancelled' is deliberately excluded -- the appointments query always
+// excludes cancelled rows server-side now, so filtering by it would only
+// ever produce an empty, confusing result.
+const STATUS_FILTER_OPTIONS: { value: AppointmentStatus; label: string }[] = (
+  ['proposed', 'awaiting_confirmation', 'confirmed', 'rescheduling_requested', 'completed', 'no_show'] as const
+).map((status) => ({ value: status, label: statusLabel(status) }))
 
-interface ResourceOption {
-  resourceId: string
-  resourceTitle: string
-}
-
-// `resource` is null for the anonymized Resources-lens busy-window events
-// (no real appointment behind them for a non-admin viewer) -- `studentName`
-// covers that case instead. `resourceId`/`resourceName`/`resourceKind` are
-// only set for Resources-lens events; they drive the color, the show/hide
-// filter chips, and the List view's columns.
-interface CalendarEventItem {
-  id: string
-  title: string
-  start: Date
-  end: Date
-  resourceId?: string
-  resourceName?: string
-  resourceKind?: 'room' | 'equipment'
-  resource: Appointment | null
-  studentName?: string
-}
-
-interface CreateFormValues {
-  patient_id: string
-  attending_id: string | null
-  room_id: string | null
-  equipment_id: string | null
-  // DateTimePicker value format -- see src/utils/dates.ts
-  start_time: string | null
-  end_time: string | null
-  notes: string
-}
+type SortField = 'start_time' | 'status' | 'patient_name' | 'student_name'
+const SORT_FIELD_OPTIONS: { value: SortField; label: string }[] = [
+  { value: 'start_time', label: 'Start time' },
+  { value: 'status', label: 'Status' },
+  { value: 'patient_name', label: 'Patient' },
+  { value: 'student_name', label: 'Student' },
+]
 
 export function AppointmentsListPage() {
   const token = useAuthToken()
   const { principal } = useAuth()
-  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [opened, { open, close }] = useDisclosure(false)
-  const [describeText, setDescribeText] = useState('')
-  const [interpretWarnings, setInterpretWarnings] = useState<string[]>([])
+  const [durationMode, setDurationMode] = useState<DurationMode>('30')
+  const [moreOptionsOpened, { toggle: toggleMoreOptions, close: closeMoreOptions }] = useDisclosure(false)
+  const [describeMode, { toggle: toggleDescribeMode, close: closeDescribeMode }] = useDisclosure(false)
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [calendarView, setCalendarView] = useState<View>('week')
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [calendarLens, setCalendarLens] = useState<CalendarLens>('personal')
   const [hiddenResourceIds, setHiddenResourceIds] = useState<string[]>([])
-  const [conflictState, setConflictState] = useState<{
-    payload: AppointmentCreateInput
-    conflicts: ConflictReason[]
-  } | null>(null)
+  // Search/status-filter/sort only apply to the Personal-lens List
+  // sub-view -- the Resources lens already has its own resource-identity
+  // filter chips, and the Calendar sub-view has no table to sort/search.
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<AppointmentStatus | null>(null)
+  const [sortField, setSortField] = useState<SortField>('start_time')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   // Row-expansion key for the List sub-view -- plain appointment id for the
   // Personal-lens table, but the composite `${resourceId}-${id}` key for the
   // admin Resources-lens table, since one appointment using both a room and
   // equipment produces two rows sharing the same appointment id there (see
-  // resourceCalendarEvents below, which already keys those rows the same way).
+  // resourceColors.ts's buildResourceCalendarEvents).
   const [expandedAppointmentId, setExpandedAppointmentId] = useState<string | null>(null)
   // Calendar sub-view has no "row" to expand underneath -- clicking an event
   // opens this appointment in a Modal instead (a "banner/window similar to
@@ -231,10 +166,31 @@ export function AppointmentsListPage() {
       ? 'resources'
       : 'personal'
 
-  const { data: appointments, isLoading } = useQuery({
-    queryKey: ['appointments'],
-    queryFn: () => listAppointments(token),
+  // Only the Calendar sub-view has a well-defined "on-screen" date window
+  // (month/week/day, from calendarView+calendarDate) -- the List sub-view
+  // shows a flat table with no inherent range, so it keeps requesting
+  // everything (up to the backend's own cap) rather than being scoped to a
+  // window it has no UI to represent.
+  const calendarRange = useMemo(
+    () => (viewMode === 'calendar' ? getCalendarViewRange(calendarDate, calendarView) : null),
+    [viewMode, calendarDate, calendarView],
+  )
+
+  // isEmpty always false -- this page's own content branches below (list vs
+  // calendar, personal vs resources lens) each render their own empty
+  // state, since "empty" means something different in each of them.
+  const appointmentsQuery = useListQuery({
+    queryKey: ['appointments', calendarRange?.start.toISOString(), calendarRange?.end.toISOString()],
+    queryFn: () =>
+      listAppointments(token, {
+        startAfter: calendarRange?.start.toISOString(),
+        startBefore: calendarRange?.end.toISOString(),
+        excludeCancelled: true,
+      }),
+    errorFallback: 'Failed to load appointments.',
+    isEmpty: () => false,
   })
+  const appointments = appointmentsQuery.status === 'ready' ? appointmentsQuery.data : undefined
 
   const { data: patients } = useQuery({
     queryKey: ['patients'],
@@ -250,7 +206,7 @@ export function AppointmentsListPage() {
   // chips need the active lists regardless of role, not just for the
   // student create-appointment form. Only ever the currently-active
   // resources -- deactivated ones with existing bookings are recovered
-  // from the booking data itself instead, see combinedResourceOptions.
+  // from the booking data itself instead, see buildCombinedResourceOptions.
   const { data: rooms } = useQuery({
     queryKey: ['rooms'],
     queryFn: () => listActiveRooms(token),
@@ -262,8 +218,8 @@ export function AppointmentsListPage() {
 
   // Combined anonymized resource schedule -- only fetched for non-admin
   // roles, since admin's Resources lens reuses the already-fetched full
-  // `appointments` list instead (see resourceCalendarEvents). Needed for
-  // both List and Calendar sub-views now, not just Calendar.
+  // `appointments` list instead (see buildResourceCalendarEvents). Needed
+  // for both List and Calendar sub-views now, not just Calendar.
   const { data: resourcesSchedule } = useQuery({
     queryKey: ['resources', 'schedule'],
     queryFn: () => getResourcesSchedule(token),
@@ -291,77 +247,52 @@ export function AppointmentsListPage() {
     },
   })
 
-  const createMutation = useMutation({
-    mutationFn: (payload: AppointmentCreateInput) => createAppointment(token, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] })
-      notifications.show({ message: 'Appointment requested', color: 'green' })
-      form.reset()
-      setDescribeText('')
-      setInterpretWarnings([])
-      close()
-    },
-    onError: (err, payload) => {
-      if (err instanceof ApiError && err.status === 409 && err.conflicts?.length) {
-        setConflictState({ payload, conflicts: err.conflicts })
-        return
-      }
-      notifications.show({
-        message: apiErrorMessage(err, 'Failed to create appointment'),
-        color: 'red',
-      })
-    },
+  const {
+    describeText,
+    setDescribeText,
+    interpretWarnings,
+    resetInterpretState,
+    conflictState,
+    setConflictState,
+    createMutation,
+    joinWaitlistMutation,
+    interpretMutation,
+  } = useAppointmentActions({
+    token,
+    form,
+    onSubmitSuccess: close,
+    // The interpreted start/end times are a specific pair, not "start time
+    // + a round duration" -- switch to Custom so the duration-sync effect
+    // below doesn't immediately overwrite the interpreted end time.
+    onInterpretApplied: () => setDurationMode('custom'),
   })
 
-  const joinWaitlistMutation = useMutation({
-    mutationFn: (payload: AppointmentCreateInput) => joinWaitlist(token, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['waitlist'] })
-      notifications.show({ message: 'Added to the waitlist', color: 'green' })
-      setConflictState(null)
-      form.reset()
-      setDescribeText('')
-      setInterpretWarnings([])
-      close()
-    },
-    onError: (err) => {
-      notifications.show({
-        message: apiErrorMessage(err, 'Failed to join the waitlist'),
-        color: 'red',
-      })
-    },
-  })
-
-  const interpretMutation = useMutation({
-    mutationFn: (text: string) => interpretSchedulingRequest(token, text),
-    onSuccess: (data) => {
-      form.setValues({
-        ...(data.patient_id && { patient_id: data.patient_id }),
-        ...(data.attending_id && { attending_id: data.attending_id }),
-        ...(data.room_id && { room_id: data.room_id }),
-        ...(data.equipment_id && { equipment_id: data.equipment_id }),
-        ...(data.start_time && { start_time: isoToMantineDateTime(data.start_time) }),
-        ...(data.end_time && { end_time: isoToMantineDateTime(data.end_time) }),
-        ...(data.notes && { notes: data.notes }),
-      })
-      setInterpretWarnings(data.warnings)
-    },
-    onError: (err) => {
-      notifications.show({
-        message: apiErrorMessage(err, 'Failed to interpret request'),
-        color: 'red',
-      })
-    },
-  })
+  // Keeps end_time in lockstep with start_time while a duration preset is
+  // active, so picking a later start time doesn't leave a stale end time
+  // behind -- skipped entirely once the user picks Custom.
+  useEffect(() => {
+    if (durationMode === 'custom') return
+    const start = form.values.start_time
+    if (!start) return
+    const nextEnd = addMinutesToMantineDateTime(start, DURATION_MINUTES[durationMode])
+    if (nextEnd !== form.values.end_time) {
+      form.setFieldValue('end_time', nextEnd)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync on start_time/durationMode, not on end_time (which this effect itself sets) or form identity
+  }, [form.values.start_time, durationMode])
 
   function handleOpenModal() {
     // Closing without submitting (X, Escape, backdrop click) never reset
     // the form -- the previously-picked patient/room/attending/notes were
     // still silently selected the next time this opened, a real risk of
-    // submitting for the wrong patient without noticing.
+    // submitting for the wrong patient without noticing. Same reasoning
+    // now covers the modal's own UI state (duration mode, collapsed
+    // sections, describe-instead mode).
     form.reset()
-    setDescribeText('')
-    setInterpretWarnings([])
+    resetInterpretState()
+    setDurationMode('30')
+    closeMoreOptions()
+    closeDescribeMode()
     open()
   }
 
@@ -375,14 +306,17 @@ export function AppointmentsListPage() {
       start_time: isoToMantineDateTime(slotInfo.start.toISOString()),
       end_time: isoToMantineDateTime(slotInfo.end.toISOString()),
     })
+    // A drag-selected slot is already an exact start/end pair, same reason
+    // as the interpret path above -- don't let a duration preset clobber it.
+    setDurationMode('custom')
   }
 
   function handleSelectEvent(event: CalendarEventItem) {
     // Non-admin Resources lens has no real appointment to show -- clicking a
     // busy block instead reveals only which student booked it, never the
     // patient or any other detail. Admin's Resources events are full real
-    // appointments (see resourceCalendarEvents), so they still open like
-    // Personal ones.
+    // appointments (see buildResourceCalendarEvents), so they still open
+    // like Personal ones.
     if (effectiveLens === 'resources' && !isAdmin) {
       setViewingBookedBy(event.studentName ?? null)
       return
@@ -410,130 +344,64 @@ export function AppointmentsListPage() {
   const roomOptions = (rooms ?? []).map((r) => ({ value: r.id, label: r.name }))
   const equipmentOptions = (equipment ?? []).map((e) => ({ value: e.id, label: e.name }))
 
-  // A cancelled appointment is done -- it holds no resource and is no
-  // longer actionable, so it's dropped from the list/calendar entirely
-  // rather than cluttering either view. Still reachable directly (e.g. via
-  // a notification link) at /appointments/{id}, which shows its true
-  // status unfiltered. Sorted ascending by start_time (soonest first) --
-  // feeds both the Personal-lens table directly and, for admin, the
-  // Resources-lens table via resourceCalendarEvents below.
-  const visibleAppointments = useMemo(
-    () =>
-      (appointments ?? [])
-        .filter((appointment) => appointment.status !== 'cancelled')
-        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()),
-    [appointments],
-  )
+  // Cancelled appointments are excluded server-side now (exclude_cancelled
+  // on the query above). Search/status-filter only apply to the
+  // Personal-lens List sub-view (see the state comment above); every other
+  // view gets the full fetched set, sorted -- default sort matches the
+  // page's original fixed behavior (ascending by start_time), so switching
+  // to Calendar or the Resources lens is unaffected by whatever sort/filter
+  // was left set on the Personal List table. Feeds both the Personal-lens
+  // table directly and, for admin, the Resources-lens table via
+  // buildResourceCalendarEvents below.
+  const visibleAppointments = useMemo(() => {
+    let list = appointments ?? []
+    if (viewMode === 'list' && effectiveLens === 'personal') {
+      const query = searchQuery.trim().toLowerCase()
+      if (query) {
+        list = list.filter((appointment) =>
+          [
+            appointment.patient_name,
+            appointment.student_name,
+            appointment.attending_name,
+            appointment.room_name,
+            appointment.equipment_name,
+          ]
+            .filter((field): field is string => !!field)
+            .some((field) => field.toLowerCase().includes(query)),
+        )
+      }
+      if (statusFilter) {
+        list = list.filter((appointment) => appointment.status === statusFilter)
+      }
+    }
+    const direction = sortDirection === 'asc' ? 1 : -1
+    return [...list].sort((a, b) => {
+      if (sortField === 'start_time') {
+        return (new Date(a.start_time).getTime() - new Date(b.start_time).getTime()) * direction
+      }
+      return a[sortField].localeCompare(b[sortField]) * direction
+    })
+  }, [appointments, viewMode, effectiveLens, searchQuery, statusFilter, sortField, sortDirection])
 
-  // Personal lens: your own appointments, full detail -- unchanged from
-  // before the Resources lens existed.
-  const personalCalendarEvents = useMemo<CalendarEventItem[]>(
-    () =>
-      visibleAppointments.map((appointment) => ({
-        id: appointment.id,
-        title: `${appointment.patient_name} · ${appointment.status}`,
-        start: new Date(appointment.start_time),
-        end: new Date(appointment.end_time),
-        resource: appointment,
-      })),
+  const personalCalendarEvents = useMemo(
+    () => buildPersonalCalendarEvents(visibleAppointments),
     [visibleAppointments],
   )
 
-  // Resources lens, both roles: one entry per resource actually occupied by
-  // an appointment -- an appointment using both a room and equipment
-  // produces two entries, one per resource, so filtering/coloring by
-  // resourceId is always unambiguous (matches what /resources/schedule
-  // already returns for the non-admin case below). Admin builds this
-  // straight from the full appointment list it already has (full detail,
-  // no anonymization); everyone else builds it from the anonymized
-  // schedule endpoint.
-  const resourceCalendarEvents = useMemo<CalendarEventItem[]>(() => {
-    if (isAdmin) {
-      const events: CalendarEventItem[] = []
-      for (const appointment of visibleAppointments) {
-        const title = `${appointment.patient_name} · ${appointment.status}`
-        if (appointment.room_id) {
-          events.push({
-            id: appointment.id,
-            title,
-            start: new Date(appointment.start_time),
-            end: new Date(appointment.end_time),
-            resourceId: `room:${appointment.room_id}`,
-            resourceName: appointment.room_name ?? undefined,
-            resourceKind: 'room',
-            resource: appointment,
-            studentName: appointment.student_name,
-          })
-        }
-        if (appointment.equipment_id) {
-          events.push({
-            id: appointment.id,
-            title,
-            start: new Date(appointment.start_time),
-            end: new Date(appointment.end_time),
-            resourceId: `equipment:${appointment.equipment_id}`,
-            resourceName: appointment.equipment_name ?? undefined,
-            resourceKind: 'equipment',
-            resource: appointment,
-            studentName: appointment.student_name,
-          })
-        }
-      }
-      return events
-    }
-    // Non-admin: no title text, since the resource name/color is the only
-    // detail shown by default -- the booking student's name is only
-    // revealed on click (Calendar) or as its own column (List), see
-    // handleSelectEvent and the Resources list table below.
-    return [...(resourcesSchedule ?? [])]
-      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-      .map((booking, index) => ({
-        id: `resource-busy-${index}`,
-        title: '',
-        start: new Date(booking.start_time),
-        end: new Date(booking.end_time),
-        resourceId: `${booking.resource_kind}:${booking.resource_id}`,
-        resourceName: booking.resource_name,
-        resourceKind: booking.resource_kind,
-        resource: null,
-        studentName: booking.student_name,
-      }))
-  }, [isAdmin, visibleAppointments, resourcesSchedule])
+  const resourceCalendarEvents = useMemo(
+    () => buildResourceCalendarEvents({ isAdmin, appointments: visibleAppointments, resourcesSchedule }),
+    [isAdmin, visibleAppointments, resourcesSchedule],
+  )
 
-  // Every currently-active room/equipment, plus any resource that's
-  // deactivated but still has a booking showing in resourceCalendarEvents
-  // above -- so a deactivated resource's past/future bookings keep a
-  // stable color and a chip to toggle them, instead of losing their color
-  // mapping the moment the resource itself is deactivated. A newly created
-  // resource shows up immediately (as soon as `rooms`/`equipment` refetch),
-  // with zero bookings, ready to be picked in the create-appointment form
-  // and booked like any other.
-  const combinedResourceOptions = useMemo<ResourceOption[]>(() => {
-    const options = new Map<string, ResourceOption>()
-    for (const room of rooms ?? []) {
-      options.set(`room:${room.id}`, { resourceId: `room:${room.id}`, resourceTitle: `${room.name} (Room)` })
-    }
-    for (const item of equipment ?? []) {
-      options.set(`equipment:${item.id}`, {
-        resourceId: `equipment:${item.id}`,
-        resourceTitle: `${item.name} (Equipment)`,
-      })
-    }
-    for (const event of resourceCalendarEvents) {
-      if (event.resourceId && event.resourceName && event.resourceKind && !options.has(event.resourceId)) {
-        options.set(event.resourceId, {
-          resourceId: event.resourceId,
-          resourceTitle: `${event.resourceName} (${event.resourceKind === 'room' ? 'Room' : 'Equipment'})`,
-        })
-      }
-    }
-    return Array.from(options.values()).sort((a, b) => a.resourceTitle.localeCompare(b.resourceTitle))
-  }, [rooms, equipment, resourceCalendarEvents])
+  const combinedResourceOptions = useMemo(
+    () => buildCombinedResourceOptions({ rooms, equipment, resourceCalendarEvents }),
+    [rooms, equipment, resourceCalendarEvents],
+  )
 
   const isResourceLens = effectiveLens === 'resources'
 
   // Hashed by id, not by list position -- stays put across resource
-  // create/deactivate/reactivate churn (see hashResourceColor above).
+  // create/deactivate/reactivate churn (see resourceColors.ts).
   const resourceColorNames = useMemo(
     () => Object.fromEntries(combinedResourceOptions.map((opt) => [opt.resourceId, hashResourceColor(opt.resourceId)])),
     [combinedResourceOptions],
@@ -547,6 +415,69 @@ export function AppointmentsListPage() {
   const visibleEvents = allEvents.filter(
     (event) => !event.resourceId || !hiddenResourceIds.includes(event.resourceId),
   )
+
+  let content: ReactNode
+  if (appointmentsQuery.status === 'error') {
+    content = <ErrorText onRetry={appointmentsQuery.retry}>{appointmentsQuery.message}</ErrorText>
+  } else if (appointmentsQuery.status === 'loading') {
+    content =
+      viewMode === 'calendar' ? (
+        <Skeleton height={700} />
+      ) : (
+        <TableSkeleton columns={effectiveLens === 'personal' ? 5 : isAdmin ? 8 : 5} />
+      )
+  } else if (viewMode === 'list' && effectiveLens === 'personal') {
+    content =
+      visibleAppointments.length === 0 ? (
+        <EmptyText>
+          {searchQuery.trim() || statusFilter
+            ? 'No appointments match your search/filter.'
+            : 'No appointments yet. Click "New Appointment" to create one.'}
+        </EmptyText>
+      ) : (
+        <PersonalAppointmentsTable
+          appointments={visibleAppointments}
+          attendings={attendings}
+          rooms={rooms}
+          equipment={equipment}
+          expandedId={expandedAppointmentId}
+          onToggleExpand={(id) =>
+            setExpandedAppointmentId((current) => (current === id ? null : id))
+          }
+          viewerRole={principal!.role}
+          groupByDay={sortField === 'start_time'}
+        />
+      )
+  } else if (viewMode === 'list') {
+    content = (
+      <ResourceAppointmentsTable
+        events={visibleEvents}
+        isAdmin={isAdmin}
+        attendings={attendings}
+        rooms={rooms}
+        equipment={equipment}
+        expandedId={expandedAppointmentId}
+        onToggleExpand={(compositeKey) =>
+          setExpandedAppointmentId((current) => (current === compositeKey ? null : compositeKey))
+        }
+      />
+    )
+  } else {
+    content = (
+      <AppointmentsCalendarView
+        events={visibleEvents}
+        view={calendarView}
+        onViewChange={setCalendarView}
+        date={calendarDate}
+        onNavigate={setCalendarDate}
+        selectable={canCreate && effectiveLens === 'personal'}
+        onSelectSlot={handleSelectSlot}
+        onSelectEvent={handleSelectEvent}
+        isResourceLens={isResourceLens}
+        resourceColorNames={resourceColorNames}
+      />
+    )
+  }
 
   return (
     <Stack>
@@ -602,264 +533,199 @@ export function AppointmentsListPage() {
         </Chip.Group>
       )}
 
-      {isLoading ? (
-        <LoadingText />
-      ) : viewMode === 'list' && effectiveLens === 'personal' && visibleAppointments.length === 0 ? (
-        <EmptyText>No appointments yet. Click "New Appointment" to create one.</EmptyText>
-      ) : viewMode === 'list' && effectiveLens === 'personal' ? (
-        <Table.ScrollContainer minWidth={800}>
-          <Table highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Start</Table.Th>
-                <Table.Th>End</Table.Th>
-                <Table.Th>Status</Table.Th>
-                <Table.Th>Student</Table.Th>
-                <Table.Th>Patient</Table.Th>
-                <Table.Th>Attending</Table.Th>
-                <Table.Th>Room</Table.Th>
-                <Table.Th>Equipment</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {visibleAppointments.map((appointment) => {
-                const expanded = expandedAppointmentId === appointment.id
-                const toggle = () =>
-                  setExpandedAppointmentId((current) =>
-                    current === appointment.id ? null : appointment.id,
-                  )
-                return (
-                  <Fragment key={appointment.id}>
-                    <Table.Tr
-                      style={{ cursor: 'pointer' }}
-                      onClick={toggle}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          toggle()
-                        }
-                      }}
-                      tabIndex={0}
-                      role="button"
-                      aria-expanded={expanded}
-                    >
-                      <Table.Td>{formatDateTime(appointment.start_time)}</Table.Td>
-                      <Table.Td>{formatDateTime(appointment.end_time)}</Table.Td>
-                      <Table.Td>
-                        <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
-                      </Table.Td>
-                      <Table.Td>{appointment.student_name}</Table.Td>
-                      <Table.Td>{appointment.patient_name}</Table.Td>
-                      <Table.Td>{appointment.attending_name ?? '—'}</Table.Td>
-                      <Table.Td>{appointment.room_name ?? '—'}</Table.Td>
-                      <Table.Td>{appointment.equipment_name ?? '—'}</Table.Td>
-                    </Table.Tr>
-                    {expanded && (
-                      <Table.Tr>
-                        <Table.Td colSpan={8}>
-                          <AppointmentDetailPanel
-                            appointment={appointment}
-                            attendings={attendings}
-                            rooms={rooms}
-                            equipment={equipment}
-                          />
-                        </Table.Td>
-                      </Table.Tr>
-                    )}
-                  </Fragment>
-                )
-              })}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      ) : viewMode === 'list' ? (
-        <Table.ScrollContainer minWidth={700}>
-        <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Resource</Table.Th>
-              <Table.Th>Kind</Table.Th>
-              <Table.Th>Start</Table.Th>
-              <Table.Th>End</Table.Th>
-              {isAdmin ? (
-                <>
-                  <Table.Th>Student</Table.Th>
-                  <Table.Th>Patient</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                </>
-              ) : (
-                <Table.Th>Booked by</Table.Th>
-              )}
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {visibleEvents.map((event) => {
-              // One appointment using both a room and equipment produces two
-              // rows here sharing the same event.id but different
-              // resourceId (see resourceCalendarEvents' isAdmin branch) --
-              // the expansion key must be the same composite string already
-              // used for React's key, or clicking either row would expand
-              // both. The bare-id fallback below only matters for the
-              // Waitlist deep-link (which only knows the appointment id, not
-              // which resource row it landed on); harmless in the rare
-              // dual-resource case since both rows are then just correct.
-              const compositeKey = `${event.resourceId}-${event.id}`
-              const expanded =
-                expandedAppointmentId === compositeKey || expandedAppointmentId === event.id
-              const toggle = () =>
-                setExpandedAppointmentId((current) => (current === compositeKey ? null : compositeKey))
-              return (
-                <Fragment key={compositeKey}>
-                  <Table.Tr
-                    style={isAdmin ? { cursor: 'pointer' } : undefined}
-                    onClick={isAdmin ? toggle : undefined}
-                    onKeyDown={
-                      isAdmin
-                        ? (e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              toggle()
-                            }
-                          }
-                        : undefined
-                    }
-                    tabIndex={isAdmin ? 0 : undefined}
-                    role={isAdmin ? 'button' : undefined}
-                    aria-expanded={isAdmin ? expanded : undefined}
-                  >
-                    <Table.Td>{event.resourceName}</Table.Td>
-                    <Table.Td>{event.resourceKind === 'room' ? 'Room' : 'Equipment'}</Table.Td>
-                    <Table.Td>{formatDateTime(event.start)}</Table.Td>
-                    <Table.Td>{formatDateTime(event.end)}</Table.Td>
-                    {isAdmin ? (
-                      <>
-                        <Table.Td>{event.resource?.student_name}</Table.Td>
-                        <Table.Td>{event.resource?.patient_name}</Table.Td>
-                        <Table.Td>
-                          {event.resource && (
-                            <Badge color={STATUS_COLORS[event.resource.status]}>
-                              {event.resource.status}
-                            </Badge>
-                          )}
-                        </Table.Td>
-                      </>
-                    ) : (
-                      <Table.Td>{event.studentName}</Table.Td>
-                    )}
-                  </Table.Tr>
-                  {isAdmin && expanded && event.resource && (
-                    <Table.Tr>
-                      <Table.Td colSpan={7}>
-                        <AppointmentDetailPanel
-                          appointment={event.resource}
-                          attendings={attendings}
-                          rooms={rooms}
-                          equipment={equipment}
-                        />
-                      </Table.Td>
-                    </Table.Tr>
-                  )}
-                </Fragment>
-              )
-            })}
-          </Table.Tbody>
-        </Table>
-        </Table.ScrollContainer>
-      ) : (
-        // One flat calendar for every lens -- the Resources lens colors
-        // events by resource (via the chips above) instead of splitting
-        // into per-resource lanes, so every room/equipment's bookings are
-        // visible together without any horizontal scrolling.
-        <div style={{ height: 700 }}>
-          <Calendar
-            localizer={localizer}
-            formats={CALENDAR_FORMATS}
-            events={visibleEvents}
-            views={['month', 'week', 'day']}
-            view={calendarView}
-            onView={setCalendarView}
-            date={calendarDate}
-            onNavigate={setCalendarDate}
-            selectable={canCreate && effectiveLens === 'personal'}
-            onSelectSlot={handleSelectSlot}
-            onSelectEvent={handleSelectEvent}
-            eventPropGetter={(event) => {
-              const color =
-                isResourceLens && event.resourceId
-                  ? RESOURCE_COLOR_HEX[resourceColorNames[event.resourceId]]
-                  : event.resource
-                    ? STATUS_CSS_COLORS[event.resource.status]
-                    : '#868e96'
-              return { style: { backgroundColor: color } }
-            }}
-            style={{ height: '100%' }}
+      {viewMode === 'list' && effectiveLens === 'personal' && (
+        <Group align="flex-end">
+          <TextInput
+            label="Search"
+            placeholder="Patient, student, attending, room, equipment..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.currentTarget.value)}
+            flex={1}
+            miw={200}
           />
-        </div>
+          <Select
+            label="Status"
+            placeholder="All statuses"
+            data={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value as AppointmentStatus | null)}
+            clearable
+            w={180}
+          />
+          <Select
+            label="Sort by"
+            data={SORT_FIELD_OPTIONS}
+            value={sortField}
+            onChange={(value) => value && setSortField(value as SortField)}
+            allowDeselect={false}
+            w={160}
+          />
+          <ActionIcon
+            variant="default"
+            size="lg"
+            aria-label={sortDirection === 'asc' ? 'Sort ascending' : 'Sort descending'}
+            onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
+          >
+            {sortDirection === 'asc' ? (
+              <IconSortAscending size={18} />
+            ) : (
+              <IconSortDescending size={18} />
+            )}
+          </ActionIcon>
+        </Group>
       )}
 
-      <Modal opened={opened} onClose={close} title="New Appointment">
-        <Stack mb="md">
-          <Textarea
-            label="Describe it in your own words (optional)"
-            placeholder="e.g. book Jane with Dr. Smith in the X-ray room next Tuesday afternoon"
-            value={describeText}
-            onChange={(event) => setDescribeText(event.currentTarget.value)}
-            autosize
-            minRows={2}
-          />
-          <Button
-            type="button"
-            variant="light"
-            onClick={() => interpretMutation.mutate(describeText)}
-            loading={interpretMutation.isPending}
-            disabled={!describeText.trim()}
-          >
-            Interpret
-          </Button>
-          {interpretWarnings.map((warning) => (
-            <Text key={warning} size="sm" c="dimmed">
-              {warning}
-            </Text>
-          ))}
-        </Stack>
+      {content}
 
-        <form onSubmit={form.onSubmit(handleSubmit)}>
-          <Stack>
+      <Modal opened={opened} onClose={close} title="New Appointment" size="lg">
+        <Button
+          type="button"
+          variant="subtle"
+          size="xs"
+          onClick={toggleDescribeMode}
+          mb={describeMode ? 'xs' : 'md'}
+        >
+          {describeMode ? 'Fill in the form manually instead' : 'Describe it in your own words instead'}
+        </Button>
+        <Collapse expanded={describeMode}>
+          <Stack mb="md">
+            <Textarea
+              label="Describe it in your own words"
+              placeholder="e.g. book Jane with Dr. Smith in the X-ray room next Tuesday afternoon"
+              value={describeText}
+              onChange={(event) => setDescribeText(event.currentTarget.value)}
+              autosize
+              minRows={2}
+            />
+            <Button
+              type="button"
+              variant="light"
+              onClick={() => interpretMutation.mutate(describeText)}
+              loading={interpretMutation.isPending}
+              disabled={!describeText.trim()}
+            >
+              Interpret
+            </Button>
+            {interpretWarnings.map((warning) => (
+              <Text key={warning} size="sm" c="dimmed">
+                {warning}
+              </Text>
+            ))}
+          </Stack>
+        </Collapse>
+
+        {/* A plain <form>, not a Mantine component -- no flex/miw/mah shorthand props apply to it. */}
+        <form onSubmit={form.onSubmit(handleSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+          {/* overflowY has no Mantine shorthand; mah covers max-height. */}
+          <Stack mah="55vh" style={{ overflowY: 'auto' }} pb="sm" pr={4}>
             {isStudent && (
-              <Select label="Patient" data={patientOptions} {...form.getInputProps('patient_id')} />
+              <Fieldset legend="Who">
+                <Select
+                  label="Patient"
+                  withAsterisk
+                  data={patientOptions}
+                  {...form.getInputProps('patient_id')}
+                />
+              </Fieldset>
             )}
-            <AppointmentDateTimeInput
-              label="Start time"
-              timeOptions={APPOINTMENT_START_TIME_OPTIONS}
-              {...form.getInputProps('start_time')}
-            />
-            <AppointmentDateTimeInput
-              label="End time"
-              timeOptions={APPOINTMENT_END_TIME_OPTIONS}
-              {...form.getInputProps('end_time')}
-            />
+
+            <Fieldset legend="When">
+              <Stack gap="sm">
+                <AppointmentDateTimeInput
+                  label="Start time"
+                  required
+                  timeOptions={APPOINTMENT_START_TIME_OPTIONS}
+                  {...form.getInputProps('start_time')}
+                />
+                <div>
+                  <Text size="sm" fw={500} mb={4}>
+                    Duration
+                  </Text>
+                  <Chip.Group
+                    value={durationMode}
+                    onChange={(value) => setDurationMode(value as DurationMode)}
+                  >
+                    <Group gap="xs">
+                      <Chip value="30">30 min</Chip>
+                      <Chip value="45">45 min</Chip>
+                      <Chip value="60">60 min</Chip>
+                      <Chip value="custom">Custom</Chip>
+                    </Group>
+                  </Chip.Group>
+                </div>
+                {durationMode === 'custom' ? (
+                  <AppointmentDateTimeInput
+                    label="End time"
+                    required
+                    timeOptions={APPOINTMENT_END_TIME_OPTIONS}
+                    {...form.getInputProps('end_time')}
+                  />
+                ) : (
+                  form.values.end_time && (
+                    <Text size="sm" c="dimmed">
+                      Ends at {formatDateTime(form.values.end_time)}
+                    </Text>
+                  )
+                )}
+              </Stack>
+            </Fieldset>
+
             {isStudent && (
+              <Fieldset legend="Where">
+                <Select
+                  label="Room"
+                  withAsterisk
+                  data={roomOptions}
+                  {...form.getInputProps('room_id')}
+                />
+              </Fieldset>
+            )}
+
+            {isStudent ? (
               <>
-                <Select
-                  label="Attending (optional)"
-                  data={attendingOptions}
-                  clearable
-                  {...form.getInputProps('attending_id')}
-                />
-                <Select label="Room" data={roomOptions} {...form.getInputProps('room_id')} />
-                <Select
-                  label="Equipment (optional)"
-                  data={equipmentOptions}
-                  clearable
-                  {...form.getInputProps('equipment_id')}
-                />
+                <Button
+                  type="button"
+                  variant="subtle"
+                  size="xs"
+                  onClick={toggleMoreOptions}
+                  // No Mantine shorthand for align-self.
+                  style={{ alignSelf: 'flex-start' }}
+                >
+                  {moreOptionsOpened ? 'Fewer options' : 'More options (attending, equipment, notes)'}
+                </Button>
+                <Collapse expanded={moreOptionsOpened}>
+                  <Stack gap="sm">
+                    <Select
+                      label="Attending"
+                      data={attendingOptions}
+                      clearable
+                      {...form.getInputProps('attending_id')}
+                    />
+                    <Select
+                      label="Equipment"
+                      data={equipmentOptions}
+                      clearable
+                      {...form.getInputProps('equipment_id')}
+                    />
+                    <Textarea label="Notes" {...form.getInputProps('notes')} />
+                  </Stack>
+                </Collapse>
               </>
+            ) : (
+              <Textarea label="Notes" {...form.getInputProps('notes')} />
             )}
-            <Textarea label="Notes (optional)" {...form.getInputProps('notes')} />
+          </Stack>
+
+          {/* No Mantine shorthand for a single border side (`bd` sets all four). */}
+          <Group
+            justify="flex-end"
+            pt="sm"
+            style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
+          >
             <Button type="submit" loading={createMutation.isPending}>
               Request
             </Button>
-          </Stack>
+          </Group>
         </form>
       </Modal>
 
@@ -877,6 +743,7 @@ export function AppointmentsListPage() {
         opened={!!viewingAppointment}
         onClose={() => setViewingAppointment(null)}
         title="Appointment"
+        size="md"
       >
         {viewingAppointment && (
           <AppointmentDetailPanel
@@ -893,6 +760,7 @@ export function AppointmentsListPage() {
         opened={!!viewingBookedBy}
         onClose={() => setViewingBookedBy(null)}
         title="Booked slot"
+        size="sm"
       >
         <Text>Booked by {viewingBookedBy}</Text>
       </Modal>

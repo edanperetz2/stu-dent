@@ -39,3 +39,18 @@ export function getCurrentUser(token: string) {
 export function updateCurrentUser(token: string, payload: UserSelfUpdateInput) {
   return request<User>('/users/me', { method: 'PATCH', body: payload, token })
 }
+
+// Both endpoints return 204 with no body -- the backend deliberately gives
+// no signal either way on `requestPasswordReset` (whether the email
+// matched a real account), so there's nothing meaningful to type as a
+// response beyond "the request didn't throw".
+export function requestPasswordReset(email: string) {
+  return request<void>('/auth/password-reset/request', { method: 'POST', body: { email } })
+}
+
+export function confirmPasswordReset(token: string, newPassword: string) {
+  return request<void>('/auth/password-reset/confirm', {
+    method: 'POST',
+    body: { token, new_password: newPassword },
+  })
+}

@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Stu-Dent</title>
+    <!-- Vite is a plain client-rendered SPA, so Mantine's <ColorSchemeScript>
+         React component (meant for SSR frameworks to render server-side)
+         doesn't apply -- this is the same script it would inject, added by
+         hand: sets the color scheme attribute before React mounts, so
+         there's no flash of the wrong theme on load. Must match
+         MantineProvider's defaultColorScheme="auto" in App.tsx and
+         localStorage key "mantine-color-scheme-value" (Mantine's default). -->
+    <script>
+      try {
+        var stored = window.localStorage.getItem('mantine-color-scheme-value')
+        var scheme = stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'auto'
+        var resolved =
+          scheme !== 'auto'
+            ? scheme
+            : window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+        document.documentElement.setAttribute('data-mantine-color-scheme', resolved)
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

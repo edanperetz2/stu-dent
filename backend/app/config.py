@@ -20,7 +20,9 @@ class Settings(BaseSettings):
 
     jwt_secret_key: str = "change-me-in-.env"
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 30
+    # See .env.example for why 120, not the old 30 -- shorter than a
+    # clinic shift.
+    jwt_expire_minutes: int = 120
 
     login_rate_limit_max_attempts: int = 5
     login_rate_limit_window_minutes: int = 15
@@ -33,6 +35,15 @@ class Settings(BaseSettings):
     # as repeated attempts at one specific email, or the last people
     # through the door get falsely locked out.
     registration_rate_limit_max_attempts_per_ip: int = 50
+
+    # Same two-layer shape as registration: a tight per-(email, IP) check
+    # plus a much higher per-IP-only ceiling, so a shared clinic WiFi full
+    # of different real people resetting their own passwords doesn't get
+    # bunched into one tight counter.
+    password_reset_rate_limit_max_attempts: int = 5
+    password_reset_rate_limit_window_minutes: int = 15
+    password_reset_rate_limit_max_attempts_per_ip: int = 50
+    password_reset_token_expire_minutes: int = 30
 
     smtp_host: str = "mailhog"
     smtp_port: int = 1025

@@ -32,10 +32,28 @@ interface RequestOptions {
  * that reads as developer-ese to an end user (e.g. a patient submitting
  * feedback). Not a per-field label map on purpose: new fields would
  * silently fall back to the raw name until someone remembered to add an
- * entry, whereas this covers every field automatically. */
-function humanizeFieldName(field: string): string {
+ * entry, whereas this covers every field automatically. Exported: also
+ * reused for status enum values ("awaiting_confirmation" -> "Awaiting
+ * confirmation") in appointmentActions.ts and WaitlistPage -- the same
+ * snake_case-to-label transformation, just applied to a different kind of
+ * raw backend string. */
+export function humanizeFieldName(field: string): string {
   const spaced = field.replace(/_/g, ' ')
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+}
+
+type UnauthorizedHandler = () => void
+let unauthorizedHandler: UnauthorizedHandler | null = null
+
+/** Registered by AuthProvider so a 401 on an *authenticated* request (an
+ * expired or otherwise invalidated token) can centrally trigger a clean
+ * logout + "session expired" message, instead of leaving every call site to
+ * notice a 401 on its own -- which is how it silently rendered as "you have
+ * no data" everywhere before. A 401 from an unauthenticated call (e.g. a
+ * wrong password on /auth/login, no `token` in its RequestOptions) never
+ * reaches this, since there's no session to have expired. */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  unauthorizedHandler = handler
 }
 
 function buildUrl(path: string, query?: RequestOptions['query']): string {
@@ -89,6 +107,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       }
     } catch {
       // response body wasn't JSON; keep statusText
+    }
+    if (response.status === 401 && token) {
+      unauthorizedHandler?.()
     }
     throw new ApiError(response.status, detail, conflicts)
   }

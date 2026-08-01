@@ -3,7 +3,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
-from app.core.rate_limit import enforce_login_rate_limit, enforce_registration_rate_limit
+from app.core.rate_limit import (
+    enforce_login_rate_limit,
+    enforce_password_reset_rate_limit,
+    enforce_registration_rate_limit,
+)
 from app.core.security import (
     DUMMY_PASSWORD_HASH,
     create_access_token,
@@ -13,10 +17,17 @@ from app.core.security import (
 from app.database import get_db
 from app.models.notification import NotificationType
 from app.models.user import RoleEnum, User
-from app.schemas.auth import LoginIn, RegisterIn, TokenOut
+from app.schemas.auth import (
+    LoginIn,
+    PasswordResetConfirmIn,
+    PasswordResetRequestIn,
+    RegisterIn,
+    TokenOut,
+)
 from app.schemas.user import UserOut, UserSelfUpdate
 from app.services.audit import record_audit_log
 from app.services.notifications import notify
+from app.services.password_reset import confirm_password_reset, request_password_reset
 from app.services.users import active_user_filters
 
 router = APIRouter(tags=["auth"])
@@ -139,6 +150,33 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)) -> 
 
     token = create_access_token(subject=user.id, role=user.role.value)
     return TokenOut(access_token=token)
+
+
+@router.post("/auth/password-reset/request", status_code=status.HTTP_204_NO_CONTENT)
+def request_password_reset_route(
+    payload: PasswordResetRequestIn, request: Request, db: Session = Depends(get_db)
+) -> None:
+    """Always 204, whether or not `email` matches a real account -- the
+    response itself must not reveal which emails are registered.
+    """
+    email = payload.email.lower()
+    ip = _client_ip(request)
+    enforce_password_reset_rate_limit(db, email=email, ip_address=ip)
+    request_password_reset(db, email=email, ip_address=ip)
+
+
+@router.post("/auth/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+def confirm_password_reset_route(
+    payload: PasswordResetConfirmIn, db: Session = Depends(get_db)
+) -> None:
+    succeeded = confirm_password_reset(
+        db, raw_token=payload.token, new_password=payload.new_password
+    )
+    if not succeeded:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This reset link is invalid or has expired. Request a new one.",
+        )
 
 
 def _with_owner_student_name(db: Session, user: User) -> UserOut:

@@ -2,13 +2,15 @@ import { Button, Group, Modal, Stack, Text, Textarea, TextInput, Title } from '@
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 import { createPost, listPosts, type ForumPostCreateInput } from '../../api/forum'
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { LoadingText } from '../../components/StateText'
+import { CardListSkeleton } from '../../components/Skeletons'
+import { ErrorText } from '../../components/StateText'
+import { useListQuery } from '../../hooks/useListQuery'
 import { ForumPostCard } from './ForumPostCard'
 
 export function ForumListPage() {
@@ -20,10 +22,16 @@ export function ForumListPage() {
 
   const isStudent = principal?.role === 'student'
 
-  const { data: posts, isLoading } = useQuery({
+  // isEmpty always false -- this page renders its own "No posts yet." text
+  // inline below (a plain <Text>, not <EmptyText>, since it sits alongside
+  // the post list rather than replacing it), not through the empty branch.
+  const postsQuery = useListQuery({
     queryKey: ['forum', 'posts'],
     queryFn: () => listPosts(token),
+    errorFallback: 'Failed to load the forum.',
+    isEmpty: () => false,
   })
+  const posts = postsQuery.status === 'ready' ? postsQuery.data : undefined
 
   const form = useForm<ForumPostCreateInput>({
     initialValues: { title: '', body: '' },
@@ -69,8 +77,13 @@ export function ForumListPage() {
         {isStudent && <Button onClick={open}>New Post</Button>}
       </Group>
 
-      {isLoading && <LoadingText />}
-      {!isLoading && sortedPosts.length === 0 && <Text c="dimmed">No posts yet.</Text>}
+      {postsQuery.status === 'error' ? (
+        <ErrorText onRetry={postsQuery.retry}>{postsQuery.message}</ErrorText>
+      ) : postsQuery.status === 'loading' ? (
+        <CardListSkeleton />
+      ) : (
+        sortedPosts.length === 0 && <Text c="dimmed">No posts yet.</Text>
+      )}
 
       <Stack gap={0}>
         {sortedPosts.map((post) => (
@@ -83,7 +96,7 @@ export function ForumListPage() {
         ))}
       </Stack>
 
-      <Modal opened={opened} onClose={close} title="New Post">
+      <Modal opened={opened} onClose={close} title="New Post" size="md">
         <form onSubmit={form.onSubmit((values) => createMutation.mutate(values))}>
           <Stack>
             <TextInput label="Title" {...form.getInputProps('title')} />

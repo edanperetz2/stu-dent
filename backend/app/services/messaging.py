@@ -327,13 +327,26 @@ def list_thread_summaries(db: Session, current_user: User) -> list[dict]:
     return summaries
 
 
-def list_conversation_messages(db: Session, conversation_id: uuid.UUID) -> list[Message]:
-    stmt = (
-        select(Message)
-        .where(Message.conversation_id == conversation_id)
-        .order_by(Message.sequence.asc())
-    )
-    return list(db.scalars(stmt))
+def list_conversation_messages(
+    db: Session,
+    conversation_id: uuid.UUID,
+    *,
+    before_sequence: int | None = None,
+    limit: int = 100,
+) -> list[Message]:
+    """Most recent `limit` messages, oldest-first (chat order) -- unlike
+    every other list_* helper before this milestone, this one previously had
+    no cap at all, so a long-running conversation would fetch its entire
+    history on every open. `before_sequence` (an already-seen message's
+    sequence number) pages further back for a "load earlier" affordance.
+    """
+    stmt = select(Message).where(Message.conversation_id == conversation_id)
+    if before_sequence is not None:
+        stmt = stmt.where(Message.sequence < before_sequence)
+    stmt = stmt.order_by(Message.sequence.desc()).limit(limit)
+    messages = list(db.scalars(stmt))
+    messages.reverse()
+    return messages
 
 
 def list_participants(db: Session, conversation_id: uuid.UUID) -> list[User]:

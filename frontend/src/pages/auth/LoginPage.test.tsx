@@ -50,6 +50,17 @@ describe('LoginPage', () => {
     await userEvent.type(screen.getByLabelText('Password'), 'wrong')
     await userEvent.click(screen.getByRole('button', { name: 'Log in' }))
 
-    expect(await screen.findByText('Incorrect email or password')).toBeInTheDocument()
+    // A submission failure is a real alert, not a plain red <Text> a screen
+    // reader has no reason to notice.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect email or password')
+  })
+
+  it('links to the forgot-password flow', () => {
+    renderWithProviders(<LoginPage />, { route: '/login' })
+
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    )
   })
 })

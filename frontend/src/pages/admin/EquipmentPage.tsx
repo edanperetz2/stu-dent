@@ -2,7 +2,7 @@ import { Badge, Button, Group, Modal, Stack, Table, Text, TextInput, Title } fro
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
   createEquipment,
@@ -13,7 +13,9 @@ import {
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
-import { LoadingText } from '../../components/StateText'
+import { TableSkeleton } from '../../components/Skeletons'
+import { ErrorText } from '../../components/StateText'
+import { useListQuery } from '../../hooks/useListQuery'
 import { FULL_DAY_HALF_HOUR_OPTIONS, formatDateTime, mantineDateTimeToIso } from '../../utils/dates'
 
 export function EquipmentPage() {
@@ -24,10 +26,15 @@ export function EquipmentPage() {
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
   const [reactivateAt, setReactivateAt] = useState<string | null>(null)
 
-  const { data: equipment, isLoading } = useQuery({
+  // isEmpty always false, same reasoning as RoomsPage -- an empty list still
+  // renders the (empty) table, not a separate empty state.
+  const equipmentQuery = useListQuery({
     queryKey: ['admin', 'equipment'],
     queryFn: () => listAllEquipment(token),
+    errorFallback: 'Failed to load equipment.',
+    isEmpty: () => false,
   })
+  const equipment = equipmentQuery.status === 'ready' ? equipmentQuery.data : undefined
 
   const form = useForm<EquipmentCreateInput>({
     initialValues: { name: '', equipment_type: '' },
@@ -97,8 +104,10 @@ export function EquipmentPage() {
         <Button onClick={open}>New Equipment</Button>
       </Group>
 
-      {isLoading ? (
-        <LoadingText />
+      {equipmentQuery.status === 'error' ? (
+        <ErrorText onRetry={equipmentQuery.retry}>{equipmentQuery.message}</ErrorText>
+      ) : equipmentQuery.status === 'loading' ? (
+        <TableSkeleton columns={4} />
       ) : (
         <Table.ScrollContainer minWidth={500}>
         <Table highlightOnHover>
@@ -149,7 +158,7 @@ export function EquipmentPage() {
         </Table.ScrollContainer>
       )}
 
-      <Modal opened={opened} onClose={close} title="New Equipment">
+      <Modal opened={opened} onClose={close} title="New Equipment" size="md">
         <form onSubmit={form.onSubmit((values) => createMutation.mutate(values))}>
           <Stack>
             <TextInput label="Name" {...form.getInputProps('name')} />
@@ -161,7 +170,7 @@ export function EquipmentPage() {
         </form>
       </Modal>
 
-      <Modal opened={deactivateOpened} onClose={closeDeactivate} title="Deactivate equipment">
+      <Modal opened={deactivateOpened} onClose={closeDeactivate} title="Deactivate equipment" size="sm">
         <Stack>
           <Text size="sm" c="dimmed">
             Students booking a future appointment using this equipment will be notified.

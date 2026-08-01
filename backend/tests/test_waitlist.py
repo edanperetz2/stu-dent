@@ -240,6 +240,45 @@ def test_cancel_already_cancelled_conflicts(client):
     assert response.status_code == 409
 
 
+def test_reactivate_undoes_a_cancel(client):
+    student_token = register_and_login(client, "wl-s8b@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    _book(client, student_token, patient_id=patient_id)
+    entry = _wait(client, student_token, patient_id=patient_id).json()
+
+    client.post(f"/waitlist/{entry['id']}/cancel", headers=auth_header(student_token))
+    response = client.post(
+        f"/waitlist/{entry['id']}/reactivate", headers=auth_header(student_token)
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "active"
+
+
+def test_reactivate_requires_cancelled_status(client):
+    student_token = register_and_login(client, "wl-s8c@example.com", role="student")
+    patient_id = create_patient(client, student_token)
+    _book(client, student_token, patient_id=patient_id)
+    entry = _wait(client, student_token, patient_id=patient_id).json()
+
+    # Still active -- never cancelled -- so there's nothing to undo.
+    response = client.post(
+        f"/waitlist/{entry['id']}/reactivate", headers=auth_header(student_token)
+    )
+    assert response.status_code == 409
+
+
+def test_admin_cannot_reactivate_others_entry(client):
+    student_token = register_and_login(client, "wl-s9b@example.com", role="student")
+    admin_token = register_and_login(client, "wl-admin9b@example.com", role="admin")
+    patient_id = create_patient(client, student_token)
+    _book(client, student_token, patient_id=patient_id)
+    entry = _wait(client, student_token, patient_id=patient_id).json()
+    client.post(f"/waitlist/{entry['id']}/cancel", headers=auth_header(student_token))
+
+    response = client.post(f"/waitlist/{entry['id']}/reactivate", headers=auth_header(admin_token))
+    assert response.status_code == 403
+
+
 def test_admin_cannot_cancel_others_entry(client):
     student_token = register_and_login(client, "wl-s9@example.com", role="student")
     admin_token = register_and_login(client, "wl-admin9@example.com", role="admin")

@@ -29,7 +29,7 @@ export function ConfirmButton({
       <Button color={color} variant={variant} size={size} onClick={open}>
         {label}
       </Button>
-      <Modal opened={opened} onClose={close} title="Are you sure?" centered>
+      <Modal opened={opened} onClose={close} title="Are you sure?" centered size="sm">
         <Text size="sm">{message}</Text>
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={close}>

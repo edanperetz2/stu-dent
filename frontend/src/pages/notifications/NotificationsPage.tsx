@@ -1,6 +1,6 @@
 import { Badge, Button, Group, Paper, Stack, Switch, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -10,7 +10,8 @@ import {
 } from '../../api/notifications'
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { EmptyText, LoadingText } from '../../components/StateText'
+import { CardListSkeleton } from '../../components/Skeletons'
+import { EmptyText, ErrorText } from '../../components/StateText'
 import { formatDateTime } from '../../utils/dates'
 
 function formatType(notificationType: string): string {
@@ -20,16 +21,36 @@ function formatType(notificationType: string): string {
     .join(' ')
 }
 
+const PAGE_SIZE = 30
+
 export function NotificationsPage() {
   const token = useAuthToken()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [unreadOnly, setUnreadOnly] = useState(false)
 
-  const { data: items, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['notifications', unreadOnly],
-    queryFn: () => listNotifications(token, unreadOnly),
+    queryFn: ({ pageParam }) =>
+      listNotifications(token, unreadOnly, { limit: PAGE_SIZE, offset: pageParam }),
+    initialPageParam: 0,
+    // A page shorter than PAGE_SIZE means the server had nothing left to
+    // give -- offset for the next page is just how many rows loaded so far.
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length === PAGE_SIZE
+        ? allPages.reduce((sum, page) => sum + page.length, 0)
+        : undefined,
   })
+  const items = data?.pages.flat()
 
   const markReadMutation = useMutation({
     mutationFn: (notificationId: string) => markNotificationRead(token, notificationId),
@@ -68,8 +89,12 @@ export function NotificationsPage() {
         />
       </Group>
 
-      {isLoading ? (
-        <LoadingText />
+      {isError ? (
+        <ErrorText onRetry={() => refetch()}>
+          {apiErrorMessage(error, 'Failed to load notifications.')}
+        </ErrorText>
+      ) : isLoading ? (
+        <CardListSkeleton count={6} />
       ) : items?.length === 0 ? (
         <EmptyText>No notifications.</EmptyText>
       ) : (
@@ -86,8 +111,8 @@ export function NotificationsPage() {
               key={item.id}
               withBorder
               p="sm"
+              className={isLinkable ? 'list-item-enter cursor-pointer' : 'list-item-enter'}
               bg={item.read_at ? undefined : 'var(--mantine-color-blue-0)'}
-              style={isLinkable ? { cursor: 'pointer' } : undefined}
               onClick={isLinkable ? goToAppointment : undefined}
               onKeyDown={
                 isLinkable
@@ -110,7 +135,7 @@ export function NotificationsPage() {
                   <Text size="sm">{item.message}</Text>
                 </Stack>
                 <Stack gap={4} align="flex-end">
-                  <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                  <Text size="xs" c="dimmed" className="text-nowrap">
                     {formatDateTime(item.created_at)}
                   </Text>
                   {item.read_at ? (
@@ -143,6 +168,17 @@ export function NotificationsPage() {
             </Paper>
             )
           })}
+          {hasNextPage && (
+            <Button
+              variant="subtle"
+              onClick={() => fetchNextPage()}
+              loading={isFetchingNextPage}
+              // No Mantine shorthand for align-self.
+              style={{ alignSelf: 'center' }}
+            >
+              Load more
+            </Button>
+          )}
         </Stack>
       )}
     </Stack>

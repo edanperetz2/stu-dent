@@ -208,3 +208,49 @@ def cancel_waitlist_entry(
     db.commit()
     db.refresh(entry)
     return _entry_out(entry, current_user)
+
+
+@router.post("/waitlist/{entry_id}/reactivate", response_model=WaitlistEntryOut)
+def reactivate_waitlist_entry(
+    entry_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WaitlistEntryOut:
+    """Undoes a cancel -- safe because cancelling a waitlist entry is a pure
+    status flip with no side effects (unlike cancelling an appointment,
+    which can synchronously auto-promote a *different* waitlist entry into
+    a real booking; see the frontend's undo-toast usage for why that one
+    still uses a real confirm instead of this pattern). Doesn't re-derive
+    conflicts -- a short-window undo should restore exactly what was
+    cancelled, not silently change what it's waiting for.
+    """
+    entry = _get_visible_entry(db, entry_id, current_user)
+
+    is_owning_student = (
+        current_user.role == RoleEnum.student and entry.student_id == current_user.id
+    )
+    is_self_patient = current_user.role == RoleEnum.patient and entry.patient_id == current_user.id
+    if not (is_owning_student or is_self_patient):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to reactivate this waitlist entry",
+        )
+
+    if entry.status != WaitlistStatus.cancelled:
+        raise HTTPException(
+            status_code=409, detail="Only a cancelled waitlist entry can be reactivated"
+        )
+
+    entry.status = WaitlistStatus.active
+    db.flush()
+
+    record_audit_log(
+        db,
+        action="waitlist_reactivate",
+        actor_id=current_user.id,
+        target_type="waitlist_entry",
+        target_id=entry.id,
+    )
+    db.commit()
+    db.refresh(entry)
+    return _entry_out(entry, current_user)

@@ -23,6 +23,14 @@ export function isoToMantineDateTime(iso: string): string {
   )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
+/** Mantine local-time string + a duration -> the same-shaped string that
+ * many minutes later -- backs the booking modal's duration shortcut chips
+ * (30/45/60 min), which compute an end time directly from the picked start
+ * time instead of requiring a second manual time pick. */
+export function addMinutesToMantineDateTime(value: string, minutes: number): string {
+  return dayjs(value.replace(' ', 'T')).add(minutes, 'minute').format('YYYY-MM-DD HH:mm:ss')
+}
+
 /** dd/mm/yy HH:mm, no seconds, no timezone -- the one display format used
  * everywhere in the app (Israel-based, so day-first + 24-hour, not the
  * browser-locale-dependent `.toLocaleString()` this replaces). */

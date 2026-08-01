@@ -1,4 +1,14 @@
-import { Badge, Button, Group, Modal, Select, Stack, Text, Textarea } from '@mantine/core'
+import {
+  Badge,
+  Button,
+  Group,
+  Modal,
+  Select,
+  Stack,
+  Text,
+  Textarea,
+  useComputedColorScheme,
+} from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
@@ -32,7 +42,8 @@ import {
 } from '../../utils/dates'
 import {
   getAvailableActions,
-  STATUS_COLORS,
+  statusBadgeStyle,
+  statusLabel,
   TERMINAL_STATUSES,
   type AppointmentActionName,
 } from './appointmentActions'
@@ -137,6 +148,7 @@ export function AppointmentDetailPanel({
   const token = useAuthToken()
   const { principal } = useAuth()
   const queryClient = useQueryClient()
+  const colorScheme = useComputedColorScheme('light')
   const [editOpened, { open: openEdit, close: closeEdit }] = useDisclosure(false)
   const [acceptOpened, { open: openAccept, close: closeAccept }] = useDisclosure(false)
   const [acceptRoomId, setAcceptRoomId] = useState<string | null>(null)
@@ -318,7 +330,9 @@ export function AppointmentDetailPanel({
   return (
     <Stack maw={480}>
       <Group justify="space-between">
-        <Badge color={STATUS_COLORS[appointment.status]}>{appointment.status}</Badge>
+        <Badge style={statusBadgeStyle(appointment.status, colorScheme)}>
+          {statusLabel(appointment.status)}
+        </Badge>
       </Group>
 
       <Text>Start: {formatDateTime(appointment.start_time)}</Text>
@@ -373,7 +387,7 @@ export function AppointmentDetailPanel({
         )}
       </Group>
 
-      <Modal opened={editOpened} onClose={closeEdit} title="Edit Appointment">
+      <Modal opened={editOpened} onClose={closeEdit} title="Edit Appointment" size="lg">
         <form
           onSubmit={editForm.onSubmit((values) =>
             editMutation.mutate({
@@ -422,7 +436,7 @@ export function AppointmentDetailPanel({
         </form>
       </Modal>
 
-      <Modal opened={acceptOpened} onClose={closeAccept} title="Assign a room to accept">
+      <Modal opened={acceptOpened} onClose={closeAccept} title="Assign a room to accept" size="sm">
         <Stack>
           <Select
             label="Room"

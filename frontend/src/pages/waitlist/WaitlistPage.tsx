@@ -1,20 +1,63 @@
-import { Badge, Button, Group, Stack, Table, Text, Title } from '@mantine/core'
+import { Badge, Button, Group, Stack, Table, Text, Title, useComputedColorScheme } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { apiErrorMessage } from '../../api/httpClient'
+import { apiErrorMessage, humanizeFieldName } from '../../api/httpClient'
 import type { ConflictResourceType, WaitlistStatus } from '../../api/types'
-import { cancelWaitlistEntry, listWaitlistEntries } from '../../api/waitlist'
+import {
+  cancelWaitlistEntry,
+  listWaitlistEntries,
+  reactivateWaitlistEntry,
+} from '../../api/waitlist'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { ConfirmButton } from '../../components/ConfirmButton'
-import { ErrorText, LoadingText } from '../../components/StateText'
+import { TableSkeleton } from '../../components/Skeletons'
+import { ErrorText } from '../../components/StateText'
+import { showUndoToast } from '../../hooks/showUndoToast'
+import { useListQuery } from '../../hooks/useListQuery'
+import { BRAND_INK, hslToHex } from '../../theme'
 import { formatDateTime } from '../../utils/dates'
+import { maxLightnessForContrast } from '../../utils/colorContrast'
 
-const STATUS_COLORS: Record<WaitlistStatus, string> = {
-  active: 'blue',
-  booked: 'green',
-  cancelled: 'gray',
+// One hue (+ saturation) per status -- same generation pattern as
+// appointmentActions.ts's (larger) status table, kept as its own small
+// table here rather than importing that one, since WaitlistStatus and
+// AppointmentStatus are genuinely different enums that only coincide on
+// "cancelled" by name. Saturation 0 (cancelled) is a neutral gray.
+const STATUS_COLOR_SPEC: Record<WaitlistStatus, { hue: number; saturation: number }> = {
+  active: { hue: 208, saturation: 0.85 },
+  booked: { hue: 132, saturation: 0.85 },
+  cancelled: { hue: 0, saturation: 0 },
+}
+
+const WHITE = '#ffffff'
+const PALE_LIGHTNESS = 0.93
+
+// Pale background + a uniform dark ink text color for light mode -- same
+// reasoning as appointmentActions.ts's statusBadgeStyle (reliable AA
+// contrast regardless of hue, without hand-picking a matching dark shade
+// per status). Dark mode uses the saturated variant below instead, so a
+// badge doesn't stay a bright near-white pill against a dark page.
+const STATUS_BADGE_BACKGROUND: Record<WaitlistStatus, string> = Object.fromEntries(
+  Object.entries(STATUS_COLOR_SPEC).map(([status, { hue, saturation }]) => [
+    status,
+    hslToHex(hue, saturation, PALE_LIGHTNESS),
+  ]),
+) as Record<WaitlistStatus, string>
+
+const STATUS_BADGE_BACKGROUND_DARK: Record<WaitlistStatus, string> = Object.fromEntries(
+  Object.entries(STATUS_COLOR_SPEC).map(([status, { hue, saturation }]) => [
+    status,
+    hslToHex(hue, saturation, maxLightnessForContrast(hue, saturation, hslToHex, WHITE)),
+  ]),
+) as Record<WaitlistStatus, string>
+
+function statusBadgeStyle(status: WaitlistStatus, colorScheme: 'light' | 'dark'): CSSProperties {
+  if (colorScheme === 'dark') {
+    return { backgroundColor: STATUS_BADGE_BACKGROUND_DARK[status], color: '#ffffff' }
+  }
+  return { backgroundColor: STATUS_BADGE_BACKGROUND[status], color: BRAND_INK }
 }
 
 const CAUSE_LABELS: Record<ConflictResourceType, string> = {
@@ -31,29 +74,43 @@ export function WaitlistPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
+  const colorScheme = useComputedColorScheme('light')
   const isStudent = principal?.role === 'student'
   const isPatient = principal?.role === 'patient'
   const canManageOwn = isStudent || isPatient
 
-  const {
-    data: entries,
-    isLoading,
-    isError,
-    error,
-  } = useQuery({
+  const waitlistQuery = useListQuery({
     queryKey: ['waitlist'],
     queryFn: () => listWaitlistEntries(token),
+    errorFallback: 'Failed to load the waitlist.',
   })
+  const entries = waitlistQuery.status === 'ready' ? waitlistQuery.data : undefined
+
+  const invalidateWaitlist = () => queryClient.invalidateQueries({ queryKey: ['waitlist'] })
 
   const cancelMutation = useMutation({
     mutationFn: (entryId: string) => cancelWaitlistEntry(token, entryId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['waitlist'] })
-      notifications.show({ message: 'Waitlist entry cancelled', color: 'green' })
+    onSuccess: (_, entryId) => {
+      invalidateWaitlist()
+      showUndoToast({
+        message: 'Waitlist entry cancelled.',
+        onUndo: () => reactivateMutation.mutate(entryId),
+      })
     },
     onError: (err) => {
       notifications.show({
         message: apiErrorMessage(err, 'Failed to cancel entry'),
+        color: 'red',
+      })
+    },
+  })
+
+  const reactivateMutation = useMutation({
+    mutationFn: (entryId: string) => reactivateWaitlistEntry(token, entryId),
+    onSuccess: invalidateWaitlist,
+    onError: (err) => {
+      notifications.show({
+        message: apiErrorMessage(err, 'Failed to restore the waitlist entry'),
         color: 'red',
       })
     },
@@ -74,11 +131,11 @@ export function WaitlistPage() {
         blocking it frees up, it's booked for you here.
       </Text>
 
-      {isLoading ? (
-        <LoadingText />
-      ) : isError ? (
-        <ErrorText>{apiErrorMessage(error, 'Failed to load the waitlist.')}</ErrorText>
-      ) : sortedEntries.length === 0 ? (
+      {waitlistQuery.status === 'loading' ? (
+        <TableSkeleton columns={5} />
+      ) : waitlistQuery.status === 'error' ? (
+        <ErrorText onRetry={waitlistQuery.retry}>{waitlistQuery.message}</ErrorText>
+      ) : waitlistQuery.status === 'empty' ? (
         <Text c="dimmed">Nothing on the waitlist.</Text>
       ) : (
         <Table.ScrollContainer minWidth={600}>
@@ -94,7 +151,7 @@ export function WaitlistPage() {
           </Table.Thead>
           <Table.Tbody>
             {sortedEntries.map((entry) => (
-              <Table.Tr key={entry.id}>
+              <Table.Tr key={entry.id} className="list-item-enter">
                 <Table.Td>
                   {formatDateTime(entry.start_time)} &ndash;{' '}
                   {formatDateTime(entry.end_time)}
@@ -114,7 +171,9 @@ export function WaitlistPage() {
                   </Group>
                 </Table.Td>
                 <Table.Td>
-                  <Badge color={STATUS_COLORS[entry.status]}>{entry.status}</Badge>
+                  <Badge style={statusBadgeStyle(entry.status, colorScheme)}>
+                    {humanizeFieldName(entry.status)}
+                  </Badge>
                 </Table.Td>
                 <Table.Td>
                   <Group gap="xs">
@@ -128,12 +187,15 @@ export function WaitlistPage() {
                       </Button>
                     )}
                     {canManageOwn && entry.status === 'active' && (
-                      <ConfirmButton
-                        label="Cancel"
-                        message="This will remove your waitlist entry."
-                        onConfirm={() => cancelMutation.mutate(entry.id)}
-                        loading={cancelMutation.isPending}
-                      />
+                      <Button
+                        size="xs"
+                        color="red"
+                        variant="light"
+                        loading={cancelMutation.isPending && cancelMutation.variables === entry.id}
+                        onClick={() => cancelMutation.mutate(entry.id)}
+                      >
+                        Cancel
+                      </Button>
                     )}
                   </Group>
                 </Table.Td>

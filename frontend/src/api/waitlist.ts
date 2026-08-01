@@ -21,3 +21,7 @@ export function joinWaitlist(token: string, payload: AppointmentCreateInput) {
 export function cancelWaitlistEntry(token: string, entryId: string) {
   return request<WaitlistEntry>(`/waitlist/${entryId}/cancel`, { method: 'POST', token })
 }
+
+export function reactivateWaitlistEntry(token: string, entryId: string) {
+  return request<WaitlistEntry>(`/waitlist/${entryId}/reactivate`, { method: 'POST', token })
+}

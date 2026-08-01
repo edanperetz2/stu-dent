@@ -3,13 +3,15 @@ import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconPencil } from '@tabler/icons-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiErrorMessage } from '../../api/httpClient'
 import { createRoom, listAllRooms, updateRoom, type RoomCreateInput } from '../../api/rooms'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { AppointmentDateTimeInput } from '../../components/AppointmentDateTimeInput'
-import { LoadingText } from '../../components/StateText'
+import { TableSkeleton } from '../../components/Skeletons'
+import { ErrorText } from '../../components/StateText'
+import { useListQuery } from '../../hooks/useListQuery'
 import { FULL_DAY_HALF_HOUR_OPTIONS, formatDateTime, mantineDateTimeToIso } from '../../utils/dates'
 
 export function RoomsPage() {
@@ -22,10 +24,16 @@ export function RoomsPage() {
   const [deactivatingRoomId, setDeactivatingRoomId] = useState<string | null>(null)
   const [reactivateAt, setReactivateAt] = useState<string | null>(null)
 
-  const { data: rooms, isLoading } = useQuery({
+  // isEmpty always false -- an empty room list still shows the (empty)
+  // table with its "New Room" button, not a separate empty state; the
+  // review's own mockup for this page never called for one.
+  const roomsQuery = useListQuery({
     queryKey: ['admin', 'rooms'],
     queryFn: () => listAllRooms(token),
+    errorFallback: 'Failed to load rooms.',
+    isEmpty: () => false,
   })
+  const rooms = roomsQuery.status === 'ready' ? roomsQuery.data : undefined
 
   const form = useForm<RoomCreateInput>({
     initialValues: { name: '' },
@@ -96,8 +104,10 @@ export function RoomsPage() {
         <Button onClick={open}>New Room</Button>
       </Group>
 
-      {isLoading ? (
-        <LoadingText />
+      {roomsQuery.status === 'error' ? (
+        <ErrorText onRetry={roomsQuery.retry}>{roomsQuery.message}</ErrorText>
+      ) : roomsQuery.status === 'loading' ? (
+        <TableSkeleton columns={3} />
       ) : (
         <Table.ScrollContainer minWidth={500}>
         <Table highlightOnHover>
@@ -140,7 +150,7 @@ export function RoomsPage() {
                     <Group
                       gap={4}
                       wrap="nowrap"
-                      style={{ cursor: 'pointer' }}
+                      className="cursor-pointer"
                       onClick={() => {
                         setRenamingId(room.id)
                         setRenameValue(room.name)
@@ -192,7 +202,7 @@ export function RoomsPage() {
         </Table.ScrollContainer>
       )}
 
-      <Modal opened={opened} onClose={close} title="New Room">
+      <Modal opened={opened} onClose={close} title="New Room" size="md">
         <form onSubmit={form.onSubmit((values) => createMutation.mutate(values))}>
           <Stack>
             <TextInput label="Name" {...form.getInputProps('name')} />
@@ -203,7 +213,7 @@ export function RoomsPage() {
         </form>
       </Modal>
 
-      <Modal opened={deactivateOpened} onClose={closeDeactivate} title="Deactivate room">
+      <Modal opened={deactivateOpened} onClose={closeDeactivate} title="Deactivate room" size="sm">
         <Stack>
           <Text size="sm" c="dimmed">
             Students booking a future appointment in this room will be notified.

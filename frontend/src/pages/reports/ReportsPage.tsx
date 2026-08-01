@@ -6,7 +6,8 @@ import { askQuestion, generateReport, listReports } from '../../api/reports'
 import { apiErrorMessage } from '../../api/httpClient'
 import type { ReportContentSource, ReportPeriodType } from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { EmptyText, ErrorText, LoadingText } from '../../components/StateText'
+import { CardListSkeleton } from '../../components/Skeletons'
+import { EmptyText, ErrorText } from '../../components/StateText'
 import { formatDateTime } from '../../utils/dates'
 
 const PERIOD_COLORS: Record<ReportPeriodType, string> = {
@@ -37,6 +38,7 @@ export function ReportsPage() {
     isLoading,
     isError,
     error,
+    refetch,
   } = useQuery({
     queryKey: ['reports'],
     queryFn: () => listReports(token),
@@ -106,9 +108,11 @@ export function ReportsPage() {
       </Stack>
 
       {isLoading ? (
-        <LoadingText />
+        <CardListSkeleton />
       ) : isError ? (
-        <ErrorText>{apiErrorMessage(error, 'Failed to load reports.')}</ErrorText>
+        <ErrorText onRetry={() => refetch()}>
+          {apiErrorMessage(error, 'Failed to load reports.')}
+        </ErrorText>
       ) : reports?.length === 0 ? (
         <EmptyText>No reports yet.</EmptyText>
       ) : (
@@ -129,7 +133,7 @@ export function ReportsPage() {
                       {CONTENT_SOURCE[report.content_source].label}
                     </Badge>
                   </Group>
-                  <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                  <Text size="xs" c="dimmed" className="text-nowrap">
                     {formatDateTime(report.created_at)}
                   </Text>
                 </Group>

@@ -1,6 +1,8 @@
 import json
 
 import psycopg
+import pytest
+from fastapi import WebSocketDisconnect, status
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,6 +18,30 @@ from app.realtime.events import CHANNEL
 from app.services.notifications import notify
 from tests.conftest import TEST_DATABASE_URL, engine
 from tests.helpers import auth_header
+
+
+def test_websocket_closes_with_protocol_error_on_malformed_auth_message(client):
+    """A client that never gets a usable auth message across (malformed
+    JSON, here) must close with a code distinct from a genuinely rejected
+    token -- the frontend treats WS_1008_POLICY_VIOLATION as "your session
+    expired" and logs the user out, which would be wrong for what's really
+    just a garbled handshake."""
+    with client.websocket_connect("/ws") as websocket:
+        websocket.send_text("not json")
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            websocket.receive_json()
+        assert exc_info.value.code == status.WS_1002_PROTOCOL_ERROR
+
+
+def test_websocket_closes_with_policy_violation_on_rejected_token(client):
+    """A token that's actually evaluated and rejected keeps the original
+    close code -- this is the one the frontend correctly treats as a real
+    session expiry."""
+    with client.websocket_connect("/ws") as websocket:
+        websocket.send_json({"token": "not-a-real-token"})
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            websocket.receive_json()
+        assert exc_info.value.code == status.WS_1008_POLICY_VIOLATION
 
 
 def _sync_dsn() -> str:

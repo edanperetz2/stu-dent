@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -162,6 +162,18 @@ def create_appointment(
 
 @router.get("/appointments", response_model=list[AppointmentOut])
 def list_appointments(
+    # Lets the calendar sub-view ask only for what it's currently showing
+    # (a month/week/day at a time) instead of the whole table -- both
+    # bounds are optional so the List sub-view (no inherent date window)
+    # can still request everything up to `limit`.
+    start_after: datetime | None = Query(default=None),
+    start_before: datetime | None = Query(default=None),
+    # The frontend used to fetch every appointment and filter cancelled
+    # ones out client-side -- moved server-side so a cancelled-heavy
+    # account doesn't pay to transfer rows it's going to throw away.
+    exclude_cancelled: bool = Query(default=False),
+    limit: int = Query(default=500, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Appointment]:
@@ -172,12 +184,14 @@ def list_appointments(
         stmt = stmt.where(Appointment.student_id == current_user.id)
     elif current_user.role == RoleEnum.attending:
         stmt = stmt.where(Appointment.attending_id == current_user.id)
-    # else: admin sees every appointment, unfiltered -- the one branch a
-    # defensive cap actually matters for at realistic scale. Defensive cap,
-    # not full pagination (out of scope for this fix); appointments are
-    # never hard-deleted, so this grows monotonically for the life of the
-    # app.
-    stmt = stmt.order_by(Appointment.start_time.desc()).limit(500)
+    # else: admin sees every appointment, unfiltered.
+    if start_after is not None:
+        stmt = stmt.where(Appointment.start_time >= start_after)
+    if start_before is not None:
+        stmt = stmt.where(Appointment.start_time < start_before)
+    if exclude_cancelled:
+        stmt = stmt.where(Appointment.status != AppointmentStatus.cancelled)
+    stmt = stmt.order_by(Appointment.start_time.desc()).offset(offset).limit(limit)
     return list(db.scalars(stmt))
 
 

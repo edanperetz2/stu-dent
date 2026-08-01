@@ -1,13 +1,28 @@
-import { Badge, Button, Group, Modal, PasswordInput, Stack, Table, TextInput, Title } from '@mantine/core'
+import {
+  Badge,
+  Box,
+  Button,
+  Collapse,
+  Group,
+  Modal,
+  PasswordInput,
+  Stack,
+  Table,
+  TextInput,
+  Title,
+} from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Fragment, useState } from 'react'
 import { apiErrorMessage } from '../../api/httpClient'
 import { createPatient, listPatients, type PatientCreateInput } from '../../api/patients'
 import { useAuthToken } from '../../auth/useAuthToken'
-import { EmptyText, LoadingText } from '../../components/StateText'
+import { ClickableRow } from '../../components/ClickableRow'
+import { TableSkeleton } from '../../components/Skeletons'
+import { EmptyText, ErrorText } from '../../components/StateText'
+import { useListQuery } from '../../hooks/useListQuery'
 import { PatientDetailPanel } from './PatientDetailPanel'
 
 export function PatientsListPage() {
@@ -16,9 +31,10 @@ export function PatientsListPage() {
   const [opened, { open, close }] = useDisclosure(false)
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null)
 
-  const { data: patients, isLoading } = useQuery({
+  const patientsQuery = useListQuery({
     queryKey: ['patients'],
     queryFn: () => listPatients(token),
+    errorFallback: 'Failed to load patients.',
   })
 
   const form = useForm<PatientCreateInput>({
@@ -53,9 +69,11 @@ export function PatientsListPage() {
         <Button onClick={open}>New Patient</Button>
       </Group>
 
-      {isLoading ? (
-        <LoadingText />
-      ) : patients?.length === 0 ? (
+      {patientsQuery.status === 'error' ? (
+        <ErrorText onRetry={patientsQuery.retry}>{patientsQuery.message}</ErrorText>
+      ) : patientsQuery.status === 'loading' ? (
+        <TableSkeleton columns={5} />
+      ) : patientsQuery.status === 'empty' ? (
         <EmptyText>No patients yet. Click "New Patient" to add one.</EmptyText>
       ) : (
         <Table.ScrollContainer minWidth={500}>
@@ -66,27 +84,20 @@ export function PatientsListPage() {
               <Table.Th>Phone</Table.Th>
               <Table.Th>Confirmation</Table.Th>
               <Table.Th>Status</Table.Th>
+              <Table.Th />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {patients?.map((patient) => {
+            {patientsQuery.data.map((patient) => {
               const expanded = expandedPatientId === patient.id
               const toggle = () =>
                 setExpandedPatientId((current) => (current === patient.id ? null : patient.id))
               return (
                 <Fragment key={patient.id}>
-                  <Table.Tr
-                    style={{ cursor: 'pointer' }}
-                    onClick={toggle}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        toggle()
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-expanded={expanded}
+                  <ClickableRow
+                    onToggle={toggle}
+                    expanded={expanded}
+                    expandLabel={`Toggle details for ${patient.full_name}`}
                   >
                     <Table.Td>{patient.full_name}</Table.Td>
                     <Table.Td>{patient.contact_phone ?? '-'}</Table.Td>
@@ -102,14 +113,16 @@ export function PatientsListPage() {
                         {patient.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </Table.Td>
+                  </ClickableRow>
+                  <Table.Tr>
+                    <Table.Td colSpan={5} p={0}>
+                      <Collapse expanded={expanded} keepMounted={false}>
+                        <Box p="md">
+                          <PatientDetailPanel patient={patient} />
+                        </Box>
+                      </Collapse>
+                    </Table.Td>
                   </Table.Tr>
-                  {expanded && (
-                    <Table.Tr>
-                      <Table.Td colSpan={4}>
-                        <PatientDetailPanel patient={patient} />
-                      </Table.Td>
-                    </Table.Tr>
-                  )}
                 </Fragment>
               )
             })}
@@ -118,13 +131,28 @@ export function PatientsListPage() {
         </Table.ScrollContainer>
       )}
 
-      <Modal opened={opened} onClose={close} title="New Patient">
+      <Modal opened={opened} onClose={close} title="New Patient" size="md">
         <form onSubmit={form.onSubmit((values) => createMutation.mutate(values))}>
           <Stack>
-            <TextInput label="Full name" {...form.getInputProps('full_name')} />
-            <TextInput label="Email" placeholder="patient@example.com" {...form.getInputProps('email')} />
-            <PasswordInput label="Password" {...form.getInputProps('password')} />
-            <TextInput label="Contact phone" {...form.getInputProps('contact_phone')} />
+            <TextInput label="Full name" autoComplete="name" {...form.getInputProps('full_name')} />
+            <TextInput
+              label="Email"
+              placeholder="patient@example.com"
+              type="email"
+              autoComplete="email"
+              {...form.getInputProps('email')}
+            />
+            <PasswordInput
+              label="Password"
+              autoComplete="new-password"
+              {...form.getInputProps('password')}
+            />
+            <TextInput
+              label="Contact phone"
+              type="tel"
+              autoComplete="tel"
+              {...form.getInputProps('contact_phone')}
+            />
             <Button type="submit" loading={createMutation.isPending}>
               Create
             </Button>

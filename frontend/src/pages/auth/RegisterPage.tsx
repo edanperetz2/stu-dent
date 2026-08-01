@@ -1,4 +1,4 @@
-import { Anchor, Button, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Anchor, Button, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -7,6 +7,7 @@ import { listStudents } from '../../api/students'
 import { apiErrorMessage } from '../../api/httpClient'
 import type { Role } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
+import { ErrorText } from '../../components/StateText'
 
 interface RegisterFormValues {
   fullName: string
@@ -41,7 +42,13 @@ export function RegisterPage() {
     },
   })
 
-  const { data: students, isLoading: studentsLoading } = useQuery({
+  const {
+    data: students,
+    isLoading: studentsLoading,
+    isError: studentsError,
+    error: studentsErrorValue,
+    refetch: refetchStudents,
+  } = useQuery({
     queryKey: ['students'],
     queryFn: listStudents,
     enabled: form.values.role === 'patient',
@@ -87,9 +94,15 @@ export function RegisterPage() {
   return (
     <form onSubmit={form.onSubmit(handleSubmit)}>
       <Stack>
-        <TextInput label="Full name" {...form.getInputProps('fullName')} />
-        <TextInput label="Email" placeholder="you@example.com" {...form.getInputProps('email')} />
-        <PasswordInput label="Password" {...form.getInputProps('password')} />
+        <TextInput label="Full name" autoComplete="name" {...form.getInputProps('fullName')} />
+        <TextInput
+          label="Email"
+          placeholder="you@example.com"
+          type="email"
+          autoComplete="email"
+          {...form.getInputProps('email')}
+        />
+        <PasswordInput label="Password" autoComplete="new-password" {...form.getInputProps('password')} />
         <Select
           label="Role"
           data={ROLE_OPTIONS}
@@ -97,24 +110,33 @@ export function RegisterPage() {
           {...form.getInputProps('role')}
         />
         {form.values.role === 'patient' && (
-          <Select
-            label="Choose your student"
-            placeholder={
-              studentsLoading
-                ? 'Loading students...'
-                : students?.length === 0
-                  ? 'No students available yet'
-                  : 'Select a student'
-            }
-            disabled={studentsLoading || students?.length === 0}
-            data={(students ?? []).map((s) => ({ value: s.id, label: s.full_name }))}
-            {...form.getInputProps('ownerStudentId')}
-          />
+          <>
+            <Select
+              label="Choose your student"
+              placeholder={
+                studentsError
+                  ? 'Failed to load students'
+                  : studentsLoading
+                    ? 'Loading students...'
+                    : students?.length === 0
+                      ? 'No students available yet'
+                      : 'Select a student'
+              }
+              disabled={studentsLoading || studentsError || students?.length === 0}
+              data={(students ?? []).map((s) => ({ value: s.id, label: s.full_name }))}
+              {...form.getInputProps('ownerStudentId')}
+            />
+            {studentsError && (
+              <ErrorText onRetry={() => refetchStudents()}>
+                {apiErrorMessage(studentsErrorValue, 'Failed to load the list of students.')}
+              </ErrorText>
+            )}
+          </>
         )}
         {error && (
-          <Text c="red" size="sm">
+          <Alert color="red" role="alert">
             {error}
-          </Text>
+          </Alert>
         )}
         <Button type="submit" loading={submitting} fullWidth>
           Register

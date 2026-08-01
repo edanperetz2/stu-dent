@@ -1,4 +1,15 @@
-import { Avatar, Button, Divider, Group, Paper, Stack, Text, Textarea, TextInput } from '@mantine/core'
+import {
+  Avatar,
+  Button,
+  Collapse,
+  Divider,
+  Group,
+  Paper,
+  Stack,
+  Text,
+  Textarea,
+  TextInput,
+} from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { IconMessageCircle, IconUser } from '@tabler/icons-react'
@@ -20,7 +31,8 @@ import type { ForumPost } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { ConfirmButton } from '../../components/ConfirmButton'
-import { LoadingText } from '../../components/StateText'
+import { CardListSkeleton } from '../../components/Skeletons'
+import { ErrorText } from '../../components/StateText'
 import { VoteButtons } from '../../components/VoteButtons'
 import { formatDateTime } from '../../utils/dates'
 
@@ -65,7 +77,13 @@ export const ForumPostCard = memo(function ForumPostCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.title, post.body])
 
-  const { data: comments, isLoading: commentsLoading } = useQuery({
+  const {
+    data: comments,
+    isLoading: commentsLoading,
+    isError: commentsError,
+    error: commentsErrorValue,
+    refetch: refetchComments,
+  } = useQuery({
     queryKey: ['forum', 'posts', post.id, 'comments'],
     queryFn: () => listComments(token, post.id),
     enabled: expanded,
@@ -144,12 +162,17 @@ export const ForumPostCard = memo(function ForumPostCard({
   })
 
   return (
-    <Stack gap={0} style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+    <Stack
+      gap={0}
+      className="list-item-enter"
+      // No Mantine shorthand for a single border side (`bd` sets all four).
+      style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
+    >
       <Group
         align="flex-start"
         wrap="nowrap"
         p="md"
-        style={{ cursor: 'pointer' }}
+        className="cursor-pointer"
         onClick={() => onToggleExpand(post.id)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -164,13 +187,13 @@ export const ForumPostCard = memo(function ForumPostCard({
         <Avatar radius="xl" color="blue">
           <IconUser size={20} />
         </Avatar>
-        <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+        <Stack gap={4} flex={1} miw={0}>
           <Text fw={700}>{post.title}</Text>
           <Text
             size="sm"
             c="dimmed"
             lineClamp={expanded ? undefined : 3}
-            style={{ whiteSpace: 'pre-wrap' }}
+            className="text-pre-wrap"
           >
             {post.body}
           </Text>
@@ -197,7 +220,7 @@ export const ForumPostCard = memo(function ForumPostCard({
         </Stack>
       </Group>
 
-      {expanded && (
+      <Collapse expanded={expanded} keepMounted={false}>
         <Stack gap="xs" pl={68} pr="md" pb="md">
           {editing ? (
             <Stack>
@@ -249,7 +272,13 @@ export const ForumPostCard = memo(function ForumPostCard({
           )}
 
           <Divider label={`Replies (${comments?.length ?? 0})`} />
-          {commentsLoading && <LoadingText />}
+          {commentsError ? (
+            <ErrorText onRetry={() => refetchComments()}>
+              {apiErrorMessage(commentsErrorValue, 'Failed to load replies.')}
+            </ErrorText>
+          ) : (
+            commentsLoading && <CardListSkeleton count={2} />
+          )}
           <Stack gap="xs">
             {comments?.map((comment) => (
               <Paper key={comment.id} withBorder p="sm">
@@ -296,7 +325,7 @@ export const ForumPostCard = memo(function ForumPostCard({
             </Group>
           )}
         </Stack>
-      )}
+      </Collapse>
     </Stack>
   )
 })
