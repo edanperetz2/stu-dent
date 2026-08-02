@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -79,8 +80,19 @@ def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db
         owner_student_id=owner_student_id,
         owner_confirmed_at=owner_confirmed_at,
     )
-    db.add(user)
-    db.flush()
+    # A SAVEPOINT, not a bare insert: two simultaneous registrations for
+    # the same email can both pass the `existing is None` check above
+    # before either commits -- without this, the second one's flush hits
+    # the DB's unique constraint on users.email and surfaces as a bare 500
+    # instead of the same 409 the check above was trying to guarantee.
+    try:
+        with db.begin_nested():
+            db.add(user)
+            db.flush()
+    except IntegrityError as err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+        ) from err
 
     record_audit_log(
         db,

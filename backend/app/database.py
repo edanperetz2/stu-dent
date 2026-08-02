@@ -23,9 +23,9 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def get_or_404[
-    ModelT
-](db: Session, model: type[ModelT], entity_id: uuid.UUID, *, detail: str) -> ModelT:
+def get_or_404[ModelT](
+    db: Session, model: type[ModelT], entity_id: uuid.UUID, *, detail: str
+) -> ModelT:
     """Fetch by primary key or raise 404 -- for the plain "no extra
     visibility/ownership rule" case (e.g. rooms/equipment). Routes with a
     real authorization rule beyond existence (e.g. appointments, patients)

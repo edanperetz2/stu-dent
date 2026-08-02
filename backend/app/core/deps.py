@@ -34,7 +34,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user_id is None:
         raise _credentials_exception
 
-    user = db.get(User, uuid.UUID(user_id))
+    try:
+        subject = uuid.UUID(user_id)
+    except (ValueError, TypeError) as err:
+        # A non-UUID `sub` (a forged/corrupted token) would otherwise raise
+        # an unhandled ValueError -- an unhandled 500 -- instead of the
+        # same 401 every other malformed-credentials path here already
+        # returns.
+        raise _credentials_exception from err
+
+    user = db.get(User, subject)
     if user is None or not user.is_active or user.deleted_at is not None:
         raise _credentials_exception
 

@@ -54,6 +54,49 @@ describe('useListQuery', () => {
     expect(result.current.status === 'ready' && result.current.data).toEqual([1, 2, 3])
   })
 
+  it('keeps showing the last-good data, not the error screen, when a background refetch fails', async () => {
+    // Regression test: TanStack Query keeps a query's last-successful
+    // `data` populated across a *background* refetch failure (only a
+    // query that has never once succeeded has `data === undefined`) --
+    // this hook used to check `isError` before `data`, so an ordinary
+    // transient refetch failure (tab-switch-back, a brief network blip)
+    // discarded already-loaded, still-valid rows and showed the full
+    // error/"Try again" screen instead.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    function localWrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    }
+
+    let callCount = 0
+    const { result } = renderHook(
+      () =>
+        useListQuery({
+          queryKey: ['test-refetch-failure'],
+          queryFn: () => {
+            callCount += 1
+            if (callCount === 1) return Promise.resolve([1, 2, 3])
+            return Promise.reject(new Error('transient failure'))
+          },
+          errorFallback: 'Failed to load.',
+        }),
+      { wrapper: localWrapper },
+    )
+
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current.status === 'ready' && result.current.data).toEqual([1, 2, 3])
+
+    await queryClient.refetchQueries({ queryKey: ['test-refetch-failure'] }).catch(() => {})
+
+    // Waited for (not a bare synchronous check): the query's internal
+    // isError flip and this hook's re-render both happen after
+    // refetchQueries's own promise resolves, so asserting immediately
+    // could observe a stale pre-refetch render and pass for the wrong
+    // reason even on the old, buggy branch order.
+    await waitFor(() => expect(queryClient.getQueryState(['test-refetch-failure'])?.status).toBe('error'))
+    expect(result.current.status).toBe('ready')
+    expect(result.current.status === 'ready' && result.current.data).toEqual([1, 2, 3])
+  })
+
   it('never reports empty when isEmpty is overridden to false, even for an empty array', async () => {
     const { result } = renderHook(
       () =>

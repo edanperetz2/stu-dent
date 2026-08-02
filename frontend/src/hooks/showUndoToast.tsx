@@ -1,5 +1,6 @@
 import { Button, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
+import { apiErrorMessage } from '../api/httpClient'
 
 let toastCounter = 0
 
@@ -40,7 +41,17 @@ export function showUndoToast({
           size="compact-xs"
           variant="light"
           onClick={() => {
-            onUndo()
+            // Normalizes both a plain `void` onUndo and a real Promise into
+            // one chain -- a rejecting onUndo (a real caller today all
+            // happen to avoid this, but the primitive itself had no
+            // defensive catch) would otherwise be a silent unhandled
+            // rejection with no user-facing feedback at all.
+            Promise.resolve(onUndo()).catch((err: unknown) => {
+              notifications.show({
+                message: apiErrorMessage(err, 'Undo failed'),
+                color: 'red',
+              })
+            })
             notifications.hide(id)
           }}
         >

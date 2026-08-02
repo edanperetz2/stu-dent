@@ -30,7 +30,7 @@ Stu-Dent is a containerized web platform that centralizes patient management, ap
 |---|---|---|
 | **Dental student** | Manage assigned patients, appointments, resources, preferences, forum content, and messages; schedule. | Cannot access another student's scheduler. |
 | **Attending** | Schedule; approves student requests for attending procedures. | Cannot access student schedules; cannot communicate with patients. |
-| **Patient record** | Stores contact details, appointment history, and scheduling preferences. | Not a full user account in the initial release; no medical diagnosis or treatment data is stored. |
+| **Patient** | Stores contact details, appointment history, and scheduling preferences; logs in to view/manage their own info. | A full user account (a 4th role on the same `users` table, not a separate principal type) — reversed post-Phase-5 from this proposal's original "not a full user account" design, once real browser testing showed how awkward a separate patient login/registration system was in practice (see CLAUDE.md). No medical diagnosis or treatment data is stored. |
 | **Administrator** | Manage users, supervisors, rooms, equipment, moderation, quotas, and system configuration. | Administrative actions are logged and protected by role-based authorization. |
 
 ## 4. Core Functional Features

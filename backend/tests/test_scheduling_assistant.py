@@ -181,6 +181,41 @@ def test_interpret_patient_role_does_not_resolve_attending_room_equipment(client
     assert body["warnings"] == []
 
 
+def test_interpret_non_string_fields_do_not_crash(client, monkeypatch):
+    # Regression test: nothing enforces the model actually returns strings
+    # for the fields the prompt asks for -- a non-string value used to
+    # crash (AttributeError on `.strip()`, or TypeError on an unhashable
+    # dict `.get()` key) instead of degrading to "couldn't resolve this
+    # field" like a real string that just doesn't match anything.
+    student_token = register_and_login(client, "sched-s7@example.com", role="student")
+    _mock_ollama(
+        monkeypatch,
+        {
+            "patient_name": ["not", "a", "string"],
+            "attending_name": 42,
+            "room_name": True,
+            "equipment_name": {"nested": "object"},
+            "date_phrase": ["also", "not", "a", "string"],
+            "time_of_day": ["morning"],
+            "notes": 123,
+        },
+    )
+
+    response = client.post(
+        "/scheduling/interpret",
+        json={"text": "book something weird"},
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["patient_id"] is None
+    assert body["attending_id"] is None
+    assert body["room_id"] is None
+    assert body["equipment_id"] is None
+    assert body["start_time"] is None
+    assert body["notes"] is None
+
+
 def test_interpret_unresolvable_date_phrase_warns(client, monkeypatch):
     student_token = register_and_login(client, "sched-s6@example.com", role="student")
     _mock_ollama(

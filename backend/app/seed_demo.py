@@ -9,7 +9,7 @@ no-op, so re-running is always safe.
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
@@ -36,7 +36,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SEED_ADMIN_EMAIL = "admin@stu-dent.demo"
-DEMO_PASSWORD = "DemoPass123!"
+# A deliberately public, printed-to-console demo credential for local dev
+# seed accounts (see main()'s final print block) -- not a real secret.
+DEMO_PASSWORD = "DemoPass123!"  # noqa: S105
 
 
 def _seed_users(db: Session) -> dict[str, list[User] | User]:
@@ -420,18 +422,15 @@ def _seed_messages(
     )
     db.add(patient_thread)
     db.flush()
-    db.add_all(
-        [
-            ConversationParticipant(
-                conversation_id=patient_thread.id, user_id=student.id, last_read_at=now
-            ),
-            ConversationParticipant(
-                conversation_id=patient_thread.id,
-                user_id=patient.id,
-                last_read_at=now - timedelta(minutes=5),
-            ),
-        ]
+    student_participant = ConversationParticipant(
+        conversation_id=patient_thread.id, user_id=student.id, last_read_at=now
     )
+    patient_participant = ConversationParticipant(
+        conversation_id=patient_thread.id,
+        user_id=patient.id,
+        last_read_at=now - timedelta(minutes=5),
+    )
+    db.add_all([student_participant, patient_participant])
     exchanges = [
         (
             patient.id,
@@ -456,6 +455,18 @@ def _seed_messages(
                 created_at=created_at,
             )
         )
+    db.flush()
+    # last_read_sequence, not just last_read_at: unread comparisons key off
+    # the former (see the column's own comment) -- both participants here
+    # are meant to already be caught up on this thread (their last_read_at
+    # values above are chronologically after every message that isn't
+    # their own), so both get backfilled to the thread's current max
+    # sequence once the messages actually exist to read one from.
+    last_sequence = db.scalar(
+        select(func.max(Message.sequence)).where(Message.conversation_id == patient_thread.id)
+    )
+    student_participant.last_read_sequence = last_sequence
+    patient_participant.last_read_sequence = last_sequence
 
     # Direct: student <-> attending.
     other_student = students[0]

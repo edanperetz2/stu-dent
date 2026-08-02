@@ -131,9 +131,17 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Reverse order: undo every column/FK change on the surviving tables
     # first, then recreate `patients`, then wire the FKs back to it.
-    op.drop_constraint(None, 'waitlist_entries', type_='foreignkey')
+    # Every constraint below is named explicitly via op.f(...) -- the
+    # matching create_foreign_key(None, ...) calls in upgrade() let Postgres
+    # auto-name them on create, but Alembic's downgrade then has no real
+    # name to drop by (`op.drop_constraint(None, ...)` raises CompileError:
+    # "it has no name"). Postgres's own auto-naming convention for an FK is
+    # `<table>_<column>_fkey`, which is what op.f() reconstructs here.
+    op.drop_constraint(
+        op.f('waitlist_entries_patient_id_fkey'), 'waitlist_entries', type_='foreignkey'
+    )
 
-    op.drop_constraint(None, 'users', type_='foreignkey')
+    op.drop_constraint(op.f('users_owner_student_id_fkey'), 'users', type_='foreignkey')
     op.drop_index(op.f('ix_users_owner_student_id'), table_name='users')
     op.drop_column('users', 'preferred_time_of_day')
     op.drop_column('users', 'contact_phone')
@@ -148,7 +156,7 @@ def downgrade() -> None:
         'notifications',
         sa.Column('recipient_user_id', sa.UUID(), autoincrement=False, nullable=True),
     )
-    op.drop_constraint(None, 'notifications', type_='foreignkey')
+    op.drop_constraint(op.f('notifications_recipient_id_fkey'), 'notifications', type_='foreignkey')
     op.drop_index(op.f('ix_notifications_recipient_id'), table_name='notifications')
     op.create_index(
         op.f('ix_notifications_recipient_user_id'),
@@ -171,8 +179,12 @@ def downgrade() -> None:
     op.add_column(
         'direct_messages', sa.Column('sender_user_id', sa.UUID(), autoincrement=False, nullable=True)
     )
-    op.drop_constraint(None, 'direct_messages', type_='foreignkey')
-    op.drop_constraint(None, 'direct_messages', type_='foreignkey')
+    op.drop_constraint(
+        op.f('direct_messages_sender_id_fkey'), 'direct_messages', type_='foreignkey'
+    )
+    op.drop_constraint(
+        op.f('direct_messages_patient_id_fkey'), 'direct_messages', type_='foreignkey'
+    )
     op.drop_index(op.f('ix_direct_messages_sender_id'), table_name='direct_messages')
     op.create_index(
         op.f('ix_direct_messages_sender_user_id'),
@@ -194,7 +206,7 @@ def downgrade() -> None:
     op.add_column(
         'audit_log', sa.Column('actor_patient_id', sa.UUID(), autoincrement=False, nullable=True)
     )
-    op.drop_constraint(None, 'audit_log', type_='foreignkey')
+    op.drop_constraint(op.f('audit_log_actor_id_fkey'), 'audit_log', type_='foreignkey')
     op.drop_index(op.f('ix_audit_log_actor_id'), table_name='audit_log')
     op.create_index(
         op.f('ix_audit_log_actor_user_id'), 'audit_log', ['actor_user_id'], unique=False
@@ -204,7 +216,7 @@ def downgrade() -> None:
     )
     op.drop_column('audit_log', 'actor_id')
 
-    op.drop_constraint(None, 'appointments', type_='foreignkey')
+    op.drop_constraint(op.f('appointments_patient_id_fkey'), 'appointments', type_='foreignkey')
 
     # Recreate `patients` before wiring any FK back to it.
     op.create_table(
@@ -235,7 +247,19 @@ def downgrade() -> None:
         ),
         sa.Column(
             'preferred_time_of_day',
-            postgresql.ENUM('morning', 'afternoon', 'evening', name='preferred_time_of_day_enum'),
+            # create_type=False: this type already exists in the DB at this
+            # point in downgrade() -- it was created for users.preferred_
+            # time_of_day back in upgrade(), and dropping that column above
+            # doesn't drop the shared enum type itself. Without this,
+            # create_table tries to CREATE TYPE again and fails with
+            # DuplicateObject.
+            postgresql.ENUM(
+                'morning',
+                'afternoon',
+                'evening',
+                name='preferred_time_of_day_enum',
+                create_type=False,
+            ),
             autoincrement=False,
             nullable=True,
         ),

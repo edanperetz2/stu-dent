@@ -70,14 +70,17 @@ import { useAppointmentActions, type CreateFormValues } from './useAppointmentAc
 type CalendarLens = 'personal' | 'resources'
 
 // Duration shortcut chips on the New Appointment modal's "When" fieldset --
-// 'custom' falls back to a second explicit end-time picker; the three
-// preset minute counts drive addMinutesToMantineDateTime directly off
-// whatever start time is picked, so the end time never needs a second
-// manual entry for the common cases.
-type DurationMode = '30' | '45' | '60' | 'custom'
+// 'custom' falls back to a second explicit end-time picker; the preset
+// minute counts drive addMinutesToMantineDateTime directly off whatever
+// start time is picked, so the end time never needs a second manual entry
+// for the common cases. Only multiples of 30 belong here -- every start
+// time is itself on the half-hour grid (APPOINTMENT_START_TIME_OPTIONS),
+// and APPOINTMENT_END_TIME_OPTIONS only offers half-hour slots too, so a
+// non-30-multiple preset (45 min was here once) computes an end time the
+// Select can't represent as selected once a user switches to Custom.
+type DurationMode = '30' | '60' | 'custom'
 const DURATION_MINUTES: Record<Exclude<DurationMode, 'custom'>, number> = {
   '30': 30,
-  '45': 45,
   '60': 60,
 }
 
@@ -647,7 +650,6 @@ export function AppointmentsListPage() {
                   >
                     <Group gap="xs">
                       <Chip value="30">30 min</Chip>
-                      <Chip value="45">45 min</Chip>
                       <Chip value="60">60 min</Chip>
                       <Chip value="custom">Custom</Chip>
                     </Group>

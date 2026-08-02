@@ -4,9 +4,18 @@ target-version = "py312"
 extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "S"]
 # B008: FastAPI's Depends()-as-default-argument is the idiomatic DI pattern, not a bug.
 ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 (assert): pytest's whole mechanism *is* assert -- not a stripped-in-
+#   production risk here, unlike application code.
+# S105/S106/S107 (hardcoded-password-*): every hit is a fake, hardcoded
+#   test-account credential ("password123" and friends) or a placeholder
+#   hashed_password="x" on a User built directly via the ORM for a
+#   real-Session concurrency test -- never a real secret.
+"tests/**" = ["S101", "S105", "S106", "S107"]
 
 [tool.black]
 line-length = 100

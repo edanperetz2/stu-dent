@@ -539,6 +539,108 @@ def test_rejecting_resolves_appointment_created_regardless_of_recipient(client):
     assert attending_resolved["read_at"] is not None
 
 
+def test_reassigning_attending_resolves_the_old_attendings_notification(client):
+    student_token = register_and_login(client, "notif-s16@example.com", role="student")
+    old_attending_token = register_and_login(client, "notif-a16@example.com", role="attending")
+    old_attending_id = _user_id(client, old_attending_token)
+    new_attending_token = register_and_login(client, "notif-a16b@example.com", role="attending")
+    new_attending_id = _user_id(client, new_attending_token)
+    patient_id = create_patient(client, student_token)
+    room_id = create_default_room(client)
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "attending_id": old_attending_id,
+            "room_id": room_id,
+            "start_time": START,
+            "end_time": END,
+        },
+        headers=auth_header(student_token),
+    ).json()
+
+    pending = _find_notification(
+        client,
+        old_attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert pending["read_at"] is None
+
+    reassign = client.patch(
+        f"/appointments/{appointment['id']}",
+        json={
+            "attending_id": new_attending_id,
+            "start_time": appointment["start_time"],
+            "end_time": appointment["end_time"],
+        },
+        headers=auth_header(student_token),
+    )
+    assert reassign.status_code == 200
+
+    # The old attending's stale notification is resolved -- without this,
+    # they'd be permanently stuck with an unread "needs your approval" nag
+    # for an appointment they're no longer assigned to, and clicking
+    # through on it would just 403 ("Not the assigned attending").
+    old_resolved = _find_notification(
+        client,
+        old_attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert old_resolved["read_at"] is not None
+
+    # The new attending gets their own fresh, still-unread copy.
+    new_pending = _find_notification(
+        client,
+        new_attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert new_pending["read_at"] is None
+
+
+def test_clearing_attending_resolves_the_old_attendings_notification(client):
+    student_token = register_and_login(client, "notif-s17@example.com", role="student")
+    attending_token = register_and_login(client, "notif-a17@example.com", role="attending")
+    attending_id = _user_id(client, attending_token)
+    patient_id = create_patient(client, student_token)
+    room_id = create_default_room(client)
+
+    appointment = client.post(
+        "/appointments",
+        json={
+            "patient_id": patient_id,
+            "attending_id": attending_id,
+            "room_id": room_id,
+            "start_time": START,
+            "end_time": END,
+        },
+        headers=auth_header(student_token),
+    ).json()
+
+    cleared = client.patch(
+        f"/appointments/{appointment['id']}",
+        json={
+            "attending_id": None,
+            "start_time": appointment["start_time"],
+            "end_time": appointment["end_time"],
+        },
+        headers=auth_header(student_token),
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["attending_id"] is None
+
+    resolved = _find_notification(
+        client,
+        attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert resolved["read_at"] is not None
+
+
 def test_cancelling_also_resolves_appointment_created(client):
     student_token = register_and_login(client, "notif-s15@example.com", role="student")
     attending_token = register_and_login(client, "notif-a15@example.com", role="attending")

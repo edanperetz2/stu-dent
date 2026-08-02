@@ -34,7 +34,12 @@ export type PreferredTimeOfDay = 'morning' | 'afternoon' | 'evening'
 
 export type ReportPeriodType = 'weekly' | 'monthly' | 'ad_hoc'
 
-export type ReportContentSource = 'ai' | 'fallback_summary' | 'unsupported' | 'unavailable'
+export type ReportContentSource =
+  | 'ai'
+  | 'fallback_summary'
+  | 'unsupported'
+  | 'unavailable'
+  | 'unresolved_date_range'
 
 export interface User {
   id: string

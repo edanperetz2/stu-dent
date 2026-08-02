@@ -1,6 +1,15 @@
-from sqlalchemy import select
+import threading
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.api.routes import forum as forum_routes
 from app.models.audit_log import AuditLog
+from app.models.forum_post import ForumPost
+from app.models.forum_post_vote import ForumPostVote
+from app.models.user import RoleEnum, User
+from app.schemas.forum import VoteIn
+from tests.conftest import engine
 from tests.helpers import auth_header, create_and_login_patient, register_and_login
 
 
@@ -326,3 +335,99 @@ def test_comment_on_missing_post_404(client):
 def test_forum_requires_authentication(client):
     assert client.get("/forum/posts").status_code == 401
     assert client.post("/forum/posts", json={"title": "x", "body": "y"}).status_code == 401
+
+
+def test_vote_on_post_rescues_concurrent_duplicate_insert():
+    """Real DB-level concurrency guarantee (same pattern as
+    test_messaging.py::test_get_or_create_conversation_rescues_concurrent_duplicate_insert),
+    bypassing the client/db_session fixture entirely -- that fixture wraps
+    everything in one connection + SAVEPOINT rolled back at teardown, so
+    two independent Sessions can't race against each other through it.
+    This uses the real `engine` and two independent `Session`s, with a
+    `Barrier` so both threads race the same student's first vote on the
+    same post at the same instant (a real double-click/two-open-tabs),
+    proving vote_on_post's SAVEPOINT-based rescue actually works under a
+    genuine concurrent duplicate-key insert on the (post_id, student_id)
+    unique constraint, not just the already-exists happy path.
+    """
+    setup_session = Session(bind=engine)
+    author_id = voter_id = post_id = None
+    try:
+        author = User(
+            email="forum-race-author@example.com",
+            hashed_password="x",
+            role=RoleEnum.student,
+            full_name="Race Author",
+        )
+        setup_session.add(author)
+        setup_session.flush()
+        voter = User(
+            email="forum-race-voter@example.com",
+            hashed_password="x",
+            role=RoleEnum.student,
+            full_name="Race Voter",
+        )
+        setup_session.add(voter)
+        setup_session.flush()
+        post = ForumPost(author_student_id=author.id, title="Race post", body="body")
+        setup_session.add(post)
+        setup_session.commit()
+        author_id, voter_id, post_id = author.id, voter.id, post.id
+    finally:
+        setup_session.close()
+
+    barrier = threading.Barrier(2)
+    results: dict[str, str] = {}
+
+    def _attempt(name: str) -> None:
+        session = Session(bind=engine)
+        try:
+            voter_in_this_session = session.get(User, voter_id)
+            barrier.wait()
+            forum_routes.vote_on_post(
+                post_id=post_id,
+                payload=VoteIn(value=1),
+                current_user=voter_in_this_session,
+                db=session,
+            )
+            results[name] = "ok"
+        except Exception:
+            results[name] = "error"
+        finally:
+            session.close()
+
+    thread_a = threading.Thread(target=_attempt, args=("a",))
+    thread_b = threading.Thread(target=_attempt, args=("b",))
+    thread_a.start()
+    thread_b.start()
+    thread_a.join()
+    thread_b.join()
+
+    try:
+        assert results == {"a": "ok", "b": "ok"}
+
+        cleanup_session = Session(bind=engine)
+        try:
+            votes = (
+                cleanup_session.query(ForumPostVote)
+                .filter(ForumPostVote.post_id == post_id, ForumPostVote.student_id == voter_id)
+                .all()
+            )
+            assert len(votes) == 1
+            assert votes[0].value == 1
+        finally:
+            cleanup_session.close()
+    finally:
+        teardown_session = Session(bind=engine)
+        try:
+            teardown_session.query(ForumPostVote).filter(ForumPostVote.post_id == post_id).delete()
+            teardown_session.query(ForumPost).filter(ForumPost.id == post_id).delete()
+            teardown_session.query(AuditLog).filter(
+                AuditLog.actor_id.in_([author_id, voter_id])
+            ).delete(synchronize_session=False)
+            teardown_session.query(User).filter(User.id.in_([author_id, voter_id])).delete(
+                synchronize_session=False
+            )
+            teardown_session.commit()
+        finally:
+            teardown_session.close()

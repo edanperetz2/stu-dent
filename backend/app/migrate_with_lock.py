@@ -46,7 +46,13 @@ def main() -> None:
         conn.execute("SELECT pg_advisory_lock(%s)", (_MIGRATION_LOCK_KEY,))
         logger.info("Migration lock acquired, running alembic upgrade head")
         try:
-            subprocess.run(["alembic", "upgrade", "head"], check=True)
+            # sys.executable, not a bare "alembic" -- a partial/PATH-relative
+            # executable name is what ruff's S607 flags; args are otherwise
+            # fully hardcoded (no untrusted input reaches this call), hence
+            # the S603 ignore.
+            subprocess.run(  # noqa: S603
+                [sys.executable, "-m", "alembic", "upgrade", "head"], check=True
+            )
         finally:
             conn.execute("SELECT pg_advisory_unlock(%s)", (_MIGRATION_LOCK_KEY,))
 

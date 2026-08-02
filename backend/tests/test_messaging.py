@@ -1,9 +1,11 @@
 import threading
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.conversation import Conversation, ConversationKind, ConversationParticipant
+from app.models.conversation import Conversation, ConversationKind, ConversationParticipant, Message
 from app.models.user import RoleEnum, User
 from app.services.messaging import direct_key, get_or_create_conversation
 from tests.conftest import engine
@@ -514,6 +516,61 @@ def test_unread_count_resets_after_read_and_returns_after_unread(client):
     )
 
     client.post(f"/messages/direct/{patient_id}/unread", headers=auth_header(student_token))
+    assert (
+        client.get("/messages/unread-count", headers=auth_header(student_token)).json()["count"]
+        == 1
+    )
+
+
+def test_unread_count_uses_sequence_not_created_at_so_clock_skew_cant_hide_a_new_message(
+    client, db_session
+):
+    """Regression test for the created_at-vs-last_read_at clock mismatch:
+    Message.created_at is stamped by Postgres's transaction-start clock
+    (func.now()), while last_read_at was stamped by this API server's own
+    Python clock (datetime.now(UTC)) -- two different clock sources for
+    the same "when did this happen" question. Directly backdates a brand
+    new message's created_at to before the read receipt's timestamp (the
+    same shape ordinary clock skew or round-trip timing could produce) and
+    confirms it still counts as unread -- proving the comparison now keys
+    off Message.sequence (which is really, unambiguously ordered by
+    insertion) rather than the two mismatched clocks.
+    """
+    student_token = register_and_login(client, "msg-s26b@example.com", role="student")
+    patient_id, patient_token = create_and_login_patient(
+        client, student_token, "msg-p26b@example.com"
+    )
+    student_id = _student_id(client, student_token)
+
+    client.post(
+        f"/messages/direct/{student_id}", json={"body": "first"}, headers=auth_header(patient_token)
+    )
+    client.post(f"/messages/direct/{patient_id}/read", headers=auth_header(student_token))
+    assert (
+        client.get("/messages/unread-count", headers=auth_header(student_token)).json()["count"]
+        == 0
+    )
+
+    participant = db_session.scalar(
+        select(ConversationParticipant).where(ConversationParticipant.user_id == student_id)
+    )
+    read_at = participant.last_read_at
+    assert read_at is not None
+
+    conversation = db_session.get(Conversation, participant.conversation_id)
+    # A real new message, inserted (and so sequenced) after the read --
+    # but with created_at deliberately stamped *before* last_read_at, the
+    # exact shape clock skew between the two sources could produce.
+    db_session.add(
+        Message(
+            conversation_id=conversation.id,
+            sender_id=uuid.UUID(patient_id),
+            body="skewed",
+            created_at=read_at - timedelta(seconds=5),
+        )
+    )
+    db_session.commit()
+
     assert (
         client.get("/messages/unread-count", headers=auth_header(student_token)).json()["count"]
         == 1

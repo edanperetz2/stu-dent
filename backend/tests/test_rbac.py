@@ -1,3 +1,4 @@
+from app.core.security import create_access_token
 from tests.helpers import auth_header, register_and_login
 
 
@@ -47,3 +48,17 @@ def test_no_token_rejected_on_protected_endpoints(client):
     assert client.get("/patients").status_code == 401
     assert client.get("/attending/dashboard").status_code == 401
     assert client.get("/admin/audit-log").status_code == 401
+
+
+def test_token_with_non_uuid_subject_rejected_cleanly_not_500(client):
+    # Regression test: a token whose `sub` claim isn't a real UUID (a
+    # forged/corrupted token, only reachable if the JWT secret were ever
+    # compromised) used to raise an unhandled ValueError from
+    # uuid.UUID(user_id) -- a bare 500 -- instead of the same 401 every
+    # other malformed-credentials path in get_current_user already returns.
+    # create_access_token's `subject` param is typed as uuid.UUID, but
+    # Python doesn't enforce that at runtime -- passing a plain string
+    # reproduces exactly the malformed-token shape being guarded against.
+    token = create_access_token(subject="not-a-real-uuid", role="student")
+    response = client.get("/patients", headers=auth_header(token))
+    assert response.status_code == 401

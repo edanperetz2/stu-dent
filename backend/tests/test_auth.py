@@ -1,6 +1,15 @@
+import threading
+
 import jwt as pyjwt
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.database import get_db
+from app.main import app
+from app.models.audit_log import AuditLog
+from app.models.user import User
+from tests.conftest import engine
 
 
 def _register(
@@ -136,3 +145,64 @@ def test_users_me_update_partial_leaves_other_field_untouched(client):
     body = response.json()
     assert body["contact_phone"] == "555-1234"
     assert body["preferred_time_of_day"] == "morning"
+
+
+def test_concurrent_registration_with_the_same_email_gets_a_clean_409_not_a_500():
+    """Real DB-level concurrency guarantee (same pattern as
+    test_messaging.py::test_get_or_create_conversation_rescues_concurrent_duplicate_insert
+    and test_forum.py::test_vote_on_post_rescues_concurrent_duplicate_insert),
+    hitting the real HTTP endpoint through two real TestClient connections
+    with a real-commit `get_db` override (not the SAVEPOINT-wrapped
+    `client`/`db_session` fixture, which wraps everything in one connection
+    invisible to a second thread) -- proves register's SAVEPOINT-based
+    rescue actually turns a genuine concurrent duplicate-email insert into
+    a clean 409 for the loser, not an unhandled 500.
+    """
+
+    def _real_get_db():
+        db = Session(bind=engine)
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = _real_get_db
+    email = "auth-race@example.com"
+    try:
+        with TestClient(app) as real_client:
+            barrier = threading.Barrier(2)
+            results: dict[str, int] = {}
+
+            def _attempt(name: str) -> None:
+                barrier.wait()
+                response = real_client.post(
+                    "/auth/register",
+                    json={
+                        "email": email,
+                        "password": "password123",
+                        "full_name": "Race Registrant",
+                        "role": "student",
+                    },
+                )
+                results[name] = response.status_code
+
+            thread_a = threading.Thread(target=_attempt, args=("a",))
+            thread_b = threading.Thread(target=_attempt, args=("b",))
+            thread_a.start()
+            thread_b.start()
+            thread_a.join()
+            thread_b.join()
+
+            assert sorted(results.values()) == [201, 409]
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        cleanup_session = Session(bind=engine)
+        try:
+            winner = cleanup_session.query(User).filter(User.email == email).first()
+            cleanup_session.query(AuditLog).filter(AuditLog.attempted_identifier == email).delete()
+            if winner is not None:
+                cleanup_session.query(AuditLog).filter(AuditLog.actor_id == winner.id).delete()
+            cleanup_session.query(User).filter(User.email == email).delete()
+            cleanup_session.commit()
+        finally:
+            cleanup_session.close()

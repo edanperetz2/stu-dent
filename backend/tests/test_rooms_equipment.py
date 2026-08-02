@@ -178,6 +178,62 @@ def test_deactivating_room_notifies_owning_student_via_message_and_notification(
     )
 
 
+def test_deactivating_room_notifies_students_with_pending_waitlist_entries(client):
+    admin_token = _admin_token(client, "rooms-admin5b@example.com")
+    attending_token = register_and_login(client, "rooms-attending5b@example.com", role="attending")
+    attending_id = client.get("/users/me", headers=auth_header(attending_token)).json()["id"]
+    room_id = client.post(
+        "/admin/rooms", json={"name": "Room 606b"}, headers=auth_header(admin_token)
+    ).json()["id"]
+
+    occupier_token = register_and_login(client, "rooms-occupier5b@example.com", role="student")
+    occupier_patient_id = create_patient(client, occupier_token)
+    client.post(
+        "/appointments",
+        json={
+            "patient_id": occupier_patient_id,
+            "attending_id": attending_id,
+            "room_id": create_default_room(client),
+            "start_time": "2026-08-12T09:00:00+00:00",
+            "end_time": "2026-08-12T09:30:00+00:00",
+        },
+        headers=auth_header(occupier_token),
+    )
+
+    waiter_token = register_and_login(client, "rooms-waiter5b@example.com", role="student")
+    waiter_patient_id = create_patient(client, waiter_token)
+    entry = client.post(
+        "/waitlist",
+        json={
+            "patient_id": waiter_patient_id,
+            "attending_id": attending_id,
+            "room_id": room_id,
+            "start_time": "2026-08-12T09:00:00+00:00",
+            "end_time": "2026-08-12T09:30:00+00:00",
+        },
+        headers=auth_header(waiter_token),
+    )
+    assert entry.status_code == 201
+
+    deactivated = client.patch(
+        f"/admin/rooms/{room_id}", json={"is_active": False}, headers=auth_header(admin_token)
+    )
+    assert deactivated.status_code == 200
+
+    # The waiter has no appointment yet -- only a pending waitlist entry
+    # targeting this room -- and must still be told, or their entry could
+    # later silently try to auto-promote into a resource nobody warned them
+    # was taken offline.
+    admin_thread = client.get("/messages/admin", headers=auth_header(waiter_token)).json()
+    assert any("Room 606b" in m["body"] for m in admin_thread)
+
+    waiter_notifications = client.get("/notifications", headers=auth_header(waiter_token)).json()
+    assert any(
+        n["notification_type"] == "resource_deactivated" and "Room 606b" in n["message"]
+        for n in waiter_notifications
+    )
+
+
 def test_deactivating_room_with_no_future_appointments_sends_nothing(client):
     admin_token = _admin_token(client, "rooms-admin6@example.com")
     student_token = register_and_login(client, "rooms-student6@example.com", role="student")

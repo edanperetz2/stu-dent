@@ -82,6 +82,51 @@ def test_ask_question_ollama_unavailable_returns_assistant_unavailable_message(c
     assert body["content_source"] == "unavailable"
 
 
+def test_ask_question_unresolved_date_range_is_not_silently_answered_with_a_default_window(
+    client, monkeypatch
+):
+    # Regression test: a real, supported question type with a date phrase
+    # resolve_date_range() doesn't recognize used to silently fall back to
+    # a generic last-30-days window with no indication the answered range
+    # wasn't the one actually asked about.
+    _mock_ollama_router(
+        monkeypatch,
+        classify={"question_type": "time_impact", "date_range_phrase": "yesterday"},
+        narrate={"summary": "this should never be reached"},
+    )
+    student_token = register_and_login(client, "rep-s6b@example.com", role="student")
+
+    response = client.post(
+        "/reports/ask",
+        json={"question": "who wasted my time yesterday?"},
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["content_source"] == "unresolved_date_range"
+    assert "yesterday" in body["content"]
+    assert "this should never be reached" not in body["content"]
+
+
+def test_ask_question_malformed_classify_response_gets_a_distinct_message_from_unavailable(
+    client, monkeypatch
+):
+    # Ollama responded (unlike the genuinely-unreachable case), just not
+    # with something _ClassifyResponse can validate -- the message should
+    # say so, not claim the assistant "couldn't be reached".
+    _mock_ollama_router(monkeypatch, classify={"question_type": "not_a_real_type"})
+    student_token = register_and_login(client, "rep-s6c@example.com", role="student")
+
+    response = client.post(
+        "/reports/ask", json={"question": "anything"}, headers=auth_header(student_token)
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["content_source"] == "unavailable"
+    assert "couldn't be reached" not in body["content"]
+    assert "format this app" in body["content"]
+
+
 def test_ask_question_time_impact_narrates_successfully(client, monkeypatch):
     _mock_ollama_router(
         monkeypatch,

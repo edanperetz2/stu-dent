@@ -40,8 +40,11 @@ services (see `docs/proposal.md` for the original proposal).
   unreachable.
 - **Infra**: Docker Compose (`api`, `db`, `frontend`, `mailhog`,
   `worker`, `ollama`), one documented startup command
-  (`docker compose up --build`), plus a hardened production variant
-  (`docker-compose.prod.yml`) for VM deployment.
+  (`docker compose up --build`). A hardened production variant
+  (`docker-compose.prod.yml`) was built for VM deployment during Phase 7
+  but removed after the course confirmed no VM would actually be
+  provided (see Deployment below) — the local Compose stack is the only
+  deployment path this project currently ships.
 - **Auth**: argon2 password hashing, JWT access tokens (HS256, no
   refresh token).
 
@@ -117,8 +120,6 @@ backend/alembic/versions/   one migration per schema change, no exceptions
 backend/tests/              pytest, run inside the api container
 frontend/src/                Vite + React + TS
 docs/proposal.md            original project proposal
-docker-compose.prod.yml     hardened production stack (VM deploy)
-deploy/bootstrap-vm.sh      first-time VM setup script
 ```
 
 ## 3. Implemented Features (by phase)
@@ -150,13 +151,14 @@ deploy/bootstrap-vm.sh      first-time VM setup script
   boundary design). Scope was deliberately expanded beyond the original
   proposal at the team's request to include live ad-hoc Q&A, not just
   auto-generated periodic reports.
-- **Phase 7 — CI/CD + seed data + VM deploy**: a full CI pipeline
-  (lint, backend tests, frontend tests, Docker image build validation —
-  see Testing below), an idempotent demo-data seeding script, and a
-  production deployment path (hardened Docker Compose stack, VM
-  bootstrap script, SSH-based deploy workflow) — built and locally
-  rehearsed end-to-end; actual deployment is pending VM access from the
-  course (see Deployment and Risks below).
+- **Phase 7 — CI/CD + seed data**: a full CI pipeline (lint, backend
+  tests, frontend tests, Docker image build validation — see Testing
+  below) and an idempotent demo-data seeding script. A production
+  deployment path (hardened Docker Compose stack, VM bootstrap script,
+  SSH-based deploy workflow) was also built and locally rehearsed
+  end-to-end, but was removed once the course confirmed no VM would
+  actually be provided (see Deployment and Risks below) — it never saw
+  real deployment and no longer exists in the repo.
 - **Codebase review + cleanup** (cross-phase, not a proposal-scoped
   phase): a full scan of every phase's code produced 29 concrete,
   file-cited improvement findings — efficiency, explainability, and
@@ -183,8 +185,10 @@ deploy/bootstrap-vm.sh      first-time VM setup script
   PR — `lint` (ruff, black, oxlint), `backend-tests` (pytest against a
   real Postgres service container, migrations applied first),
   `frontend-tests` (Vitest + `tsc -b && vite build`), `docker-build`
-  (build-only validation of all four Dockerfiles — dev and production,
-  backend and frontend). A real pre-existing bug was found and fixed
+  (build-only validation of both Dockerfiles — backend and frontend; the
+  two additional production Dockerfiles this job once also validated
+  were removed along with the rest of the VM-deploy path, see
+  Deployment below). A real pre-existing bug was found and fixed
   during Phase 7: the `push` trigger targeted a branch called `main`,
   which never existed on this repo (only `master` does) — so `push` had
   silently never fired since the CI stub was first added; only
@@ -214,25 +218,31 @@ deploy/bootstrap-vm.sh      first-time VM setup script
   `docker compose exec api python -m app.seed_demo`.
 - **VM (course-supplied)**: the proposal's "supplied Azure environment"
   turned out, after confirming with the course lecturer, to mean a plain
-  VM rather than a managed cloud platform. All deployment artifacts are
-  built and were rehearsed successfully as a full local dry run
+  VM rather than a managed cloud platform. A full production deployment
+  path was built and rehearsed successfully as a local dry run
   (production Dockerfiles, `docker-compose.prod.yml`, an nginx-served
   static frontend build, a VM bootstrap script, a manually-triggered SSH
-  deploy workflow) — but **actual deployment to the real VM has not
-  happened yet**, since the VM itself had not been provisioned by the
-  course as of this report. See Risks below.
+  deploy workflow) — but the course ultimately confirmed no VM would
+  actually be provisioned, so **real deployment never happened**, and
+  the entire VM-deploy path (all the artifacts just listed) was
+  subsequently removed from the repo rather than left unused. See Risks
+  below.
 
 ## 6. Risks and Limitations
 
-- **VM deployment unexecuted.** Everything is prepared and locally
-  rehearsed (the full production stack was brought up locally, reusing
-  the same database volume as the dev stack, and verified working
-  end-to-end through the real production frontend/API), but the actual
-  target machine did not exist yet at time of writing. The rehearsal did
-  surface and fix two real deployment bugs (a Docker image tag collision
-  between dev and prod frontend builds, and a CORS-configuration gotcha
-  where forgetting to list the deploy origin produces a silent, confusing
-  login failure) — both are now documented in the README.
+- **VM deployment never executed, and the path was later removed.**
+  Everything was prepared and locally rehearsed (the full production
+  stack was brought up locally, reusing the same database volume as the
+  dev stack, and verified working end-to-end through the real production
+  frontend/API) — the rehearsal did surface and fix two real deployment
+  bugs (a Docker image tag collision between dev and prod frontend
+  builds, and a CORS-configuration gotcha where forgetting to list the
+  deploy origin produces a silent, confusing login failure), documented
+  in the README at the time. The target VM was never actually provisioned
+  by the course, and once that was confirmed, the whole VM-deploy path
+  (production Dockerfiles, `docker-compose.prod.yml`, the bootstrap
+  script, the deploy workflow) was removed from the repo — this project's
+  only shipping deployment path today is the local Docker Compose stack.
 - **No admin-approval gate on signup.** `POST /auth/register` accepts a
   `role` field with no verification — anyone can self-register as
   student, attending, or admin. This is an accepted simplification for a
@@ -245,13 +255,18 @@ deploy/bootstrap-vm.sh      first-time VM setup script
   immediate/ungated. It's recorded here as a suggested upgrade for a
   real production rollout after course submission and approval, not a
   gap to close now.
-- **The VM deploy plan hasn't been validated against a real network/
-  firewall setup.** `docker-compose.prod.yml` doesn't expose Postgres or
-  Ollama outside the VM's own Docker network at all (only the frontend,
-  API, and MailHog's ports are published) — a reasonable default, but
-  whatever firewall/security-group rules the actual VM enforces at the
-  network level are outside this project's control and unverified until
-  the real VM exists.
+- **The VM deploy plan was never validated against a real network/
+  firewall setup, and no longer exists to validate.** While it did
+  exist, `docker-compose.prod.yml` didn't expose Postgres or Ollama
+  outside the VM's own Docker network at all (only the frontend, API,
+  and MailHog's ports were published) — a reasonable default, but
+  whatever firewall/security-group rules a real VM would have enforced
+  at the network level were always outside this project's control, and
+  that question is now moot since the VM path itself was removed (see
+  Deployment above). The local dev stack itself still publishes
+  `db`/`ollama` ports for local development convenience; `ollama`'s is
+  now bound to localhost only, `db`'s remains open due to a real
+  port-binding conflict found on at least one contributor's machine.
 - **Local AI is best-effort, not guaranteed.** Both AI features degrade
   gracefully (plain warnings / raw-data fallback) if Ollama is
   unreachable or the model isn't pulled — this is a deliberate design

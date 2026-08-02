@@ -18,7 +18,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://stu_dent:stu_dent@db:5432/stu_dent"
 
-    jwt_secret_key: str = "change-me-in-.env"
+    # An intentional placeholder sentinel (see warn_if_placeholder_jwt_secret
+    # below), not a real secret.
+    jwt_secret_key: str = "change-me-in-.env"  # noqa: S105
     jwt_algorithm: str = "HS256"
     # See .env.example for why 120, not the old 30 -- shorter than a
     # clinic shift.

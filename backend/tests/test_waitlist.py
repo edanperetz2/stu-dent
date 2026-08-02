@@ -631,6 +631,60 @@ def test_rescheduling_appointment_away_promotes_waitlist_entry_for_freed_room(cl
     assert resolved["resulting_appointment_id"] is not None
 
 
+def test_auto_promotion_skips_a_candidate_whose_room_was_deactivated_while_pending(client):
+    # Regression test: recheck_waitlist_for_freed_slot used to promote a
+    # candidate the instant find_conflicts() came back clear, without
+    # re-checking whether the entry's own room/equipment/participants were
+    # still valid -- find_conflicts only looks for overlapping *active
+    # appointments*, never resource active status. A room deactivated while
+    # an entry was pending could then get silently booked anyway once the
+    # entry's original (unrelated) conflict cleared.
+    admin_token = register_and_login(client, "wl-admin20@example.com", role="admin")
+    room_id = create_room(client, admin_token, "WL Room 20")
+    attending_token = register_and_login(client, "wl-a20@example.com", role="attending")
+    attending_id = _user_id(client, attending_token)
+
+    occupier_token = register_and_login(client, "wl-s20a@example.com", role="student")
+    occupier_patient_id = create_patient(client, occupier_token)
+    appointment = _book(
+        client,
+        occupier_token,
+        patient_id=occupier_patient_id,
+        attending_id=attending_id,
+        start_time="2026-09-05T09:00:00+00:00",
+        end_time="2026-09-05T10:00:00+00:00",
+    ).json()
+
+    waiter_token = register_and_login(client, "wl-s20b@example.com", role="student")
+    waiter_patient_id = create_patient(client, waiter_token)
+    entry = _wait(
+        client,
+        waiter_token,
+        patient_id=waiter_patient_id,
+        attending_id=attending_id,
+        room_id=room_id,
+        start_time="2026-09-05T09:00:00+00:00",
+        end_time="2026-09-05T10:00:00+00:00",
+    ).json()
+    assert entry["conflicts"][0]["resource_type"] == "attending"
+
+    deactivate = client.patch(
+        f"/admin/rooms/{room_id}", json={"is_active": False}, headers=auth_header(admin_token)
+    )
+    assert deactivate.status_code == 200
+
+    # The attending conflict clears -- the only thing that would have
+    # triggered promotion before this fix.
+    cancel = client.post(
+        f"/appointments/{appointment['id']}/cancel", headers=auth_header(occupier_token)
+    )
+    assert cancel.status_code == 200
+
+    still_active = client.get(f"/waitlist/{entry['id']}", headers=auth_header(waiter_token)).json()
+    assert still_active["status"] == "active"
+    assert still_active["resulting_appointment_id"] is None
+
+
 def test_competing_entries_for_the_same_freed_slot_first_created_wins(client):
     attending_token = register_and_login(client, "wl-a17@example.com", role="attending")
     attending_id = _user_id(client, attending_token)

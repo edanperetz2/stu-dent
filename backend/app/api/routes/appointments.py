@@ -301,6 +301,21 @@ def update_appointment(
         # a reminder for its new time at all.
         appointment.reminder_sent_at = None
 
+    if attending_changed and old_attending_id is not None:
+        # The old attending's own unread "needs your approval" notification
+        # for this appointment is now stale -- they're no longer assigned,
+        # so approve_appointment would 403 them ("Not the assigned
+        # attending") if they ever clicked through on it. Scoped to just
+        # them: a different recipient's copy of this same notification type
+        # (there isn't one for appointment_created, but this matches the
+        # general convention) must stay untouched.
+        resolve_notifications(
+            db,
+            notification_type=NotificationType.appointment_created,
+            related_appointment_id=appointment.id,
+            recipient_id=old_attending_id,
+        )
+
     if time_changed or attending_changed:
         if appointment.attending_id is not None:
             appointment.attending_approved_at = None
@@ -370,30 +385,36 @@ def accept_appointment(
         )
     old_room_id = appointment.room_id
     room_changed = room_id != appointment.room_id
+
+    # Always validated/conflict-checked, not just when the room changes --
+    # an accept that kept an already-pre-assigned room used to skip
+    # find_conflicts entirely, relying solely on the DB exclusion
+    # constraint's generic 409 (no ConflictReason list) to catch a real
+    # double-booking, unlike every other conflict path in this file.
+    validate_participants(
+        db,
+        student_id=appointment.student_id,
+        patient_id=appointment.patient_id,
+        attending_id=appointment.attending_id,
+        room_id=room_id,
+        equipment_id=appointment.equipment_id,
+    )
+    conflicts = find_conflicts(
+        db,
+        student_id=appointment.student_id,
+        patient_id=appointment.patient_id,
+        attending_id=appointment.attending_id,
+        room_id=room_id,
+        equipment_id=appointment.equipment_id,
+        start_time=appointment.start_time,
+        end_time=appointment.end_time,
+        exclude_appointment_id=appointment.id,
+    )
+    if conflicts:
+        raise AppointmentConflictError(
+            "Requested room conflicts with an existing booking", conflicts
+        )
     if room_changed:
-        validate_participants(
-            db,
-            student_id=appointment.student_id,
-            patient_id=appointment.patient_id,
-            attending_id=appointment.attending_id,
-            room_id=room_id,
-            equipment_id=appointment.equipment_id,
-        )
-        conflicts = find_conflicts(
-            db,
-            student_id=appointment.student_id,
-            patient_id=appointment.patient_id,
-            attending_id=appointment.attending_id,
-            room_id=room_id,
-            equipment_id=appointment.equipment_id,
-            start_time=appointment.start_time,
-            end_time=appointment.end_time,
-            exclude_appointment_id=appointment.id,
-        )
-        if conflicts:
-            raise AppointmentConflictError(
-                "Requested room conflicts with an existing booking", conflicts
-            )
         appointment.room_id = room_id
 
     appointment.student_confirmed_at = datetime.now(UTC)

@@ -2,9 +2,11 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.api.routes import (
     admin,
@@ -26,6 +28,7 @@ from app.api.routes import (
     websocket,
 )
 from app.config import settings
+from app.database import get_db
 from app.realtime.listener import listen_forever
 from app.services.scheduling import AppointmentConflictError
 
@@ -86,5 +89,21 @@ async def handle_appointment_conflict(
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health(db: Session = Depends(get_db)) -> JSONResponse:
+    """A liveness-only stub (always `{"status": "ok"}`) previously reported
+    healthy even with the DB unreachable -- docker-compose's `api`
+    healthcheck hits exactly this endpoint, so a DB connection-pool
+    exhaustion or a lost connection post-startup went unnoticed
+    indefinitely (depends_on: service_healthy only gates the *initial*
+    start order). Ollama deliberately isn't checked here: the app is
+    explicitly designed to keep working (booking, everything but the AI
+    features) with Ollama down, so treating that as "unhealthy" would be a
+    real regression, not a safety improvement.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse(
+            status_code=503, content={"status": "unhealthy", "detail": "database unreachable"}
+        )
+    return JSONResponse(status_code=200, content={"status": "ok"})

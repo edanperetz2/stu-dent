@@ -26,6 +26,17 @@ _PROMPT_TEMPLATE = (
 )
 
 
+def _as_str(value: object) -> str | None:
+    """The model is asked for JSON with specific keys, but nothing enforces
+    it actually returns strings for them -- a list/int/bool for a field
+    that's supposed to be a name or phrase would otherwise reach `.strip()`
+    (AttributeError) or a dict `.get()` key lookup (TypeError: unhashable
+    type) below. Treated the same as "field not mentioned" rather than a
+    crash.
+    """
+    return value if isinstance(value, str) else None
+
+
 def _resolve_by_name(
     candidates: list[tuple[uuid.UUID, str]], name: str | None, label: str
 ) -> tuple[uuid.UUID | None, list[str]]:
@@ -87,25 +98,30 @@ def interpret_request(db: Session, *, user: User, text: str) -> InterpretedAppoi
             db.execute(select(Equipment.id, Equipment.name).where(Equipment.is_active.is_(True)))
         )
 
-        patient_id, w = _resolve_by_name(patients, raw.get("patient_name"), "patient")
+        patient_id, w = _resolve_by_name(patients, _as_str(raw.get("patient_name")), "patient")
         warnings += w
-        attending_id, w = _resolve_by_name(attendings, raw.get("attending_name"), "attending")
+        attending_id, w = _resolve_by_name(
+            attendings, _as_str(raw.get("attending_name")), "attending"
+        )
         warnings += w
-        room_id, w = _resolve_by_name(rooms, raw.get("room_name"), "room")
+        room_id, w = _resolve_by_name(rooms, _as_str(raw.get("room_name")), "room")
         warnings += w
-        equipment_id, w = _resolve_by_name(equipment, raw.get("equipment_name"), "equipment item")
+        equipment_id, w = _resolve_by_name(
+            equipment, _as_str(raw.get("equipment_name")), "equipment item"
+        )
         warnings += w
 
     start_time: datetime | None = None
     end_time: datetime | None = None
-    date_phrase = raw.get("date_phrase")
+    date_phrase = _as_str(raw.get("date_phrase"))
     if date_phrase:
         now = datetime.now(UTC)
         resolved_date = resolve_relative_date(date_phrase, now=now)
         if resolved_date is None:
             warnings.append(f'Couldn\'t understand the date "{date_phrase}" -- pick one manually.')
         else:
-            hour = TIME_OF_DAY_HOURS.get(raw.get("time_of_day"), TIME_OF_DAY_HOURS["morning"])
+            time_of_day = _as_str(raw.get("time_of_day"))
+            hour = TIME_OF_DAY_HOURS.get(time_of_day, TIME_OF_DAY_HOURS["morning"])
             # tzinfo=DISPLAY_TIMEZONE (not UTC): `hour` is a local Israel
             # wall-clock hour ("afternoon" -> 13:00 local), so it must be
             # tagged with the zone it was meant in, not stamped UTC -- the
@@ -113,9 +129,7 @@ def interpret_request(db: Session, *, user: User, text: str) -> InterpretedAppoi
             start_time = datetime.combine(resolved_date, time(hour=hour), tzinfo=DISPLAY_TIMEZONE)
             end_time = start_time + timedelta(minutes=DEFAULT_APPOINTMENT_MINUTES)
 
-    notes = raw.get("notes")
-    if not isinstance(notes, str):
-        notes = None
+    notes = _as_str(raw.get("notes"))
 
     return InterpretedAppointmentOut(
         patient_id=patient_id,

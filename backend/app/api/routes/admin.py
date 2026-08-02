@@ -68,6 +68,19 @@ def update_user(
     if payload.is_active is not None:
         user.is_active = payload.is_active
     if payload.role is not None:
+        # patient has its own dedicated creation/confirmation flows
+        # (POST /patients, self-registration + POST /patients/{id}/confirm)
+        # that populate owner_student_id/owner_confirmed_at -- an admin
+        # role-flip was never meant to reach this. Flipping a student *to*
+        # patient leaves those columns NULL (a permanent 403 dead-end via
+        # require_confirmed_patient) and orphans any patients/appointments
+        # that referenced them in their old role; flipping a patient *away*
+        # would silently strand the columns the other way.
+        if payload.role == RoleEnum.patient or user.role == RoleEnum.patient:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot change a user's role into or out of patient via this endpoint",
+            )
         user.role = payload.role
 
     record_audit_log(

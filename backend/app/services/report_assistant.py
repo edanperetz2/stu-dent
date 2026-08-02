@@ -22,6 +22,16 @@ _ASSISTANT_UNAVAILABLE_MESSAGE = (
     "couldn't be reached). Try again in a moment."
 )
 
+_ASSISTANT_MALFORMED_RESPONSE_MESSAGE = (
+    "The report assistant responded, but not in a format this app "
+    "understands. Try rephrasing your question, or try again in a moment."
+)
+
+_UNRESOLVED_DATE_RANGE_MESSAGE_TEMPLATE = (
+    'Couldn\'t understand the date range "{phrase}" -- try a phrase like '
+    '"this week", "last week", "this month", or "last month" instead.'
+)
+
 _NARRATE_PROMPT_TEMPLATE = (
     "Write a short, plain-English summary (3-5 sentences) of this "
     "dental-clinic data for a {audience}, as JSON with exactly one key "
@@ -209,11 +219,16 @@ def generate_periodic_report(
 def answer_ad_hoc_question(db: Session, recipient: User, question: str) -> Report:
     """Classify `question` into a small fixed set of supported types and
     extract a date-range phrase -- the model never sees the database or
-    writes a query. Three distinct non-answer outcomes are surfaced
-    separately rather than collapsed into one generic message: the
-    classify call itself failing entirely (assistant unreachable) vs. it
-    succeeding but naming a genuinely unsupported question type vs. the
-    narration step itself falling back once a supported type was found.
+    writes a query. Several distinct non-answer outcomes are surfaced
+    separately rather than collapsed into one generic message: the classify
+    call itself failing entirely (assistant unreachable) vs. it responding
+    with something that doesn't match the expected shape at all (malformed
+    -- same user-facing message as unreachable, since either way there's no
+    usable classification, but logged/tested as its own branch since it's a
+    different failure mode) vs. it succeeding but naming a genuinely
+    unsupported question type vs. a real supported type whose date-range
+    phrase wasn't recognized vs. the narration step itself falling back
+    once a supported type and date range were both found.
     """
     raw = ollama_client.generate_json(_CLASSIFY_PROMPT_TEMPLATE.format(question=question))
     try:
@@ -223,13 +238,30 @@ def answer_ad_hoc_question(db: Session, recipient: User, question: str) -> Repor
 
     now = datetime.now(UTC)
     date_phrase = parsed.date_range_phrase if parsed is not None else None
-    period_start, period_end = resolve_date_range(date_phrase, now=now) or (
-        now - timedelta(days=30),
-        now,
-    )
+    resolved_range = resolve_date_range(date_phrase, now=now)
+    period_start, period_end = resolved_range or (now - timedelta(days=30), now)
 
-    if parsed is None:
+    if raw is None:
         content, content_source = _ASSISTANT_UNAVAILABLE_MESSAGE, ReportContentSource.unavailable
+    elif parsed is None:
+        # The model responded (raw is not None), just not with something
+        # `_ClassifyResponse` can validate -- distinct from "unreachable"
+        # even though the message shown is the same today.
+        content, content_source = (
+            _ASSISTANT_MALFORMED_RESPONSE_MESSAGE,
+            ReportContentSource.unavailable,
+        )
+    elif date_phrase and resolved_range is None:
+        # A real, non-empty phrase was extracted but resolve_date_range()
+        # doesn't recognize it -- previously this silently fell back to
+        # the same generic 30-day window as "no phrase given at all", so a
+        # user asking about e.g. "yesterday" could get 30 days of data
+        # narrated back with no indication the range they asked about
+        # wasn't actually the one answered.
+        content, content_source = (
+            _UNRESOLVED_DATE_RANGE_MESSAGE_TEMPLATE.format(phrase=date_phrase),
+            ReportContentSource.unresolved_date_range,
+        )
     elif parsed.question_type == "resource_utilization":
         data = resource_utilization(db, start=period_start, end=period_end)
         content, content_source = _narrate(

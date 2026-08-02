@@ -101,7 +101,7 @@ export function PatientDetailPanel({ patient }: PatientDetailPanelProps) {
         <ConfirmButton
           label="Delete"
           message="This will deactivate the patient record. This can't be undone from here."
-          onConfirm={() => deleteMutation.mutate()}
+          onConfirm={() => deleteMutation.mutateAsync()}
           loading={deleteMutation.isPending}
         />
       </Group>

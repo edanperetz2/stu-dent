@@ -264,7 +264,7 @@ export const ForumPostCard = memo(function ForumPostCard({
                 <ConfirmButton
                   label="Delete"
                   message="This will delete the post. This can't be undone."
-                  onConfirm={() => deletePostMutation.mutate()}
+                  onConfirm={() => deletePostMutation.mutateAsync()}
                   loading={deletePostMutation.isPending}
                 />
               </Group>
@@ -298,7 +298,7 @@ export const ForumPostCard = memo(function ForumPostCard({
                       label="Delete"
                       variant="subtle"
                       message="This will delete the comment. This can't be undone."
-                      onConfirm={() => deleteCommentMutation.mutate(comment.id)}
+                      onConfirm={() => deleteCommentMutation.mutateAsync(comment.id)}
                       loading={deleteCommentMutation.isPending}
                     />
                   )}

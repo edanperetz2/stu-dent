@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -11,7 +12,7 @@ from app.models.waitlist_entry import WaitlistEntry, WaitlistStatus
 from app.services.audit import record_audit_log
 from app.services.formatting import format_dt
 from app.services.notifications import notify
-from app.services.scheduling import find_conflicts, recompute_status
+from app.services.scheduling import find_conflicts, recompute_status, validate_participants
 
 
 def recheck_waitlist_after_cancellation(db: Session, appointment: Appointment) -> None:
@@ -123,6 +124,28 @@ def recheck_waitlist_for_freed_slot(
             held_types.add("equipment")
 
         if not held_types:
+            continue
+
+        # An entry's target student/patient/attending/room/equipment can
+        # have been deactivated any time after it was created (unlike
+        # find_conflicts below, nothing else re-checks this before now) --
+        # create/update/accept_appointment all validate this before
+        # booking; auto-promotion previously didn't, so it could silently
+        # book a since-deactivated resource. A validation failure here
+        # means this one candidate can't be promoted, not that the
+        # caller's own unrelated action (e.g. cancelling a different
+        # appointment) should fail -- skip to the next candidate instead
+        # of letting the HTTPException propagate.
+        try:
+            validate_participants(
+                db,
+                student_id=entry.student_id,
+                patient_id=entry.patient_id,
+                attending_id=entry.attending_id,
+                room_id=entry.room_id,
+                equipment_id=entry.equipment_id,
+            )
+        except HTTPException:
             continue
 
         remaining = find_conflicts(

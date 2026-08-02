@@ -43,7 +43,7 @@ class ConnectionManager:
         for socket in sockets:
             try:
                 await socket.send_json(payload)
-            except Exception:
+            except Exception:  # noqa: S110
                 # Best-effort push: a dead socket is cleaned up separately by
                 # its own receive-loop's disconnect handler, not here.
                 pass

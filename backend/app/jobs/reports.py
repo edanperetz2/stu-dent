@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.report import Report, ReportPeriodType
 from app.models.user import RoleEnum, User
+from app.services.formatting import DISPLAY_TIMEZONE
 from app.services.report_assistant import generate_periodic_report
 from app.services.report_data import resource_utilization
 from app.services.users import active_user_filters
@@ -14,7 +15,17 @@ logger = logging.getLogger(__name__)
 
 
 def _period_bounds(period_type: ReportPeriodType, *, now: datetime) -> tuple[datetime, datetime]:
-    today_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
+    # Anchored to the Israel-local calendar day, not raw UTC -- same
+    # reasoning as nl_dates.py's resolve_relative_date/resolve_date_range:
+    # a UTC calendar day is offset from Israel's own by 2-3 hours
+    # (DST-dependent), so a raw-UTC boundary could recognize a new
+    # week/month as started that many hours late or early relative to what
+    # "this week"/"this month" actually means locally. The returned
+    # datetimes are still precise, directly comparable/storable instants
+    # (DISPLAY_TIMEZONE-aware, not naive) -- only which calendar day they
+    # land on changes.
+    local_now = now.astimezone(DISPLAY_TIMEZONE)
+    today_start = datetime(local_now.year, local_now.month, local_now.day, tzinfo=DISPLAY_TIMEZONE)
     if period_type == ReportPeriodType.weekly:
         # Monday-aligned week, so every user's weekly report for a given
         # calendar week shares the same period_start -- that's what the

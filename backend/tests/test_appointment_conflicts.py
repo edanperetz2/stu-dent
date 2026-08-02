@@ -337,6 +337,56 @@ def test_accept_with_conflicting_room_rejected(client):
     assert [c["resource_type"] for c in conflicts] == ["room"]
 
 
+def test_accept_with_conflicting_pre_assigned_room_still_returns_structured_conflicts(client):
+    """Room already assigned via a separate PATCH (not the accept payload
+    itself) before a *different* booking takes that same room/time -- the
+    accept call below supplies no room_id at all, so room_changed is False.
+    Before this was fixed, that path skipped find_conflicts entirely and
+    fell back to flush_or_409's generic, conflicts-less 409.
+    """
+    occupier_token = register_and_login(client, "conf-s10-occ@example.com", role="student")
+    admin_token = register_and_login(client, "conf-admin10@example.com", role="admin")
+    room_id = create_room(client, admin_token, "Pre-assigned Accept Conflict Room")
+    occupier_patient_id = create_patient(client, occupier_token)
+
+    student_token = register_and_login(client, "conf-s10@example.com", role="student")
+    _, patient_token = create_and_login_patient(client, student_token, "conf-p10@example.com")
+    proposed = client.post(
+        "/appointments",
+        json={"start_time": START, "end_time": END},
+        headers=auth_header(patient_token),
+    ).json()
+    assert proposed["status"] == "proposed"
+
+    # The owning student pre-assigns the room while it's still free.
+    assign = client.patch(
+        f"/appointments/{proposed['id']}",
+        json={"room_id": room_id, "start_time": START, "end_time": END},
+        headers=auth_header(student_token),
+    )
+    assert assign.status_code == 200
+
+    # A different party takes the same room/time after the pre-assignment.
+    occupied = _book(
+        client,
+        occupier_token,
+        patient_id=occupier_patient_id,
+        room_id=room_id,
+        start_time=START,
+        end_time=END,
+    )
+    assert occupied.status_code == 201
+
+    # Accept without resupplying room_id -- room_changed is False.
+    response = client.post(
+        f"/appointments/{proposed['id']}/accept",
+        headers=auth_header(student_token),
+    )
+    assert response.status_code == 409
+    conflicts = response.json()["conflicts"]
+    assert [c["resource_type"] for c in conflicts] == ["room"]
+
+
 def test_concurrent_overlapping_bookings_only_one_commits():
     """Real DB-level concurrency guarantee, bypassing the client/db_session fixture.
 

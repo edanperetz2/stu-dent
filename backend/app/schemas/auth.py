@@ -40,7 +40,7 @@ class LoginIn(BaseModel):
 
 class TokenOut(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 -- the OAuth2 token-type string, not a password
 
 
 class PasswordResetRequestIn(BaseModel):

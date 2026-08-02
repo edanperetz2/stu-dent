@@ -61,6 +61,15 @@ function invalidateCoreQueries(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: ['waitlist'] })
   queryClient.invalidateQueries({ queryKey: ['resources'] })
   queryClient.invalidateQueries({ queryKey: ['notifications'] })
+  // A `message` event pushed while this client's socket was down (network
+  // blip, backgrounded tab, api container restart) is otherwise lost for
+  // good -- the realtime pipeline is fire-and-forget with no replay queue
+  // for an offline client, so unlike the keys above it was never repaired
+  // on reconnect until now. Prefix match (['messages'], not a specific
+  // sub-key) invalidates contacts/groups/thread-summaries/unread-count/the
+  // open thread all at once, same as the full-reset invalidation an
+  // ordinary send already does.
+  queryClient.invalidateQueries({ queryKey: ['messages'] })
 }
 
 /**

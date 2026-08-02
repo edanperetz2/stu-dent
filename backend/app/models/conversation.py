@@ -60,8 +60,23 @@ class ConversationParticipant(Base):
     # Everything in the conversation up to this timestamp is "read" by this
     # participant -- a per-participant high-water mark rather than a
     # per-message boolean, since a group conversation can have more than one
-    # "other party" to read a message.
+    # "other party" to read a message. Exposed to the frontend as a display
+    # timestamp (ReadReceiptOut) -- last_read_sequence below, not this, is
+    # what unread comparisons actually use.
     last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The same high-water mark, but as a Message.sequence value instead of a
+    # wall-clock time -- set alongside last_read_at, to the highest sequence
+    # in the conversation at read time. Message.created_at (Postgres
+    # transaction-start clock, via func.now()) and this column's sibling
+    # last_read_at (this API server's Python clock, via datetime.now(UTC))
+    # are two different clock sources; comparing them directly is exactly
+    # the tie/misorder class `sequence` columns exist to avoid elsewhere in
+    # this codebase (Message.sequence, Notification.sequence,
+    # WaitlistEntry.sequence). Under clock skew or ordinary round-trip
+    # timing, a just-sent message's created_at could land earlier than a
+    # concurrent touch_read's last_read_at, silently counting it as already
+    # read with no self-correction.
+    last_read_sequence: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

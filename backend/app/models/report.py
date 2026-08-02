@@ -20,6 +20,15 @@ class ReportContentSource(enum.StrEnum):
     fallback_summary = "fallback_summary"
     unsupported = "unsupported"
     unavailable = "unavailable"
+    # A real, supported question type was classified, but the date-range
+    # phrase the model extracted (e.g. "yesterday") isn't one of the
+    # handful resolve_date_range() recognizes -- distinct from `unavailable`
+    # (nothing wrong with Ollama) and `unsupported` (the question itself
+    # was a real, answerable type). Without this, the ad-hoc path used to
+    # silently fall back to a generic 30-day window with no way for the
+    # viewer to tell the answered range wasn't the one they actually asked
+    # about.
+    unresolved_date_range = "unresolved_date_range"
 
 
 class Report(TimestampMixin, Base):

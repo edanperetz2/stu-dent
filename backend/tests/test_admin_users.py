@@ -75,6 +75,55 @@ def test_admin_cannot_change_own_role(client):
     assert still_admin.json()["role"] == "admin"
 
 
+def test_admin_cannot_role_flip_a_user_into_patient(client):
+    admin_token = register_and_login(client, "admusr-admin8@example.com", role="admin")
+    register(client, "admusr-target8@example.com", role="student")
+    user_id = _get_user_id(client, admin_token, "admusr-target8@example.com")
+
+    response = client.patch(
+        f"/admin/users/{user_id}", json={"role": "patient"}, headers=auth_header(admin_token)
+    )
+    assert response.status_code == 422
+
+    still_student = client.get(f"/admin/users/{user_id}", headers=auth_header(admin_token))
+    assert still_student.json()["role"] == "student"
+
+
+def test_admin_cannot_role_flip_a_patient_away_from_patient(client):
+    admin_token = register_and_login(client, "admusr-admin9@example.com", role="admin")
+    student_token = register_and_login(client, "admusr-student9@example.com", role="student")
+    student_id = _get_user_id(client, admin_token, "admusr-student9@example.com")
+    client.post(
+        "/patients",
+        json={
+            "full_name": "Target Patient",
+            "email": "admusr-patient9@example.com",
+            "password": "password123",
+        },
+        headers=auth_header(student_token),
+    )
+    patient_id = _get_user_id(client, admin_token, "admusr-patient9@example.com")
+
+    response = client.patch(
+        f"/admin/users/{patient_id}", json={"role": "student"}, headers=auth_header(admin_token)
+    )
+    assert response.status_code == 422
+
+    still_patient = client.get(f"/admin/users/{patient_id}", headers=auth_header(admin_token))
+    assert still_patient.json()["role"] == "patient"
+    # is_active-only updates on the same user must still work -- only the
+    # role field is blocked, not the whole route for this user.
+    assert (
+        client.patch(
+            f"/admin/users/{patient_id}",
+            json={"is_active": False},
+            headers=auth_header(admin_token),
+        ).status_code
+        == 200
+    )
+    assert student_id != patient_id
+
+
 def test_admin_cannot_deactivate_own_account_via_patch(client):
     admin_token = register_and_login(client, "admusr-admin7@example.com", role="admin")
     admin_id = _get_user_id(client, admin_token, "admusr-admin7@example.com")

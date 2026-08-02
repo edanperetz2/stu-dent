@@ -26,6 +26,7 @@ const CONTENT_SOURCE: Record<ReportContentSource, { label: string; color: string
   fallback_summary: { label: 'Data summary', color: 'gray' },
   unsupported: { label: 'Unsupported question', color: 'yellow' },
   unavailable: { label: 'Assistant unavailable', color: 'red' },
+  unresolved_date_range: { label: 'Date range not understood', color: 'yellow' },
 }
 
 export function ReportsPage() {
@@ -138,6 +139,14 @@ export function ReportsPage() {
                   </Text>
                 </Group>
                 <Text fw={600}>{report.title}</Text>
+                {/* Visible even when content_source is a non-answer (e.g.
+                    unresolved_date_range) -- lets a viewer see exactly what
+                    range would have been used, not just take the narrated
+                    content on faith. */}
+                <Text size="xs" c="dimmed">
+                  Period: {formatDateTime(report.period_start)} &ndash;{' '}
+                  {formatDateTime(report.period_end)}
+                </Text>
                 <Text size="sm">{report.content}</Text>
               </Stack>
             </Paper>

@@ -37,13 +37,23 @@ export function useListQuery<TQueryFnData>({
   enabled,
   isEmpty = (data) => Array.isArray(data) && data.length === 0,
 }: UseListQueryOptions<TQueryFnData>): ListQueryResult<TQueryFnData> {
-  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey, queryFn, enabled })
+  const { data, isError, error, refetch } = useQuery({ queryKey, queryFn, enabled })
   const retry = () => {
     void refetch()
   }
 
+  // `data` checked before `isError`: TanStack Query keeps the last
+  // successful result in place across a *background* refetch failure
+  // (isError flips true, data stays populated) -- only a query that has
+  // never once succeeded has `data === undefined`. Checking isError first
+  // used to throw away already-loaded, still-valid rows and show the full
+  // error/"Try again" screen on any transient refetch failure (a tab
+  // switch, a brief network blip, a backend restart), not just a genuine
+  // first-load failure.
+  if (data !== undefined) {
+    if (isEmpty(data)) return { status: 'empty' }
+    return { status: 'ready', data }
+  }
   if (isError) return { status: 'error', message: apiErrorMessage(error, errorFallback), retry }
-  if (isLoading) return { status: 'loading' }
-  if (data !== undefined && isEmpty(data)) return { status: 'empty' }
-  return { status: 'ready', data: data as TQueryFnData }
+  return { status: 'loading' }
 }

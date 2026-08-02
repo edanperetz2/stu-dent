@@ -5,6 +5,13 @@ services:
     env_file: .env
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Not bound to 127.0.0.1 (unlike ollama below) -- tried it, but a
+    # 127.0.0.1:5432 binding failed outright on at least one real dev
+    # machine in this project because of a pre-existing native Postgres
+    # service already on port 5432; the plain 0.0.0.0 form below
+    # coexisted with it without issue. Traded the LAN-exposure hardening
+    # for not risking every contributor's/the lecturer's own machine
+    # hitting the same conflict on first run.
     ports:
       - "5432:5432"
     healthcheck:
@@ -53,12 +60,15 @@ services:
     command: python -m app.worker
 
   ollama:
-    image: ollama/ollama
+    image: ollama/ollama@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a
     restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
+    # Bound to localhost only -- same reasoning as db's port above. Ollama
+    # has no authentication of its own, so an unbound port would let
+    # anyone reachable on the LAN use (or resource-exhaust) the local LLM.
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
 
   frontend:
     build: ./frontend
@@ -77,7 +87,7 @@ services:
       start_period: 10s
 
   mailhog:
-    image: mailhog/mailhog
+    image: mailhog/mailhog@sha256:8d76a3d4ffa32a3661311944007a415332c4bb855657f4f6c57996405c009bea
     restart: unless-stopped
     ports:
       - "1025:1025"

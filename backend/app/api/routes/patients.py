@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_role
@@ -54,8 +55,17 @@ def create_patient(
         owner_confirmed_at=datetime.now(UTC),
         contact_phone=payload.contact_phone,
     )
-    db.add(patient)
-    db.flush()
+    # A SAVEPOINT, not a bare insert -- same duplicate-email race as
+    # auth.py::register: two simultaneous creates for the same email can
+    # both pass the `existing is None` check above before either commits.
+    try:
+        with db.begin_nested():
+            db.add(patient)
+            db.flush()
+    except IntegrityError as err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+        ) from err
 
     record_audit_log(
         db,

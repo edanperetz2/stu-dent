@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_role
@@ -402,7 +403,28 @@ def vote_on_post(
         )
     )
     if vote is None:
-        db.add(ForumPostVote(post_id=post_id, student_id=current_user.id, value=payload.value))
+        # A SAVEPOINT, not a bare insert: two concurrent requests from the
+        # same student (a real double-click, or two open tabs) can both
+        # reach here having seen no existing row -- the UniqueConstraint on
+        # (post_id, student_id) would otherwise surface as a bare 500
+        # instead of the second request just updating the winner's row,
+        # same shape as services/messaging.py::get_or_create_conversation.
+        try:
+            with db.begin_nested():
+                vote = ForumPostVote(
+                    post_id=post_id, student_id=current_user.id, value=payload.value
+                )
+                db.add(vote)
+                db.flush()
+        except IntegrityError:
+            vote = db.scalar(
+                select(ForumPostVote).where(
+                    ForumPostVote.post_id == post_id, ForumPostVote.student_id == current_user.id
+                )
+            )
+            if vote is None:
+                raise
+            vote.value = payload.value
     else:
         vote.value = payload.value
 
@@ -466,9 +488,24 @@ def vote_on_comment(
         )
     )
     if vote is None:
-        db.add(
-            ForumCommentVote(comment_id=comment_id, student_id=current_user.id, value=payload.value)
-        )
+        # Same concurrent-duplicate-insert race as vote_on_post above.
+        try:
+            with db.begin_nested():
+                vote = ForumCommentVote(
+                    comment_id=comment_id, student_id=current_user.id, value=payload.value
+                )
+                db.add(vote)
+                db.flush()
+        except IntegrityError:
+            vote = db.scalar(
+                select(ForumCommentVote).where(
+                    ForumCommentVote.comment_id == comment_id,
+                    ForumCommentVote.student_id == current_user.id,
+                )
+            )
+            if vote is None:
+                raise
+            vote.value = payload.value
     else:
         vote.value = payload.value
 

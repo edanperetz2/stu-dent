@@ -163,9 +163,18 @@ def touch_read(
     """Mark `user_id` caught up on `conversation` as of now. Idempotent,
     and creates the participant row if this is their first-ever visit
     (e.g. an admin opening a user's support thread for the first time).
+
+    Sets both high-water marks: last_read_at (the Python-clock timestamp
+    shown to the frontend as a display value) and last_read_sequence (the
+    highest real Message.sequence in the conversation right now, which is
+    what unread_message_count/list_thread_summaries actually compare
+    against -- see the column's own comment for why).
     """
     participant = _get_or_create_participant(db, conversation.id, user_id)
     participant.last_read_at = datetime.now(UTC)
+    participant.last_read_sequence = db.scalar(
+        select(func.max(Message.sequence)).where(Message.conversation_id == conversation.id)
+    )
     db.flush()
     return participant
 
@@ -179,6 +188,7 @@ def touch_unread(
     """
     participant = _get_or_create_participant(db, conversation.id, user_id)
     participant.last_read_at = None
+    participant.last_read_sequence = None
     db.flush()
     return participant
 
@@ -207,8 +217,8 @@ def unread_message_count(db: Session, user_id: uuid.UUID) -> int:
             ConversationParticipant.user_id == user_id,
             Message.sender_id != user_id,
             or_(
-                ConversationParticipant.last_read_at.is_(None),
-                Message.created_at > ConversationParticipant.last_read_at,
+                ConversationParticipant.last_read_sequence.is_(None),
+                Message.sequence > ConversationParticipant.last_read_sequence,
             ),
         )
     )
@@ -286,8 +296,8 @@ def list_thread_summaries(db: Session, current_user: User) -> list[dict]:
                 ConversationParticipant.user_id == current_user.id,
                 Message.sender_id != current_user.id,
                 or_(
-                    ConversationParticipant.last_read_at.is_(None),
-                    Message.created_at > ConversationParticipant.last_read_at,
+                    ConversationParticipant.last_read_sequence.is_(None),
+                    Message.sequence > ConversationParticipant.last_read_sequence,
                 ),
             )
             .distinct()

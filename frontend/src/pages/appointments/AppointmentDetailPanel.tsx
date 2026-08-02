@@ -230,6 +230,7 @@ export function AppointmentDetailPanel({
       invalidateAppointments()
       notifications.show({ message: 'Appointment updated', color: 'green' })
       closeEdit()
+      onActionSuccess?.()
     },
     onError: (err, payload) => {
       // The edit form always submits every field (pre-filled from the
@@ -364,7 +365,7 @@ export function AppointmentDetailPanel({
                 label={action.label}
                 message={confirmMessage}
                 color={action.color}
-                onConfirm={() => actionMutation.mutate(action.name)}
+                onConfirm={() => actionMutation.mutateAsync(action.name)}
                 loading={actionMutation.isPending}
               />
             )

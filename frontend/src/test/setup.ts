@@ -38,3 +38,17 @@ vi.stubGlobal('ResizeObserver', ResizeObserverMock)
 // jsdom doesn't implement scrollIntoView; Mantine's Combobox (used by
 // Select) calls it when keyboard/pointer selection moves the active option.
 window.HTMLElement.prototype.scrollIntoView = vi.fn()
+
+// jsdom doesn't implement the FontFaceSet API (document.fonts is
+// `undefined`); Mantine's autosize Textarea calls
+// document.fonts.addEventListener('loadingdone', ...) to re-measure once
+// web fonts finish loading, which crashes with "Cannot read properties of
+// undefined (reading 'addEventListener')" for any test that mounts an
+// autosize Textarea outside a closed modal/collapsed panel.
+Object.defineProperty(document, 'fonts', {
+  writable: true,
+  value: {
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  },
+})
