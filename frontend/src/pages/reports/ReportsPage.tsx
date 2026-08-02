@@ -26,6 +26,7 @@ const CONTENT_SOURCE: Record<ReportContentSource, { label: string; color: string
   fallback_summary: { label: 'Data summary', color: 'gray' },
   unsupported: { label: 'Unsupported question', color: 'yellow' },
   unavailable: { label: 'Assistant unavailable', color: 'red' },
+  malformed_response: { label: 'Assistant response unusable', color: 'red' },
   unresolved_date_range: { label: 'Date range not understood', color: 'yellow' },
 }
 

@@ -220,15 +220,15 @@ def answer_ad_hoc_question(db: Session, recipient: User, question: str) -> Repor
     """Classify `question` into a small fixed set of supported types and
     extract a date-range phrase -- the model never sees the database or
     writes a query. Several distinct non-answer outcomes are surfaced
-    separately rather than collapsed into one generic message: the classify
-    call itself failing entirely (assistant unreachable) vs. it responding
-    with something that doesn't match the expected shape at all (malformed
-    -- same user-facing message as unreachable, since either way there's no
-    usable classification, but logged/tested as its own branch since it's a
-    different failure mode) vs. it succeeding but naming a genuinely
-    unsupported question type vs. a real supported type whose date-range
-    phrase wasn't recognized vs. the narration step itself falling back
-    once a supported type and date range were both found.
+    separately, each with its own message and content_source, rather than
+    collapsed into one generic one: the classify call itself failing
+    entirely (assistant unreachable) vs. it responding with something that
+    doesn't match the expected shape at all (malformed -- a different
+    failure mode from unreachable, since the model did respond, just not
+    usably) vs. it succeeding but naming a genuinely unsupported question
+    type vs. a real supported type whose date-range phrase wasn't
+    recognized vs. the narration step itself falling back once a supported
+    type and date range were both found.
     """
     raw = ollama_client.generate_json(_CLASSIFY_PROMPT_TEMPLATE.format(question=question))
     try:
@@ -245,11 +245,11 @@ def answer_ad_hoc_question(db: Session, recipient: User, question: str) -> Repor
         content, content_source = _ASSISTANT_UNAVAILABLE_MESSAGE, ReportContentSource.unavailable
     elif parsed is None:
         # The model responded (raw is not None), just not with something
-        # `_ClassifyResponse` can validate -- distinct from "unreachable"
-        # even though the message shown is the same today.
+        # `_ClassifyResponse` can validate -- a distinct content_source
+        # from "unreachable", not just a distinct message.
         content, content_source = (
             _ASSISTANT_MALFORMED_RESPONSE_MESSAGE,
-            ReportContentSource.unavailable,
+            ReportContentSource.malformed_response,
         )
     elif date_phrase and resolved_range is None:
         # A real, non-empty phrase was extracted but resolve_date_range()

@@ -39,6 +39,7 @@ export type ReportContentSource =
   | 'fallback_summary'
   | 'unsupported'
   | 'unavailable'
+  | 'malformed_response'
   | 'unresolved_date_range'
 
 export interface User {

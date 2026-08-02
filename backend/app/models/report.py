@@ -20,6 +20,12 @@ class ReportContentSource(enum.StrEnum):
     fallback_summary = "fallback_summary"
     unsupported = "unsupported"
     unavailable = "unavailable"
+    # The classify call to Ollama actually succeeded -- unlike `unavailable`
+    # -- but returned something _ClassifyResponse couldn't validate.
+    # Distinct from `unavailable` so a viewer can tell "the model is down"
+    # from "the model responded with garbage", even though the two cases
+    # happen to read similarly in prose.
+    malformed_response = "malformed_response"
     # A real, supported question type was classified, but the date-range
     # phrase the model extracted (e.g. "yesterday") isn't one of the
     # handful resolve_date_range() recognizes -- distinct from `unavailable`

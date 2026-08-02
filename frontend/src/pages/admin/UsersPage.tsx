@@ -191,11 +191,18 @@ export function UsersPage() {
                         <ConfirmButton
                           label="Delete"
                           message={`This will soft-delete ${user.full_name}'s account. This can't be undone from here.`}
-                          onConfirm={() => {
+                          onConfirm={async () => {
+                            // Returning the mutation's own promise (not
+                            // fire-and-forget `.mutate`) lets ConfirmButton
+                            // actually await it before closing -- otherwise
+                            // the modal closes on the next microtask and the
+                            // spinner never has anything to reflect.
                             togglePending(setPendingDeleteIds, user.id, true)
-                            deleteMutation.mutate(user.id, {
-                              onSettled: () => togglePending(setPendingDeleteIds, user.id, false),
-                            })
+                            try {
+                              await deleteMutation.mutateAsync(user.id)
+                            } finally {
+                              togglePending(setPendingDeleteIds, user.id, false)
+                            }
                           }}
                           loading={pendingDeleteIds.has(user.id)}
                         />

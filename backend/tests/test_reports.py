@@ -122,7 +122,7 @@ def test_ask_question_malformed_classify_response_gets_a_distinct_message_from_u
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["content_source"] == "unavailable"
+    assert body["content_source"] == "malformed_response"
     assert "couldn't be reached" not in body["content"]
     assert "format this app" in body["content"]
 

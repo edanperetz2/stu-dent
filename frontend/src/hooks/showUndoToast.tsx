@@ -41,17 +41,24 @@ export function showUndoToast({
           size="compact-xs"
           variant="light"
           onClick={() => {
-            // Normalizes both a plain `void` onUndo and a real Promise into
-            // one chain -- a rejecting onUndo (a real caller today all
-            // happen to avoid this, but the primitive itself had no
-            // defensive catch) would otherwise be a silent unhandled
-            // rejection with no user-facing feedback at all.
-            Promise.resolve(onUndo()).catch((err: unknown) => {
-              notifications.show({
-                message: apiErrorMessage(err, 'Undo failed'),
-                color: 'red',
-              })
-            })
+            // `await`ed inside an async IIFE (not `Promise.resolve(onUndo())
+            // .catch(...)`) so a *synchronously* throwing onUndo is caught
+            // too -- a plain `.catch()` chain only ever sees a rejection
+            // reported through the Promise it wraps, not a throw that
+            // happens while evaluating `onUndo()` itself. Either way, a
+            // rejecting/throwing onUndo would otherwise be a silent
+            // unhandled rejection (or an uncaught exception) with no
+            // user-facing feedback at all.
+            void (async () => {
+              try {
+                await onUndo()
+              } catch (err) {
+                notifications.show({
+                  message: apiErrorMessage(err, 'Undo failed'),
+                  color: 'red',
+                })
+              }
+            })()
             notifications.hide(id)
           }}
         >
