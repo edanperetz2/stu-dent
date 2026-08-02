@@ -681,4 +681,8 @@ docker compose exec frontend npm run lint
   a precise edit-prompt describing exactly what to fix in the image
   (remove the deleted VM-deploy box/legend/arrow, add the new
   dependency-audit CI job, update the stale test counts) was handed to the
-  user to run through their generator themselves.
+  user to run through their generator themselves. The regenerated image
+  came back correct (verified against the same checklist) and was pushed
+  manually to GitHub, pulled, validated again, and swapped in as
+  `architecture.png` (renamed from the old `stu-dent-architecture.png`,
+  README embed updated to match).

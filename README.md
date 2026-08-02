@@ -1,6 +1,6 @@
 # Stu-Dent
 
-![Stu-Dent system architecture](stu-dent-architecture.png)
+![Stu-Dent system architecture](architecture.png)
 
 Dental student appointment management system. Coordinates real patients, dental
 students, attending (mentoring) dentists, rooms, and equipment — replacing the
