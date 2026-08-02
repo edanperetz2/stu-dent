@@ -1,5 +1,7 @@
 # Stu-Dent
 
+![Stu-Dent system architecture](stu-dent-architecture.png)
+
 Dental student appointment management system. Coordinates real patients, dental
 students, attending (mentoring) dentists, rooms, and equipment — replacing the
 WhatsApp/spreadsheet workflow currently used. See `docs/proposal.md` for the

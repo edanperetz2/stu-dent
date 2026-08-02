@@ -600,3 +600,85 @@ docker compose exec frontend npm run lint
   parallel, not addressed). Full regression green across both stacks:
   backend pytest (297/297, including the 2 new websocket tests), ruff,
   black; frontend tsc, oxlint, vitest (113/113), `vite build`.
+- **Comprehensive 0-100 audit + fix arc (cross-phase, this session)**:
+  **done**. At the user's explicit request for "the most coverage audit
+  you can — not excluding nothing, nothing out of scope," 10 parallel
+  subagents plus personal verification of every P1 claim scanned the
+  entire repo (backend, frontend, infra/CI/docs — zero exclusions) and
+  produced 15 P1s, ~30 P2s, and 1 confirmed structural bug. Fixed via a
+  16-batch, dependency-ordered plan (migration integrity first since
+  later batches' CI step depends on it; `useListQuery` isolated in its
+  own batch given its 8-page blast radius; docs/ruff-`S`/TS-`strict`/
+  coverage held for explicit scope decisions rather than assumed):
+  **(1)** named 7 unnamed `drop_constraint` calls and fixed an enum
+  `create_type=False` gap in `c29f7803b629`'s `downgrade()`, verified via
+  a real upgrade→downgrade→upgrade round-trip. **(2)** CI gained an
+  Alembic downgrade/upgrade round-trip step and a `dependency-audit` job
+  (pip-audit + npm audit, one documented CVE allowlist entry), 5
+  GitHub Actions SHA-pinned; `conftest.py` switched from
+  `Base.metadata.create_all()` to running real migrations. **(3)**
+  `update_appointment` now resolves the *old* attending's stale
+  notification on reassignment/clear; `accept_appointment` runs
+  `find_conflicts` unconditionally, not just when the room changed.
+  **(4)** waitlist auto-promotion now calls `validate_participants` before
+  promoting (can't book a since-deactivated resource); resource
+  deactivation now notifies pending-waitlist students, not just booked
+  ones. **(5)** `scheduling_interpreter.py` guards every raw Ollama field
+  against a non-string crash; an unresolved date-range phrase gets its
+  own honest message instead of a silent 30-day fallback;
+  `jobs/reports.py::_period_bounds` converts through `DISPLAY_TIMEZONE`
+  like `nl_dates.py` already did. **(6)** `useListQuery` reordered so a
+  failed background refetch no longer discards already-loaded valid data
+  — given its own dedicated regression test and full-suite verification
+  pass. **(7)** `showUndoToast`/`ConfirmButton` given defensive
+  catch/await fixes (later found incomplete, see below). **(8)** forum
+  votes and **(9)** register/patient-create duplicate-email races now use
+  the same `db.begin_nested()` + `IntegrityError` rescue pattern as
+  `get_or_create_conversation`; admin blocked from role-flipping a user
+  into/out of `patient`; a malformed JWT subject now 401s instead of
+  500ing. **(10)** `ollama`/`mailhog` images pinned by digest, `ollama`
+  bound to localhost, `/health` actually checks the DB. **(11)**
+  `docs/final_report.md`/`docs/proposal.md` corrected to stop describing
+  the already-deleted VM-deploy path in the present tense. **(12-13)**
+  ruff's `S` (flake8-bandit) ruleset and TypeScript `strict` both enabled
+  clean. **(14-16)** ~90 new tests closing every zero-coverage file the
+  audit found (pages, shared components, hooks/utils/API clients).
+  Two independent adversarial re-reviews followed, each spawning fresh
+  subagents told not to trust prior claims and to re-verify against the
+  live code: the **first** (of commit `a11025c`) found 4 real gaps —
+  `report_assistant.py` collapsing two genuinely different Ollama failure
+  messages into one `content_source` (fixed with a new
+  `malformed_response` enum value + migration `c8e31c7b13c1`); `deps.py`
+  missing `AttributeError` in its malformed-JWT-subject guard;
+  `showUndoToast` only catching a *rejecting* `onUndo`, not a
+  *synchronously throwing* one; `ConfirmButton`'s await-before-close fix
+  only working where the caller actually returned a promise (`UsersPage`'s
+  Delete button didn't — switched to `mutateAsync`). The **second** review
+  (of that follow-up commit `41473fa`) found 2 of those 4 fixes had zero
+  test coverage for their new branches — and writing the `deps.py` test
+  is what revealed that fix wasn't real: PyJWT's own `decode()` already
+  raises `InvalidSubjectError` (a `PyJWTError`, already caught) for any
+  non-string `sub` before `get_current_user` ever reaches
+  `uuid.UUID(user_id)`, so the `AttributeError` branch was dead code for
+  an already-impossible scenario — reverted per this file's own "don't
+  add handling for what can't happen" convention (`ca20db8`), while the
+  `showUndoToast` sync-throw test was confirmed real (temporarily
+  reverted the fix, watched the new test fail with an uncaught exception,
+  restored it). Final state: 323 backend tests, 241 frontend tests, all
+  green, CI green on every push. A follow-up pass over every non-backend/
+  non-frontend file (docs, YAML, `.gitignore`/`.gitattributes`, images)
+  found the rest already accurate and consistent (`.env.example` matches
+  `config.py` field-for-field; `docs/final_report.md`/
+  `docs/demo_video_script.md` are correctly, deliberately frozen
+  snapshots with no live-fact errors) except one: `stu-dent-architecture.png`
+  depicted the deleted VM-deploy path and stale test counts matching
+  neither current reality nor even `final_report.md`'s own frozen
+  snapshot, and was referenced nowhere. A Mermaid-diagram replacement was
+  drafted but not approved — the user wants to keep an actual PNG,
+  regenerated through their own image generator rather than authored by
+  Claude — so the original file was kept and given a real reference (a
+  README embed, fixing the "referenced nowhere" half of the finding) while
+  a precise edit-prompt describing exactly what to fix in the image
+  (remove the deleted VM-deploy box/legend/arrow, add the new
+  dependency-audit CI job, update the stale test counts) was handed to the
+  user to run through their generator themselves.
