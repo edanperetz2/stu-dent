@@ -1,3 +1,8 @@
+from datetime import UTC, datetime, timedelta
+
+import jwt
+
+from app.config import settings
 from app.core.security import create_access_token
 from tests.helpers import auth_header, register_and_login
 
@@ -60,5 +65,25 @@ def test_token_with_non_uuid_subject_rejected_cleanly_not_500(client):
     # Python doesn't enforce that at runtime -- passing a plain string
     # reproduces exactly the malformed-token shape being guarded against.
     token = create_access_token(subject="not-a-real-uuid", role="student")
+    response = client.get("/patients", headers=auth_header(token))
+    assert response.status_code == 401
+
+
+def test_token_with_non_string_subject_rejected_cleanly_not_500(client):
+    # A non-string `sub` (int/list/dict) in a hand-forged token (same
+    # compromised-secret premise as the test above) is rejected before it
+    # ever reaches get_current_user's own uuid.UUID(user_id) call: PyJWT's
+    # decode() enforces "sub must be a string" per RFC 7519 and raises
+    # InvalidSubjectError -- a PyJWTError, already caught by _decode() into
+    # the same clean 401. This guards that behavior directly, since it's a
+    # framework guarantee this app relies on rather than re-validates.
+    now = datetime.now(UTC)
+    payload = {
+        "sub": 12345,
+        "role": "student",
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.jwt_expire_minutes),
+    }
+    token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     response = client.get("/patients", headers=auth_header(token))
     assert response.status_code == 401

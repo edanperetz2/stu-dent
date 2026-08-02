@@ -64,4 +64,27 @@ describe('showUndoToast', () => {
       ),
     )
   })
+
+  it('shows an error notification instead of an uncaught exception when onUndo throws synchronously', async () => {
+    // Distinct from the rejection case above: a synchronously-throwing
+    // onUndo throws while `onUndo()` itself is being evaluated, before any
+    // Promise machinery is involved -- a `Promise.resolve(onUndo()).catch()`
+    // chain would never see this, only an `await onUndo()` inside a real
+    // try/catch does.
+    const user = userEvent.setup()
+    const onUndo = vi.fn(() => {
+      throw new Error('undo failed synchronously')
+    })
+    showUndoToast({ message: 'Entry cancelled.', onUndo })
+    renderLastShownMessage()
+
+    await user.click(screen.getByRole('button', { name: 'Undo' }))
+
+    expect(onUndo).toHaveBeenCalledTimes(1)
+    await waitFor(() =>
+      expect(notifications.show).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Undo failed', color: 'red' }),
+      ),
+    )
+  })
 })

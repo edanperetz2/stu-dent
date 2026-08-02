@@ -36,14 +36,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
     try:
         subject = uuid.UUID(user_id)
-    except (ValueError, TypeError, AttributeError) as err:
-        # A non-UUID `sub` (a forged/corrupted token) would otherwise raise
-        # an unhandled 500 instead of the same 401 every other
-        # malformed-credentials path here already returns. `uuid.UUID()`
-        # raises ValueError for a malformed string, TypeError for `None`,
-        # and AttributeError for a non-string JSON scalar (an int/list/dict
-        # `sub` -- it calls `.replace()` on its argument before any type
-        # check) -- all three need catching, not just the first two.
+    except (ValueError, TypeError) as err:
+        # A malformed-string `sub` (a forged/corrupted token) would
+        # otherwise raise an unhandled ValueError -- a 500 -- instead of
+        # the same 401 every other malformed-credentials path here already
+        # returns. A non-string `sub` (int/list/dict) can't reach this line
+        # at all: jwt.decode() itself already enforces "sub must be a
+        # string" (raises InvalidSubjectError, a PyJWTError, caught by
+        # _decode() above) before this function ever sees the payload --
+        # so an AttributeError guard here would be dead code for a
+        # scenario the framework already rules out.
         raise _credentials_exception from err
 
     user = db.get(User, subject)
