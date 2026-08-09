@@ -35,3 +35,7 @@ frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Scratch material from producing the course gallery submission zip
+# (poster PDF export source, etc.) -- kept locally, not part of the repo.
+/gallery/
