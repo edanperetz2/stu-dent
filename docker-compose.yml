@@ -104,12 +104,29 @@ services:
   # the demo sentinel account exists and prints every seeded login to its
   # own stdout, so `docker compose logs seed-init` (or the plain console
   # during `up`) is where to read the credentials.
+  #
+  # The ${SEED_DEMO_ON_START:-false} fallback deliberately does NOT match
+  # .env.example's shipped default of true -- if the key is ever missing
+  # from .env entirely (a stale .env predating this key, same class of gap
+  # ollama-init hit earlier), this fails closed to "don't seed" rather than
+  # silently seeding demo accounts into a possibly-real database.
+  #
+  # required: false on ollama-init lets seed-init wait for it when possible
+  # (so seed_demo.py's report-narration step has a real model to call,
+  # instead of racing ahead and getting the same-as-always graceful
+  # fallback) without making demo data depend on Ollama succeeding at all --
+  # matches ollama_client.py's own best-effort, never-block contract.
   seed-init:
     image: stu-dent-backend:local
     depends_on:
       api:
         condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+        required: false
     env_file: .env
+    volumes:
+      - ./backend:/app
     entrypoint: ["/bin/sh", "-c", "if [ \"$${SEED_DEMO_ON_START:-false}\" = \"true\" ]; then python -m app.seed_demo; else echo 'SEED_DEMO_ON_START is not true -- skipping demo seed'; fi"]
     restart: "no"
 

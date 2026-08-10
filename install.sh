@@ -12,8 +12,9 @@ fi
 docker compose up --build -d
 
 echo "Waiting for the API to become healthy..."
+api_container="$(docker compose ps -q api)"
 for _ in $(seq 1 60); do
-  status="$(docker inspect --format='{{.State.Health.Status}}' finalproject-api-1 2>/dev/null || echo starting)"
+  status="$(docker inspect --format='{{.State.Health.Status}}' "$api_container" 2>/dev/null || echo starting)"
   if [ "$status" = "healthy" ]; then
     break
   fi

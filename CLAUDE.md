@@ -776,3 +776,56 @@ docker compose exec frontend npm run lint
   true, confirmed a genuinely empty `users` table when false), then the
   flag was restored to `true` and demo data reseeded. Full regression green
   again after both changes: 323 backend tests, lint clean.
+  **Follow-up 2 (same session)**: the user asked whether the Maintenance
+  section's two manual processes (regenerating hash-locked dependencies,
+  re-pinning base image digests) could fold into `docker compose up
+  --build` — answered no (that would defeat the entire point of locking/
+  pinning: builds must NOT change silently) but added `./dev.sh update-deps`
+  and `./dev.sh update-digests` to collapse each from a copy-pasted
+  multi-line script + manual file edits into one command. `update-digests`
+  actually found and re-pinned two images that had genuinely moved
+  upstream since last pinned (`postgres:16`, `ollama/ollama`) —
+  `mailhog/mailhog` correctly resolved to the same digest, a real no-op.
+  Hit and fixed a genuine Windows/Git-Bash issue building `update-deps`:
+  MSYS auto-rewrites any argument that looks like a POSIX path before
+  `docker run` sees it, silently mangling `-w /work` into `-w "C:/Program
+  Files/Git/work"` — fixed with `MSYS_NO_PATHCONV=1`, verified by actually
+  running it and confirming the container-side mount landed correctly.
+  Full rebuild against the new digests re-verified: 323 backend tests, 241
+  frontend tests, tsc, lint, build all green.
+  **Follow-up 3 (same session)**: asked to self-review the whole day's
+  work end to end ("would you change something?"). Two real bugs found and
+  fixed, not just cosmetic: (1) `install.sh` waited on a hardcoded
+  container name (`finalproject-api-1`) that only works because this
+  particular checkout is named `FinalProject` — silently useless (spins
+  the full timeout, then proceeds anyway) for any of the teammates/
+  lecturer this file explicitly says need to run it fresh on their own
+  machines under whatever folder name they clone it as. Fixed with
+  `docker compose ps -q api`, which resolves the right container
+  regardless of project name. (2) A real race condition in the new
+  auto-seed feature: `seed-init` had no dependency on `ollama-init`, so on
+  a fresh machine it could seed (including `seed_demo.py`'s Ollama-narrated
+  demo report — the specific nice-to-have called out in Phase 7 above)
+  before the model finished pulling, silently losing the narration forever
+  since seeding is idempotent and never retries. Fixed with `depends_on:
+  ollama-init: condition: service_completed_successfully, required:
+  false` — waits for the common case, but `required: false` means a
+  genuinely broken Ollama pull still can't block demo data from seeding at
+  all, preserving `ollama_client.py`'s own established never-block
+  philosophy rather than trading one failure mode for a worse one. Verified
+  live via container start/finish timestamps (`ollama-init` finished
+  before `seed-init` started) and a real narrated report in the seed
+  output, not just by reading the dependency graph. Bundled two small
+  related fixes: `seed-init` gained the same `./backend:/app` bind mount
+  `api`/`worker` already have (previously it ran whatever `seed_demo.py`
+  was baked into the image at last `--build`, not live edits — a latent
+  trap for anyone actively developing that file), and a comment explaining
+  why the `${SEED_DEMO_ON_START:-false}` shell fallback deliberately
+  doesn't match `.env.example`'s shipped default of `true` (fail closed on
+  a stale/incomplete `.env`, the same class of gap that caused the
+  original ollama-fallback bug this whole arc started from). Considered
+  and deliberately rejected: making `api`/`worker` themselves block on
+  `ollama-init` too -- that's live user traffic, where the existing
+  degrade-and-explain-in-README behavior is correct by design, unlike the
+  one-shot seed path where a lost race is silent and permanent. Full
+  regression green: 323 backend tests, lint clean.
