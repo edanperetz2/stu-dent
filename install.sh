@@ -23,11 +23,11 @@ done
 echo "Waiting for the local AI model to finish pulling (one-time, cached after this)..."
 docker compose wait ollama-init >/dev/null 2>&1 || true
 
+echo "Waiting for demo data to finish seeding (skip by setting SEED_DEMO_ON_START=false in .env)..."
+docker compose wait seed-init >/dev/null 2>&1 || true
+
 echo
 echo "Stu-Dent is up:"
 echo "  Frontend:      http://localhost:5173"
 echo "  API docs:      http://localhost:8000/docs"
 echo "  MailHog:       http://localhost:8025"
-echo
-echo "Optional: seed demo data (idempotent, safe to re-run):"
-echo "  ./dev.sh seed"

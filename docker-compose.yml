@@ -97,6 +97,22 @@ services:
     entrypoint: ["/bin/sh", "-c", "until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$${OLLAMA_MODEL:-llama3.2}\""]
     restart: "no"
 
+  # One-shot: seeds idempotent demo data once the api is actually healthy
+  # (migrations have already run by then). Opt-out via SEED_DEMO_ON_START=
+  # false in .env, e.g. for a from-scratch course-submission run or real
+  # testing against a genuinely empty DB. seed_demo.py already no-ops if
+  # the demo sentinel account exists and prints every seeded login to its
+  # own stdout, so `docker compose logs seed-init` (or the plain console
+  # during `up`) is where to read the credentials.
+  seed-init:
+    image: stu-dent-backend:local
+    depends_on:
+      api:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: ["/bin/sh", "-c", "if [ \"$${SEED_DEMO_ON_START:-false}\" = \"true\" ]; then python -m app.seed_demo; else echo 'SEED_DEMO_ON_START is not true -- skipping demo seed'; fi"]
+    restart: "no"
+
   frontend:
     build: ./frontend
     restart: unless-stopped

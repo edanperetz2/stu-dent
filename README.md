@@ -9,6 +9,47 @@ full project proposal and `CLAUDE.md` for the phase roadmap and conventions.
 
 Localhost-first, fully Dockerized, zero paid services.
 
+## Contents
+
+- [Getting started](#getting-started)
+- [Features](#features)
+- [Stack](#stack)
+- [Everyday commands](#everyday-commands)
+- [Demo data](#demo-data)
+- [How key features work](#how-key-features-work)
+- [Maintenance](#maintenance)
+- [Known limitations](#known-limitations)
+
+## Getting started
+
+- Docker Desktop (with Docker Compose v2), running before any command below.
+- No local Python/Node installation is required — everything runs in containers.
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build
+```
+
+(Git Bash/Mac/Linux: `./install.sh` does the same thing, plus waits for
+everything to become healthy before printing the URLs below.)
+
+That one command is genuinely everything — it builds and starts all 6 services
+(`db`, `api`, `worker`, `frontend`, `mailhog`, `ollama`), runs database
+migrations, pulls the local Ollama model, and seeds demo data, all
+automatically. Nothing else needs to run separately for normal use (see
+[Everyday commands](#everyday-commands) below if you want to re-run any one
+of those by hand, and [How key features work](#how-key-features-work) for
+how the Ollama and email pieces actually behave).
+
+Then open:
+
+- Frontend: http://localhost:5173
+- API docs (Swagger): http://localhost:8000/docs
+- MailHog web UI: http://localhost:8025
+
+Stop the stack with `Ctrl+C`, then `docker compose down` (add `-v` to also drop
+the Postgres volume and start from a clean database).
+
 ## Features
 
 - **Auth & roles**: unified login/registration for student, attending, admin,
@@ -50,124 +91,36 @@ Localhost-first, fully Dockerized, zero paid services.
 - Frontend: React + Vite + TypeScript
 - Infra: Docker Compose (`api`, `db`, `frontend`, `mailhog`, `worker`, `ollama`)
 
-## Prerequisites
+## Everyday commands
 
-- Docker Desktop (with Docker Compose v2), running before any command below.
-- No local Python/Node installation is required — everything runs in containers.
+`./dev.sh` (Git Bash/Mac/Linux — no `make` dependency) wraps the full
+`docker compose` commands below into short subcommands. On plain PowerShell,
+use the Full command column directly.
 
-## First run (Windows / PowerShell)
+| Task | `dev.sh` | Full command |
+| --- | --- | --- |
+| Start the stack | `./dev.sh up` | `docker compose up --build -d` |
+| Stop the stack | `./dev.sh down` | `docker compose down` |
+| Tail logs | `./dev.sh logs [service]` | `docker compose logs -f [service]` |
+| Run backend tests | `./dev.sh test` | `docker compose exec api pytest -v` |
+| Lint everything | `./dev.sh lint` | `docker compose exec api ruff check .` then `black --check .`, then `docker compose exec frontend npm run lint` |
+| Create + apply a migration | `./dev.sh migrate "<message>"` | `docker compose exec api alembic revision --autogenerate -m "<message>"` then `docker compose exec api alembic upgrade head` |
+| Seed demo data | `./dev.sh seed` | `docker compose exec api python -m app.seed_demo` |
 
-```powershell
-Copy-Item .env.example .env
-docker compose up --build
-```
+Migrations already run automatically on every `api` container start, and
+demo data is already seeded automatically on first `up` (unless
+`SEED_DEMO_ON_START=false` in `.env`) — this table is only for re-running
+any of these by hand.
 
-(On Mac/Linux, or from Git Bash on Windows, `./install.sh` does the same
-thing plus waits for everything to become healthy before printing the URLs
-below.)
+## Demo data
 
-This one command brings up all 6 services (`db`, `api`, `worker`, `frontend`,
-`mailhog`, `ollama`) and handles everything else automatically too —
-**database migrations** run on `api` startup, the **Ollama model** is
-pulled by a one-shot `ollama-init` step, and **MailHog** (which is what
-powers email reminders and password-reset emails) is already running as
-one of the 6 services. Nothing below this section needs to be run
-separately for normal use — the "Local AI", "Password reset", and
-"Running database migrations" sections further down are reference docs for
-how those pieces work and how to override them manually, not extra setup
-steps. Then open:
-
-- API: http://localhost:8000/health
-- API docs (Swagger): http://localhost:8000/docs
-- Frontend: http://localhost:5173
-- MailHog web UI: http://localhost:8025
-
-Stop the stack with `Ctrl+C`, then `docker compose down` (add `-v` to also drop
-the Postgres volume and start from a clean database).
-
-## Day-to-day commands
-
-`./dev.sh` wraps the commands documented individually further down this file:
-
-```
-./dev.sh up              # docker compose up --build -d
-./dev.sh down             # docker compose down
-./dev.sh logs [service]   # docker compose logs -f [service]
-./dev.sh test             # run the backend pytest suite
-./dev.sh lint              # ruff check, black --check, npm run lint
-./dev.sh migrate "<msg>"  # alembic revision --autogenerate, then upgrade head
-./dev.sh seed              # seed idempotent demo data
-```
-
-(Git Bash/Mac/Linux only — no `make` dependency required. On plain
-PowerShell, use the full `docker compose ...` commands below instead.)
-
-## Local AI (Ollama)
-
-*Nothing to run here for normal use — this is already handled by `docker
-compose up` / `install.sh` above.*
-
-The scheduling-interpretation and report/Q&A assistant features call a
-local Ollama model. The model is pulled automatically the first time you
-bring the stack up (see above) — no manual step required. The command
-below is only for re-pulling by hand (e.g. to switch models):
-
-```powershell
-docker compose exec ollama ollama pull llama3.2
-```
-
-Both features degrade gracefully (a plain warning / raw-data fallback,
-never an error) if Ollama is unreachable or the model isn't pulled yet —
-if AI features seem to always fall back, check
-`docker compose logs ollama-init` to confirm the pull actually completed
-(e.g. it can still be in progress on a slow connection the very first time).
-
-## Password reset
-
-*Nothing to run here either — MailHog is already one of the 6 services
-started by `docker compose up` / `install.sh` above.*
-
-The login page's "Forgot password?" link sends a reset-link email through
-MailHog — open http://localhost:8025 after requesting one to read it and
-follow the link (no real email account or SMTP setup needed locally). The
-token expires after 30 minutes and is single-use; requesting a reset
-for an email that isn't registered still returns a generic success message
-(no account-enumeration signal) and simply sends nothing.
-
-## Running database migrations
-
-*Nothing to run here for normal use — migrations already run automatically
-every time the `api` container starts.*
-
-The commands below are only for the two manual cases: applying migrations
-without a full restart, or generating a new one after changing a
-SQLAlchemy model (`./dev.sh migrate "<message>"` does both of the below in
-one step):
-
-```powershell
-docker compose exec api alembic upgrade head
-docker compose exec api alembic revision --autogenerate -m "describe the change"
-```
-
-## Running tests
-
-```powershell
-docker compose exec api pytest -v
-```
-
-## Seeding demo data
-
-Populates the database with realistic sample data (students, attendings,
-patients across both onboarding paths, appointments in most states, forum
-posts, direct messages, reports, etc.) so a demo doesn't start from an
-empty app. Safe to re-run — idempotent, no-ops if already seeded.
-
-```powershell
-docker compose exec api python -m app.seed_demo
-```
-
-Prints every seeded account's login at the end. All accounts share one
-password: `DemoPass123!`.
+Already seeded automatically on first run (see [Getting
+started](#getting-started)) unless you set `SEED_DEMO_ON_START=false` in
+`.env`. Idempotent either way — re-running `./dev.sh seed` is always safe and
+no-ops if already seeded. Populates realistic sample data (students,
+attendings, patients across both onboarding paths, appointments in most
+states, forum posts, direct messages, reports, etc.) and prints every seeded
+account's login at the end. All accounts share one password: `DemoPass123!`.
 
 | Role | Email(s) | Notes |
 | --- | --- | --- |
@@ -177,15 +130,39 @@ password: `DemoPass123!`.
 | Patient | `patient1@stu-dent.demo` – `patient4@stu-dent.demo` | confirmed |
 | Patient | `patient5@stu-dent.demo` | pending — not yet confirmed by their owning student, to demonstrate that flow |
 
-## Linting
+## How key features work
 
-```powershell
-docker compose exec api ruff check .
-docker compose exec api black --check .
-docker compose exec frontend npm run lint
-```
+### Local AI (Ollama)
 
-## Updating backend dependencies
+The scheduling-interpretation and report/Q&A assistant features call a
+local Ollama model, pulled automatically on first run (see [Getting
+started](#getting-started)) — nothing to set up by hand. Both features
+degrade gracefully (a plain warning / raw-data fallback, never an error) if
+Ollama is unreachable or the model isn't pulled yet — if AI features seem to
+always fall back, check `docker compose logs ollama-init` to confirm the
+pull actually completed (it can still be in progress on a slow connection
+the very first time). To re-pull or switch to a different model by hand:
+`docker compose exec ollama ollama pull <model>`.
+
+### Password reset
+
+The login page's "Forgot password?" link sends a reset-link email through
+MailHog, already running as one of the 6 services — open
+http://localhost:8025 after requesting one to read it and follow the link
+(no real email account or SMTP setup needed locally). The token expires
+after 30 minutes and is single-use; requesting a reset for an email that
+isn't registered still returns a generic success message (no
+account-enumeration signal) and simply sends nothing.
+
+## Maintenance
+
+Both sections below exist for the same reason: reproducible, supply-chain-
+safe builds, so the exact same bytes get built and run everywhere and any
+upgrade is a deliberate, reviewable action rather than something that
+happens silently underneath you. Low-frequency — most day-to-day work never
+touches either.
+
+### Updating backend dependencies
 
 `backend/requirements.txt`/`requirements-dev.txt` are the source of truth for
 version ranges; `requirements.lock.txt`/`requirements-dev.lock.txt` are
@@ -203,7 +180,7 @@ docker run --rm -v "${PWD}/backend:/work" -w /work python:3.12-slim bash -c "
 
 Commit all four files together.
 
-## Base image digests
+### Base image digests
 
 `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`, and
 `.github/workflows/ci.yml` pin their base/service images

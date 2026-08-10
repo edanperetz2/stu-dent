@@ -83,8 +83,10 @@ docs/proposal.md            full requirements (source of truth)
 
 ## Commands (run from repo root; PowerShell-compatible)
 
-First run — brings up all 6 services and auto-pulls the Ollama model via a
-one-shot `ollama-init` container (no separate manual pull step):
+First run — brings up all 6 services, auto-pulls the Ollama model via a
+one-shot `ollama-init` container, and auto-seeds demo data via a one-shot
+`seed-init` container (set `SEED_DEMO_ON_START=false` in `.env` to skip);
+no separate manual steps:
 ```powershell
 Copy-Item .env.example .env
 docker compose up --build
@@ -92,7 +94,7 @@ docker compose up --build
 
 `./dev.sh` (Git Bash/Mac/Linux) wraps the commands below into short
 subcommands (`up`, `down`, `logs`, `test`, `lint`, `migrate`, `seed`) — see
-README.md's "Day-to-day commands" section. No `make` dependency; on plain
+README.md's "Everyday commands" section. No `make` dependency; on plain
 PowerShell use the full commands directly.
 
 Tests:
@@ -100,7 +102,8 @@ Tests:
 docker compose exec api pytest -v
 ```
 
-Seed demo data (idempotent, safe to re-run):
+Seed demo data by hand (idempotent, safe to re-run — already runs
+automatically on first `up`, see above):
 ```powershell
 docker compose exec api python -m app.seed_demo
 ```
@@ -742,3 +745,33 @@ docker compose exec frontend npm run lint
   black; 241 frontend tests, tsc, oxlint (3 pre-existing warnings, 0
   errors), `vite build` clean. README.md and this file's Commands section
   updated to describe the new one-command flow and the `dev.sh` shortcuts.
+  **Follow-up (same session)**: the user reported the resulting README
+  still read as confusing after two rounds of inline "nothing to run here"
+  disclaimers — the real problem was structural, not wording: 17 flat,
+  same-weight `##` headings with the same 4 commands
+  (test/lint/migrate/seed) documented twice (once as a `dev.sh` shortcut,
+  once again as its own full section further down), reading like separate
+  extra steps rather than the same thing explained twice. Fixed by an
+  actual restructure, not another patch: a hand-written Contents ToC:
+  Getting started → Features → Stack → Everyday commands (one table,
+  `dev.sh` shortcut + full command side by side, replacing 5 separate
+  command sections) → Demo data → How key features work (Local AI,
+  Password reset, grouped as H3s) → Maintenance (Updating dependencies,
+  Base image digests, grouped as H3s with one shared "why" sentence,
+  answering the user's own follow-up question about why digest-pinning and
+  dependency-locking exist — reproducible, supply-chain-safe builds) →
+  Known limitations. 245 lines/17 headings became 222 lines/8 top-level
+  sections with every command documented exactly once. Also added,
+  prompted by the user asking why demo seeding wasn't automatic like the
+  Ollama pull: a new one-shot `seed-init` Compose service (same pattern as
+  `ollama-init`, depends on `api`'s healthcheck so migrations have already
+  run) that seeds demo data automatically on first `up`, opt-out via a new
+  `SEED_DEMO_ON_START` env var (`.env.example` defaults it to `true` — the
+  user's explicit choice: opt-in flag, on by default, over always-on or
+  fully manual) — `seed_demo.py`'s own idempotency and login-printing
+  already made this safe to automate. Both the auto-seed-on and
+  auto-seed-off paths were live-verified against a real dropped-and-rebuilt
+  DB (confirmed `seed-init` seeds and logs credentials when the flag is
+  true, confirmed a genuinely empty `users` table when false), then the
+  flag was restored to `true` and demo data reseeded. Full regression green
+  again after both changes: 323 backend tests, lint clean.
