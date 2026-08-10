@@ -83,11 +83,17 @@ docs/proposal.md            full requirements (source of truth)
 
 ## Commands (run from repo root; PowerShell-compatible)
 
-First run:
+First run — brings up all 6 services and auto-pulls the Ollama model via a
+one-shot `ollama-init` container (no separate manual pull step):
 ```powershell
 Copy-Item .env.example .env
 docker compose up --build
 ```
+
+`./dev.sh` (Git Bash/Mac/Linux) wraps the commands below into short
+subcommands (`up`, `down`, `logs`, `test`, `lint`, `migrate`, `seed`) — see
+README.md's "Day-to-day commands" section. No `make` dependency; on plain
+PowerShell use the full commands directly.
 
 Tests:
 ```powershell
@@ -233,7 +239,9 @@ docker compose exec frontend npm run lint
   share `report_assistant.py`/`report_data.py`, reports frontend, full
   regression + live verification). Requires a one-time
   `docker compose exec ollama ollama pull <model>` after first `docker
-  compose up` — models aren't baked into the `ollama/ollama` image.
+  compose up` — models aren't baked into the `ollama/ollama` image. (This
+  manual step was later automated away by a dedicated `ollama-init` Compose
+  service — see the "Simplify the Docker build/dev workflow" entry below.)
 - **7 — CI/CD + seed data** (§6): done. **Full CI pipeline** —
   `.github/workflows/ci.yml` fixed a real pre-existing bug (the `push:`
   trigger targeted branch `main`, which never existed; the repo's only
@@ -686,3 +694,51 @@ docker compose exec frontend npm run lint
   manually to GitHub, pulled, validated again, and swapped in as
   `architecture.png` (renamed from the old `stu-dent-architecture.png`,
   README embed updated to match).
+- **Simplify the Docker build/dev workflow (cross-phase, this session)**:
+  **done**. Triggered by the user wanting fewer Docker commands to get
+  going and do day-to-day dev work, plus a report that a teammate who
+  cloned the repo the day before saw every AI feature silently stuck on
+  its fallback path despite "starting" Ollama. Two real fixes plus one
+  command-ergonomics addition, all live-verified against a real
+  `docker compose down` → rebuild cycle:
+  **(1)** `api` and `worker` (both `build: ./backend`) now share an
+  explicit `image: stu-dent-backend:local` tag instead of each getting an
+  auto-generated per-service tag — confirmed via `docker inspect` that both
+  containers run from the identical image ID after one build, not two.
+  **(2)** a new one-shot `ollama-init` Compose service (same pinned
+  `ollama/ollama` image, `restart: "no"`) waits for the real `ollama`
+  server to accept requests, then pulls `$OLLAMA_MODEL` automatically —
+  removing the manual `docker compose exec ollama ollama pull` step
+  `install.sh`/README used to call out. This is very likely the actual fix
+  for the teammate's bug: `ollama_client.py`'s best-effort contract means a
+  never-pulled model degrades every AI feature to its fallback silently,
+  forever, with no error — exactly "always fallback even though I started
+  it." Verified for real, not just by inspection: called
+  `ollama_client.generate_json` directly inside the running `api` container
+  after a clean rebuild and got back an actual parsed model response
+  (proof the live path fired, not the `None` fallback). Building this
+  surfaced a second, sharper bug first: the initial version read
+  `OLLAMA_MODEL` via plain `env_file: .env`, which crashed
+  (`ollama pull ""` → 400) against this machine's own local `.env` — stale
+  since before several `.env.example` additions (`OLLAMA_MODEL` among them;
+  `config.py`'s Pydantic defaults had been silently covering for the app
+  itself the whole time, but a raw shell script has no such fallback).
+  Fixed with `${OLLAMA_MODEL:-llama3.2}` shell-default parameter expansion,
+  mirroring `config.py`'s own default exactly; the stale local `.env` was
+  separately topped up (additive only — existing values left untouched) to
+  match current `.env.example`. **(3)** new `dev.sh` (bash, same precedent
+  as `install.sh`; no `make` dependency, confirmed not installed here or
+  assumable for the team) wraps the day-to-day
+  `docker compose exec ...` one-liners into `up`/`down`/`logs`/`test`/
+  `lint`/`migrate`/`seed` subcommands — README keeps the full raw commands
+  documented as the fallback reference, nothing hidden. Every subcommand
+  was actually run, not just written: `test` (323 passed), `seed`
+  (idempotent no-op, as expected against already-seeded data), `lint` (all
+  three linters, 0 errors), and `migrate` against a real throwaway model
+  change (generated a genuine revision, applied it, downgraded, deleted the
+  throwaway migration file, and reverted the model edit — confirmed
+  `git status` clean and `alembic current` back at the real head
+  afterward). Full regression green throughout: 323 backend tests, ruff,
+  black; 241 frontend tests, tsc, oxlint (3 pre-existing warnings, 0
+  errors), `vite build` clean. README.md and this file's Commands section
+  updated to describe the new one-command flow and the `dev.sh` shortcuts.

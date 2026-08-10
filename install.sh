@@ -20,14 +20,14 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 
+echo "Waiting for the local AI model to finish pulling (one-time, cached after this)..."
+docker compose wait ollama-init >/dev/null 2>&1 || true
+
 echo
 echo "Stu-Dent is up:"
 echo "  Frontend:      http://localhost:5173"
 echo "  API docs:      http://localhost:8000/docs"
 echo "  MailHog:       http://localhost:8025"
 echo
-echo "One-time step: pull the local AI model (not baked into the ollama/ollama image):"
-echo "  docker compose exec ollama ollama pull llama3.2"
-echo
 echo "Optional: seed demo data (idempotent, safe to re-run):"
-echo "  docker compose exec api python -m app.seed_demo"
+echo "  ./dev.sh seed"

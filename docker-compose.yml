@@ -22,6 +22,10 @@ services:
 
   api:
     build: ./backend
+    # Shared with worker below so Compose builds the backend image once and
+    # reuses it for both containers, instead of building the same image
+    # twice under two different auto-generated tags.
+    image: stu-dent-backend:local
     restart: unless-stopped
     env_file: .env
     depends_on:
@@ -48,6 +52,7 @@ services:
 
   worker:
     build: ./backend
+    image: stu-dent-backend:local
     restart: unless-stopped
     env_file: .env
     depends_on:
@@ -69,6 +74,28 @@ services:
     # anyone reachable on the LAN use (or resource-exhaust) the local LLM.
     ports:
       - "127.0.0.1:11434:11434"
+
+  # One-shot: waits for the ollama server to accept requests, then pulls
+  # OLLAMA_MODEL. Runs on every `up` but is idempotent/fast once the model
+  # is cached in ollama_data -- this replaces a manual `ollama pull` step
+  # that was easy to forget (a forgotten pull silently degrades every AI
+  # feature to its fallback path forever, with no error -- see
+  # ollama_client.py's best-effort contract).
+  ollama-init:
+    image: ollama/ollama@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a
+    depends_on:
+      ollama:
+        condition: service_started
+    env_file: .env
+    environment:
+      OLLAMA_HOST: ollama:11434
+    # The ${OLLAMA_MODEL:-llama3.2} fallback mirrors config.py's Python
+    # default -- protects against a stale .env (missing a key that
+    # .env.example has since gained) leaving this pull with an empty model
+    # name, which fails outright instead of degrading gracefully like the
+    # rest of the app's Ollama integration does.
+    entrypoint: ["/bin/sh", "-c", "until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$${OLLAMA_MODEL:-llama3.2}\""]
+    restart: "no"
 
   frontend:
     build: ./frontend

@@ -62,7 +62,13 @@ Copy-Item .env.example .env
 docker compose up --build
 ```
 
-Then open:
+(On Mac/Linux, or from Git Bash on Windows, `./install.sh` does the same
+thing plus waits for everything to become healthy before printing the URLs
+below.)
+
+This one command brings up all 6 services (`db`, `api`, `worker`, `frontend`,
+`mailhog`, `ollama`) **and** pulls the local AI model automatically via a
+one-shot `ollama-init` step — no separate manual pull needed. Then open:
 
 - API: http://localhost:8000/health
 - API docs (Swagger): http://localhost:8000/docs
@@ -72,18 +78,39 @@ Then open:
 Stop the stack with `Ctrl+C`, then `docker compose down` (add `-v` to also drop
 the Postgres volume and start from a clean database).
 
+## Day-to-day commands
+
+`./dev.sh` wraps the commands documented individually further down this file:
+
+```
+./dev.sh up              # docker compose up --build -d
+./dev.sh down             # docker compose down
+./dev.sh logs [service]   # docker compose logs -f [service]
+./dev.sh test             # run the backend pytest suite
+./dev.sh lint              # ruff check, black --check, npm run lint
+./dev.sh migrate "<msg>"  # alembic revision --autogenerate, then upgrade head
+./dev.sh seed              # seed idempotent demo data
+```
+
+(Git Bash/Mac/Linux only — no `make` dependency required. On plain
+PowerShell, use the full `docker compose ...` commands below instead.)
+
 ## Local AI (Ollama)
 
 The scheduling-interpretation and report/Q&A assistant features call a
-local Ollama model. After the first `docker compose up`, pull the model
-once (it isn't baked into the `ollama/ollama` image):
+local Ollama model. The model is pulled automatically the first time you
+bring the stack up (see above) — no manual step required. If you ever need
+to re-pull or pull a different model by hand:
 
 ```powershell
 docker compose exec ollama ollama pull llama3.2
 ```
 
 Both features degrade gracefully (a plain warning / raw-data fallback,
-never an error) if Ollama is unreachable or the model isn't pulled yet.
+never an error) if Ollama is unreachable or the model isn't pulled yet —
+if AI features seem to always fall back, check
+`docker compose logs ollama-init` to confirm the pull actually completed
+(e.g. it can still be in progress on a slow connection the very first time).
 
 ## Password reset
 
