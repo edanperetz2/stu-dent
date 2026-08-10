@@ -93,9 +93,10 @@ docker compose up --build
 ```
 
 `./dev.sh` (Git Bash/Mac/Linux) wraps the commands below into short
-subcommands (`up`, `down`, `logs`, `test`, `lint`, `migrate`, `seed`) — see
-README.md's "Everyday commands" section. No `make` dependency; on plain
-PowerShell use the full commands directly.
+subcommands (`up`, `down`, `logs`, `test`, `lint`, `migrate`, `seed`,
+`update-deps`, `update-digests`) — see README.md's "Everyday commands" and
+"Maintenance" sections. No `make` dependency; on plain PowerShell use the
+full commands directly.
 
 Tests:
 ```powershell

@@ -171,6 +171,11 @@ installed (`Dockerfile`, CI). After changing a version range, regenerate both
 lock files from a `python:3.12-slim` container so hashes match the image:
 
 ```powershell
+./dev.sh update-deps
+```
+
+(Full form, e.g. on plain PowerShell:)
+```powershell
 docker run --rm -v "${PWD}/backend:/work" -w /work python:3.12-slim bash -c "
   pip install --no-cache-dir pip-tools &&
   pip-compile requirements.txt --generate-hashes --output-file=requirements.lock.txt &&
@@ -184,16 +189,19 @@ Commit all four files together.
 
 `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`, and
 `.github/workflows/ci.yml` pin their base/service images
-(`python:3.12-slim`, `node:22-alpine`, `postgres:16`) by digest, not just tag,
-so a build a year from now uses the exact same image bytes as today. To
-intentionally pick up a new patch release, re-pull and re-pin:
+(`python:3.12-slim`, `node:22-alpine`, `postgres:16`, `ollama/ollama`,
+`mailhog/mailhog`) by digest, not just tag, so a build a year from now uses
+the exact same image bytes as today. To intentionally pick up new releases
+and re-pin every one of them, everywhere each is referenced:
 
 ```powershell
-docker pull python:3.12-slim
-docker inspect --format='{{index .RepoDigests 0}}' python:3.12-slim
+./dev.sh update-digests
 ```
 
-then update the `@sha256:...` suffix everywhere that image is referenced.
+(Full form, per image: `docker pull <image>`, then
+`docker inspect --format='{{index .RepoDigests 0}}' <image>` to get the new
+digest, then update the `@sha256:...` suffix everywhere that image is
+referenced.)
 
 ## Known limitations
 
