@@ -67,8 +67,15 @@ thing plus waits for everything to become healthy before printing the URLs
 below.)
 
 This one command brings up all 6 services (`db`, `api`, `worker`, `frontend`,
-`mailhog`, `ollama`) **and** pulls the local AI model automatically via a
-one-shot `ollama-init` step — no separate manual pull needed. Then open:
+`mailhog`, `ollama`) and handles everything else automatically too —
+**database migrations** run on `api` startup, the **Ollama model** is
+pulled by a one-shot `ollama-init` step, and **MailHog** (which is what
+powers email reminders and password-reset emails) is already running as
+one of the 6 services. Nothing below this section needs to be run
+separately for normal use — the "Local AI", "Password reset", and
+"Running database migrations" sections further down are reference docs for
+how those pieces work and how to override them manually, not extra setup
+steps. Then open:
 
 - API: http://localhost:8000/health
 - API docs (Swagger): http://localhost:8000/docs
@@ -97,10 +104,13 @@ PowerShell, use the full `docker compose ...` commands below instead.)
 
 ## Local AI (Ollama)
 
+*Nothing to run here for normal use — this is already handled by `docker
+compose up` / `install.sh` above.*
+
 The scheduling-interpretation and report/Q&A assistant features call a
 local Ollama model. The model is pulled automatically the first time you
-bring the stack up (see above) — no manual step required. If you ever need
-to re-pull or pull a different model by hand:
+bring the stack up (see above) — no manual step required. The command
+below is only for re-pulling by hand (e.g. to switch models):
 
 ```powershell
 docker compose exec ollama ollama pull llama3.2
@@ -114,6 +124,9 @@ if AI features seem to always fall back, check
 
 ## Password reset
 
+*Nothing to run here either — MailHog is already one of the 6 services
+started by `docker compose up` / `install.sh` above.*
+
 The login page's "Forgot password?" link sends a reset-link email through
 MailHog — open http://localhost:8025 after requesting one to read it and
 follow the link (no real email account or SMTP setup needed locally). The
@@ -123,16 +136,16 @@ for an email that isn't registered still returns a generic success message
 
 ## Running database migrations
 
-Migrations run automatically on `api` container start. To run them manually
-(e.g. after pulling new migrations without a full restart):
+*Nothing to run here for normal use — migrations already run automatically
+every time the `api` container starts.*
+
+The commands below are only for the two manual cases: applying migrations
+without a full restart, or generating a new one after changing a
+SQLAlchemy model (`./dev.sh migrate "<message>"` does both of the below in
+one step):
 
 ```powershell
 docker compose exec api alembic upgrade head
-```
-
-To create a new migration after changing a SQLAlchemy model:
-
-```powershell
 docker compose exec api alembic revision --autogenerate -m "describe the change"
 ```
 
