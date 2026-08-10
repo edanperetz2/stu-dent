@@ -32,7 +32,7 @@ services:
       db:
         condition: service_healthy
       ollama:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./backend:/app
     ports:
@@ -59,7 +59,7 @@ services:
       db:
         condition: service_healthy
       ollama:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./backend:/app
     command: python -m app.worker
@@ -74,18 +74,25 @@ services:
     # anyone reachable on the LAN use (or resource-exhaust) the local LLM.
     ports:
       - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
-  # One-shot: waits for the ollama server to accept requests, then pulls
-  # OLLAMA_MODEL. Runs on every `up` but is idempotent/fast once the model
-  # is cached in ollama_data -- this replaces a manual `ollama pull` step
-  # that was easy to forget (a forgotten pull silently degrades every AI
-  # feature to its fallback path forever, with no error -- see
-  # ollama_client.py's best-effort contract).
+  # One-shot: pulls OLLAMA_MODEL once the ollama server is actually healthy.
+  # Runs on every `up` but is idempotent/fast once the model is cached in
+  # ollama_data -- this replaces a manual `ollama pull` step that was easy
+  # to forget (a forgotten pull silently degrades every AI feature to its
+  # fallback path forever, with no error -- see ollama_client.py's
+  # best-effort contract). `timeout 900` turns a stalled/stuck download
+  # into a clear, bounded failure instead of an indefinite silent hang.
   ollama-init:
     image: ollama/ollama@sha256:b88c73ace3e115f8ec53dc8761ae1c0aabfa675406e3681786b98757ce050f42
     depends_on:
       ollama:
-        condition: service_started
+        condition: service_healthy
     env_file: .env
     environment:
       OLLAMA_HOST: ollama:11434
@@ -94,7 +101,7 @@ services:
     # .env.example has since gained) leaving this pull with an empty model
     # name, which fails outright instead of degrading gracefully like the
     # rest of the app's Ollama integration does.
-    entrypoint: ["/bin/sh", "-c", "until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$${OLLAMA_MODEL:-llama3.2}\""]
+    entrypoint: ["/bin/sh", "-c", "timeout 900 ollama pull \"$${OLLAMA_MODEL:-llama3.2}\""]
     restart: "no"
 
   # One-shot: seeds idempotent demo data once the api is actually healthy

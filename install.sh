@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 # One-command local install/run. Equivalent to the manual steps in README.md's
-# "First run" section -- this script just automates them.
+# "First run" section -- delegates the actual startup to dev.sh (the single
+# definition of "how to start the stack," incl. the .env bootstrap), then
+# adds waiting for everything to actually be ready before printing the URLs.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if [ ! -f .env ]; then
-  cp .env.example .env
-  echo "Created .env from .env.example"
-fi
-
-docker compose up --build -d
+./dev.sh up
 
 echo "Waiting for the API to become healthy..."
 api_container="$(docker compose ps -q api)"

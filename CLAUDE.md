@@ -829,3 +829,48 @@ docker compose exec frontend npm run lint
   degrade-and-explain-in-README behavior is correct by design, unlike the
   one-shot seed path where a lost race is silent and permanent. Full
   regression green: 323 backend tests, lint clean.
+  **Follow-up 4 (same session)**: asked for a second, deeper "would you
+  simplify/improve something" pass over the whole day's Docker work. Two
+  independent agents audited fresh (one on build/startup complexity, one
+  cross-checking every README/CLAUDE.md command against the actual current
+  `dev.sh`/`docker-compose.yml`), then every finding from both was
+  personally verified against the real running stack before acting on
+  it -- one plausible-sounding finding (the dev frontend's `wget
+  http://localhost:5173` healthcheck maybe having the same IPv6-vs-IPv4
+  bug already found and fixed once in the now-deleted prod nginx config)
+  was tested directly inside the running container and disproved: both
+  `localhost` and `127.0.0.1` succeed identically, Vite's dev server
+  binds dual-stack unlike nginx's default did. No fix applied for that
+  one. Six real findings were fixed: (1) `ollama-init` hand-rolled an
+  unbounded `until ollama list; do sleep 1; done` wait loop instead of a
+  real Compose healthcheck -- `ollama` gained one (`ollama list`, the
+  same probe), and every dependent (`ollama-init`, and `api`/`worker`,
+  previously only `condition: service_started`) now depends on
+  `service_healthy` instead, so a crash-looping Ollama now fails loudly
+  and boundedly instead of hanging one-shots forever with zero signal.
+  (2) the pull itself had no timeout either -- wrapped in `timeout 900`,
+  matching the project's own fail-loud-not-silent philosophy. (3) `dev.sh
+  up` didn't bootstrap `.env` the way `install.sh` did, so a contributor
+  reaching for it directly on a fresh clone hit a confusing Compose
+  failure -- moved the bootstrap into `dev.sh up`, and `install.sh` now
+  calls `./dev.sh up` instead of duplicating the raw command, one
+  definition of "how to start the stack" instead of two. (4) README's
+  lint table row was missing the `docker compose exec api` prefix on
+  `black --check .`, right next to a claim that no local Python is
+  needed. (5) README's `update-deps` "full form" fallback omitted the
+  `MSYS_NO_PATHCONV=1` prefix `dev.sh` itself needs on Git Bash -- added a
+  note steering Git Bash users to `./dev.sh update-deps` instead of
+  copy-pasting the raw form into the exact bug it was written to avoid.
+  (6) Known limitations never mentioned Postgres's LAN-exposed
+  `0.0.0.0:5432` binding (a deliberate trade-off already explained in the
+  compose file's own comment, just invisible to a README-only reader) --
+  added a bullet. All six changes verified live end to end, not just by
+  inspection: a full fresh `install.sh` run confirmed the dependency
+  ordering (`ollama` healthy → `ollama-init` starts → exits 0 → `api`/
+  `worker` start only once `ollama` is healthy → `seed-init` starts only
+  after `ollama-init` exits), `timeout` was confirmed present in the
+  `ollama/ollama` image before relying on it, and `dev.sh up`'s new `.env`
+  bootstrap was tested by actually removing `.env`, running it, and
+  confirming a working stack came up on the freshly-created file (then the
+  real `.env` was restored). Full regression green: 323 backend tests,
+  lint clean.

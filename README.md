@@ -103,7 +103,7 @@ use the Full command column directly.
 | Stop the stack | `./dev.sh down` | `docker compose down` |
 | Tail logs | `./dev.sh logs [service]` | `docker compose logs -f [service]` |
 | Run backend tests | `./dev.sh test` | `docker compose exec api pytest -v` |
-| Lint everything | `./dev.sh lint` | `docker compose exec api ruff check .` then `black --check .`, then `docker compose exec frontend npm run lint` |
+| Lint everything | `./dev.sh lint` | `docker compose exec api ruff check .` then `docker compose exec api black --check .`, then `docker compose exec frontend npm run lint` |
 | Create + apply a migration | `./dev.sh migrate "<message>"` | `docker compose exec api alembic revision --autogenerate -m "<message>"` then `docker compose exec api alembic upgrade head` |
 | Seed demo data | `./dev.sh seed` | `docker compose exec api python -m app.seed_demo` |
 
@@ -174,7 +174,9 @@ lock files from a `python:3.12-slim` container so hashes match the image:
 ./dev.sh update-deps
 ```
 
-(Full form, e.g. on plain PowerShell:)
+(Full form, for plain PowerShell. On Git Bash, use `./dev.sh update-deps`
+above rather than copying this directly — it needs a `MSYS_NO_PATHCONV=1`
+prefix there or MSYS mangles the container-side mount path.)
 ```powershell
 docker run --rm -v "${PWD}/backend:/work" -w /work python:3.12-slim bash -c "
   pip install --no-cache-dir pip-tools &&
@@ -227,3 +229,11 @@ referenced.)
   a deliberate cosmetic choice, not the start of real internationalization.
   There's no i18n/RTL support anywhere else in the app, and none is
   planned.
+- Postgres's port (`5432`) is published on all interfaces (`0.0.0.0`), not
+  just `127.0.0.1` like Ollama's — a deliberate trade-off, not an oversight
+  (see the comment on `db`'s `ports:` in `docker-compose.yml`): binding it
+  to localhost-only broke outright on a real dev machine that already had
+  a native Postgres service on port 5432. On a shared/lab network this
+  means Postgres (default creds from `.env.example`) is LAN-reachable —
+  fine for a localhost-first course project, worth knowing before running
+  this on an untrusted network.
