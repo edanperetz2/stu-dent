@@ -17,7 +17,15 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
-import { IconSortAscending, IconSortDescending } from '@tabler/icons-react'
+import {
+  IconCalendar,
+  IconList,
+  IconPlus,
+  IconSortAscending,
+  IconSortDescending,
+  IconTools,
+  IconUser,
+} from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { SlotInfo, View } from 'react-big-calendar'
@@ -192,6 +200,7 @@ export function AppointmentsListPage() {
       }),
     errorFallback: 'Failed to load appointments.',
     isEmpty: () => false,
+    preservePreviousData: viewMode === 'calendar',
   })
   const appointments = appointmentsQuery.status === 'ready' ? appointmentsQuery.data : undefined
 
@@ -484,28 +493,80 @@ export function AppointmentsListPage() {
 
   return (
     <Stack>
-      <Group justify="space-between">
+      <Group justify="space-between" align="flex-start" className="appointments-page-header">
         <Title order={2}>Appointments</Title>
-        <Group>
+        <Group gap="xs" className="appointments-page-controls">
           <SegmentedControl
+            aria-label="Appointment layout"
             value={viewMode}
             onChange={(value) => setViewMode(value as 'list' | 'calendar')}
             data={[
-              { label: 'List', value: 'list' },
-              { label: 'Calendar', value: 'calendar' },
+              {
+                label: (
+                  <span className="appointments-toggle-label">
+                    <IconList size={15} stroke={1.8} />
+                    List
+                  </span>
+                ),
+                value: 'list',
+              },
+              {
+                label: (
+                  <span className="appointments-toggle-label">
+                    <IconCalendar size={15} stroke={1.8} />
+                    Calendar
+                  </span>
+                ),
+                value: 'calendar',
+              },
             ]}
+            radius="xl"
+            size="sm"
+            transitionDuration={180}
+            withItemsBorders={false}
+            className="appointments-segmented-control"
           />
           {canSeeResources && (
             <SegmentedControl
+              aria-label="Appointment scope"
               value={effectiveLens}
               onChange={(value) => setCalendarLens(value as CalendarLens)}
               data={[
-                { label: 'Personal', value: 'personal' },
-                { label: 'Resources', value: 'resources' },
+                {
+                  label: (
+                    <span className="appointments-toggle-label">
+                      <IconUser size={15} stroke={1.8} />
+                      Personal
+                    </span>
+                  ),
+                  value: 'personal',
+                },
+                {
+                  label: (
+                    <span className="appointments-toggle-label">
+                      <IconTools size={15} stroke={1.8} />
+                      Resources
+                    </span>
+                  ),
+                  value: 'resources',
+                },
               ]}
+              radius="xl"
+              size="sm"
+              transitionDuration={180}
+              withItemsBorders={false}
+              className="appointments-segmented-control"
             />
           )}
-          {canCreate && <Button onClick={handleOpenModal}>New Appointment</Button>}
+          {canCreate && (
+            <Button
+              onClick={handleOpenModal}
+              leftSection={<IconPlus size={16} stroke={1.8} />}
+              radius="xl"
+            >
+              New Appointment
+            </Button>
+          )}
         </Group>
       </Group>
 
@@ -578,7 +639,9 @@ export function AppointmentsListPage() {
         </Group>
       )}
 
-      {content}
+      <div key={`${viewMode}-${effectiveLens}`} className="appointments-view-surface">
+        {content}
+      </div>
 
       <Modal opened={opened} onClose={close} title="New Appointment" size="lg">
         <Button

@@ -26,7 +26,6 @@ Localhost-first, fully Dockerized, zero paid services.
 - No local Python/Node installation is required — everything runs in containers.
 
 ```powershell
-Copy-Item .env.example .env
 docker compose up --build
 ```
 
@@ -153,6 +152,35 @@ http://localhost:8025 after requesting one to read it and follow the link
 after 30 minutes and is single-use; requesting a reset for an email that
 isn't registered still returns a generic success message (no
 account-enumeration signal) and simply sends nothing.
+
+### Google sign-in
+
+The login and registration pages support server-side OAuth/OpenID Connect.
+Existing accounts are linked when a provider returns the same verified email;
+new users choose the same role (and, for patients, treating student) as the
+email/password registration flow. Provider subjects are stored in
+`oauth_identities`, so later sign-ins do not depend on an email remaining
+unchanged.
+
+Google OAuth credentials belong in the git-ignored `.env` file. Copy
+`.env.example` to `.env`, then set `GOOGLE_OAUTH_CLIENT_ID` and
+`GOOGLE_OAUTH_CLIENT_SECRET`; Compose loads that file after the committed
+defaults, so Google sign-in works locally without publishing the secret.
+
+Provider configuration:
+
+- **Google:** create an OAuth 2.0 **Web application** client and register
+  `http://localhost:8000/auth/oauth/google/callback` as an authorized redirect
+  URI. Set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in `.env`.
+
+Apple sign-in is shelved until the app has a permanent HTTPS deployment URL.
+Its backend integration remains dormant so it can be enabled later without
+redoing the OAuth implementation; no Apple option is shown in the current UI.
+
+For production, also set `OAUTH_FRONTEND_URL` to the HTTPS frontend origin.
+The callback URIs are exact-match values: a scheme, host, port, or path
+difference causes the provider to reject the request. If credentials are
+absent, the buttons return to the app with a clear configuration message.
 
 ## Maintenance
 

@@ -9,6 +9,7 @@ from tests.helpers import (
     create_default_room,
     create_patient,
     register_and_login,
+    relative_slot,
 )
 
 
@@ -130,13 +131,14 @@ def test_deactivated_room_cannot_be_booked(client):
         f"/admin/rooms/{room_id}", json={"is_active": False}, headers=auth_header(admin_token)
     )
 
+    start_time, end_time = relative_slot()
     response = client.post(
         "/appointments",
         json={
             "patient_id": patient_id,
             "room_id": room_id,
-            "start_time": "2026-08-10T09:00:00+00:00",
-            "end_time": "2026-08-10T09:30:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(student_token),
     )
@@ -151,13 +153,14 @@ def test_deactivating_room_notifies_owning_student_via_message_and_notification(
         "/admin/rooms", json={"name": "Room 606"}, headers=auth_header(admin_token)
     ).json()["id"]
 
+    start_time, end_time = relative_slot(duration_minutes=30)
     appointment = client.post(
         "/appointments",
         json={
             "patient_id": patient_id,
             "room_id": room_id,
-            "start_time": "2026-08-11T09:00:00+00:00",
-            "end_time": "2026-08-11T09:30:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(student_token),
     ).json()
@@ -188,14 +191,15 @@ def test_deactivating_room_notifies_students_with_pending_waitlist_entries(clien
 
     occupier_token = register_and_login(client, "rooms-occupier5b@example.com", role="student")
     occupier_patient_id = create_patient(client, occupier_token)
+    start_time, end_time = relative_slot(days=31, duration_minutes=30)
     client.post(
         "/appointments",
         json={
             "patient_id": occupier_patient_id,
             "attending_id": attending_id,
             "room_id": create_default_room(client),
-            "start_time": "2026-08-12T09:00:00+00:00",
-            "end_time": "2026-08-12T09:30:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(occupier_token),
     )
@@ -208,8 +212,8 @@ def test_deactivating_room_notifies_students_with_pending_waitlist_entries(clien
             "patient_id": waiter_patient_id,
             "attending_id": attending_id,
             "room_id": room_id,
-            "start_time": "2026-08-12T09:00:00+00:00",
-            "end_time": "2026-08-12T09:30:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(waiter_token),
     )
@@ -284,14 +288,15 @@ def test_deactivated_equipment_cannot_be_booked(client):
         headers=auth_header(admin_token),
     )
 
+    start_time, end_time = relative_slot()
     response = client.post(
         "/appointments",
         json={
             "patient_id": patient_id,
             "room_id": room_id,
             "equipment_id": equipment_id,
-            "start_time": "2026-08-10T09:00:00+00:00",
-            "end_time": "2026-08-10T09:30:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(student_token),
     )
@@ -307,14 +312,15 @@ def test_deactivating_equipment_notifies_owning_student_via_message_and_notifica
         "/admin/equipment", json={"name": "Autoclave 606"}, headers=auth_header(admin_token)
     ).json()["id"]
 
+    start_time, end_time = relative_slot(duration_minutes=30)
     appointment = client.post(
         "/appointments",
         json={
             "patient_id": patient_id,
             "room_id": room_id,
             "equipment_id": equipment_id,
-            "start_time": "2026-08-11T09:00:00+00:00",
-            "end_time": "2026-08-11T09:30:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(student_token),
     ).json()
@@ -367,14 +373,15 @@ def test_resources_schedule_reveals_booking_student_but_not_patient(client):
         "/admin/equipment", json={"name": "Autoclave 1010"}, headers=auth_header(admin_token)
     ).json()["id"]
 
+    start_time, end_time = relative_slot(days=31, duration_minutes=30)
     booked = client.post(
         "/appointments",
         json={
             "patient_id": patient_id,
             "room_id": room_id,
             "equipment_id": equipment_id,
-            "start_time": "2026-08-12T09:00:00+00:00",
-            "end_time": "2026-08-12T09:30:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(student_token),
     ).json()
@@ -436,13 +443,15 @@ def test_resources_schedule_scopes_patient_to_own_bookings(client):
         "/admin/rooms", json={"name": "Room 1112"}, headers=auth_header(admin_token)
     ).json()["id"]
 
+    own_start, own_end = relative_slot(days=32, duration_minutes=30)
+    other_start, other_end = relative_slot(days=32, hour=10, duration_minutes=30)
     own_booking = client.post(
         "/appointments",
         json={
             "patient_id": patient_id,
             "room_id": room_id,
-            "start_time": "2026-09-01T09:00:00+00:00",
-            "end_time": "2026-09-01T09:30:00+00:00",
+            "start_time": own_start,
+            "end_time": own_end,
         },
         headers=auth_header(student_token),
     ).json()
@@ -453,8 +462,8 @@ def test_resources_schedule_scopes_patient_to_own_bookings(client):
         json={
             "patient_id": other_patient_id,
             "room_id": other_room_id,
-            "start_time": "2026-09-01T10:00:00+00:00",
-            "end_time": "2026-09-01T10:30:00+00:00",
+            "start_time": other_start,
+            "end_time": other_end,
         },
         headers=auth_header(other_student_token),
     ).json()
@@ -477,13 +486,14 @@ def test_resources_schedule_excludes_cancelled_and_proposed(client):
         "/admin/rooms", json={"name": "Room 1111"}, headers=auth_header(admin_token)
     ).json()["id"]
 
+    start_time, end_time = relative_slot(days=33, duration_minutes=30)
     cancelled = client.post(
         "/appointments",
         json={
             "patient_id": patient_id,
             "room_id": room_id,
-            "start_time": "2026-08-13T09:00:00+00:00",
-            "end_time": "2026-08-13T09:30:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(student_token),
     ).json()

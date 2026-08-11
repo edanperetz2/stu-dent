@@ -18,22 +18,57 @@ def test_list_reports_requires_student_or_attending_role(client):
     assert response.status_code == 403
 
 
-def test_generate_report_now_creates_weekly_and_monthly(client, monkeypatch):
+def test_generate_report_now_creates_selected_ai_report(client, monkeypatch):
     _mock_ollama_router(monkeypatch, narrate={"summary": "Everything looks fine."})
     student_token = register_and_login(client, "rep-s1@example.com", role="student")
 
-    response = client.post("/reports/generate", headers=auth_header(student_token))
+    response = client.post(
+        "/reports/generate",
+        json={"period_type": "weekly", "output_style": "ai_narrated"},
+        headers=auth_header(student_token),
+    )
     assert response.status_code == 201
     body = response.json()
-    assert len(body) == 2
-    assert {r["period_type"] for r in body} == {"weekly", "monthly"}
-    for report in body:
-        assert report["content"] == "Everything looks fine."
-        assert report["question"] is None
-        assert report["content_source"] == "ai"
+    assert body["period_type"] == "weekly"
+    assert body["content"] == "Everything looks fine."
+    assert body["question"] is None
+    assert body["content_source"] == "ai"
 
     list_response = client.get("/reports", headers=auth_header(student_token))
-    assert len(list_response.json()) == 2
+    assert len(list_response.json()) == 1
+
+
+def test_generate_report_now_creates_selected_data_summary_without_ai(client, monkeypatch):
+    def fail_if_called(_prompt):
+        raise AssertionError("Data summary must not call Ollama")
+
+    monkeypatch.setattr(ollama_client, "generate_json", fail_if_called)
+    student_token = register_and_login(client, "rep-s1-data@example.com", role="student")
+
+    response = client.post(
+        "/reports/generate",
+        json={"period_type": "monthly", "output_style": "data_summary"},
+        headers=auth_header(student_token),
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["period_type"] == "monthly"
+    assert body["content_source"] == "fallback_summary"
+    assert body["content"].strip()
+    assert "AI narration unavailable" not in body["content"]
+
+
+def test_generate_report_rejects_ad_hoc_period_and_unknown_output_style(client):
+    student_token = register_and_login(client, "rep-s1-invalid@example.com", role="student")
+
+    response = client.post(
+        "/reports/generate",
+        json={"period_type": "ad_hoc", "output_style": "raw"},
+        headers=auth_header(student_token),
+    )
+
+    assert response.status_code == 422
 
 
 def test_reports_scoped_to_own_recipient(client, monkeypatch):
@@ -41,7 +76,11 @@ def test_reports_scoped_to_own_recipient(client, monkeypatch):
     s1_token = register_and_login(client, "rep-s2@example.com", role="student")
     s2_token = register_and_login(client, "rep-s3@example.com", role="student")
 
-    client.post("/reports/generate", headers=auth_header(s1_token))
+    client.post(
+        "/reports/generate",
+        json={"period_type": "weekly", "output_style": "ai_narrated"},
+        headers=auth_header(s1_token),
+    )
 
     s2_reports = client.get("/reports", headers=auth_header(s2_token)).json()
     assert s2_reports == []
@@ -174,12 +213,16 @@ def test_generate_report_falls_back_when_model_returns_blank_summary(client, mon
     _mock_ollama_router(monkeypatch, narrate={"summary": "   "})
     student_token = register_and_login(client, "rep-s9@example.com", role="student")
 
-    response = client.post("/reports/generate", headers=auth_header(student_token))
+    response = client.post(
+        "/reports/generate",
+        json={"period_type": "weekly", "output_style": "ai_narrated"},
+        headers=auth_header(student_token),
+    )
     assert response.status_code == 201
-    for report in response.json():
-        assert report["content"].strip() != ""
-        assert "AI narration unavailable" in report["content"]
-        assert report["content_source"] == "fallback_summary"
+    report = response.json()
+    assert report["content"].strip() != ""
+    assert "AI narration unavailable" in report["content"]
+    assert report["content_source"] == "fallback_summary"
 
 
 def test_generate_scheduled_reports_idempotent(client, db_session, monkeypatch):

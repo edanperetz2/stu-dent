@@ -8,10 +8,10 @@ from tests.helpers import (
     create_patient,
     create_room,
     register_and_login,
+    relative_slot,
 )
 
-START = "2026-08-01T09:00:00+00:00"
-END = "2026-08-01T10:00:00+00:00"
+START, END = relative_slot()
 
 
 def _book(
@@ -275,8 +275,7 @@ def test_changing_time_on_confirmed_with_attending_is_rescheduling_requested(cli
     ).json()
     client.post(f"/appointments/{appointment['id']}/approve", headers=auth_header(attending_token))
 
-    new_start = "2026-08-01T11:00:00+00:00"
-    new_end = "2026-08-01T12:00:00+00:00"
+    new_start, new_end = relative_slot(hour=11)
     response = client.patch(
         f"/appointments/{appointment['id']}",
         json={"start_time": new_start, "end_time": new_end},
@@ -307,13 +306,14 @@ def test_reject_by_student_and_by_attending(client):
     assert reject_by_student.status_code == 200
     assert reject_by_student.json()["status"] == "cancelled"
 
+    second_start, second_end = relative_slot(days=31)
     appt_b = _book(
         client,
         student_token,
         patient_id=patient_id,
         attending_id=attending_id,
-        start_time="2026-08-02T09:00:00+00:00",
-        end_time="2026-08-02T10:00:00+00:00",
+        start_time=second_start,
+        end_time=second_end,
     ).json()
     reject_by_attending = client.post(
         f"/appointments/{appt_b['id']}/reject", headers=auth_header(attending_token)
@@ -334,12 +334,13 @@ def test_cancel_by_patient_and_by_student(client):
     assert cancel_by_patient.json()["status"] == "cancelled"
 
     patient_id = create_patient(client, student_token, full_name="Second Patient")
+    second_start, second_end = relative_slot(days=32)
     appt_b = _book(
         client,
         student_token,
         patient_id=patient_id,
-        start_time="2026-08-03T09:00:00+00:00",
-        end_time="2026-08-03T10:00:00+00:00",
+        start_time=second_start,
+        end_time=second_end,
     ).json()
     cancel_by_student = client.post(
         f"/appointments/{appt_b['id']}/cancel", headers=auth_header(student_token)
@@ -354,12 +355,13 @@ def test_complete_and_no_show_require_confirmed_status(client):
 
     # Must already be in the past -- complete/no-show are gated on the
     # appointment's start time, see test_complete_and_no_show_require_started_time.
+    completed_start, completed_end = relative_slot(days=-30)
     proposed_like = _book(
         client,
         student_token,
         patient_id=patient_id,
-        start_time="2020-08-04T09:00:00+00:00",
-        end_time="2020-08-04T10:00:00+00:00",
+        start_time=completed_start,
+        end_time=completed_end,
     ).json()
     # already confirmed since no attending; complete should succeed
     complete_response = client.post(
@@ -374,12 +376,13 @@ def test_complete_and_no_show_require_confirmed_status(client):
     )
     assert complete_again.status_code == 409
 
+    no_show_start, no_show_end = relative_slot(days=-29)
     no_show_appt = _book(
         client,
         student_token,
         patient_id=patient_id,
-        start_time="2020-08-05T09:00:00+00:00",
-        end_time="2020-08-05T10:00:00+00:00",
+        start_time=no_show_start,
+        end_time=no_show_end,
     ).json()
     no_show_response = client.post(
         f"/appointments/{no_show_appt['id']}/no-show", headers=auth_header(student_token)

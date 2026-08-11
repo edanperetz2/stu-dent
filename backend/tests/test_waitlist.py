@@ -6,10 +6,14 @@ from tests.helpers import (
     create_patient,
     create_room,
     register_and_login,
+    relative_slot,
 )
 
-START = "2026-09-01T09:00:00+00:00"
-END = "2026-09-01T10:00:00+00:00"
+START, END = relative_slot()
+NON_OVERLAP_START, NON_OVERLAP_END = relative_slot(days=31)
+STALE_CAUSE_START, STALE_CAUSE_END = relative_slot(days=32)
+RESCHEDULE_START, RESCHEDULE_END = relative_slot(days=33)
+DEACTIVATION_START, DEACTIVATION_END = relative_slot(days=34)
 
 
 def _book(
@@ -441,8 +445,8 @@ def test_non_overlapping_time_does_not_match(client):
         occupier_token,
         patient_id=occupier_patient_id,
         equipment_id=equipment_id,
-        start_time="2026-09-02T09:00:00+00:00",
-        end_time="2026-09-02T10:00:00+00:00",
+        start_time=NON_OVERLAP_START,
+        end_time=NON_OVERLAP_END,
     )
 
     other_student_token = register_and_login(client, "wl-s15b@example.com", role="student")
@@ -452,8 +456,8 @@ def test_non_overlapping_time_does_not_match(client):
         other_student_token,
         patient_id=other_patient_id,
         equipment_id=equipment_id,
-        start_time="2026-09-02T09:00:00+00:00",
-        end_time="2026-09-02T10:00:00+00:00",
+        start_time=NON_OVERLAP_START,
+        end_time=NON_OVERLAP_END,
     ).json()
 
     patient_id = create_patient(client, student_token)
@@ -533,8 +537,8 @@ def test_stale_conflict_cause_does_not_block_recheck_on_a_different_resource(cli
         occupier_a_token,
         patient_id=occupier_a_patient_id,
         attending_id=attending_id,
-        start_time="2026-09-03T09:00:00+00:00",
-        end_time="2026-09-03T10:00:00+00:00",
+        start_time=STALE_CAUSE_START,
+        end_time=STALE_CAUSE_END,
     ).json()
 
     waiter_token = register_and_login(client, "wl-s18c@example.com", role="student")
@@ -545,8 +549,8 @@ def test_stale_conflict_cause_does_not_block_recheck_on_a_different_resource(cli
         patient_id=waiter_patient_id,
         attending_id=attending_id,
         room_id=room_id,
-        start_time="2026-09-03T09:00:00+00:00",
-        end_time="2026-09-03T10:00:00+00:00",
+        start_time=STALE_CAUSE_START,
+        end_time=STALE_CAUSE_END,
     ).json()
     # Room is free at creation time -- the only real conflict is the
     # attending.
@@ -563,8 +567,8 @@ def test_stale_conflict_cause_does_not_block_recheck_on_a_different_resource(cli
         occupier_b_token,
         patient_id=occupier_b_patient_id,
         room_id=room_id,
-        start_time="2026-09-03T09:00:00+00:00",
-        end_time="2026-09-03T10:00:00+00:00",
+        start_time=STALE_CAUSE_START,
+        end_time=STALE_CAUSE_END,
     ).json()
 
     # Freeing the attending isn't enough -- the room is still held by the
@@ -601,8 +605,8 @@ def test_rescheduling_appointment_away_promotes_waitlist_entry_for_freed_room(cl
         occupier_token,
         patient_id=occupier_patient_id,
         room_id=room_id,
-        start_time="2026-09-04T09:00:00+00:00",
-        end_time="2026-09-04T10:00:00+00:00",
+        start_time=RESCHEDULE_START,
+        end_time=RESCHEDULE_END,
     ).json()
 
     waiter_token = register_and_login(client, "wl-s19b@example.com", role="student")
@@ -612,8 +616,8 @@ def test_rescheduling_appointment_away_promotes_waitlist_entry_for_freed_room(cl
         waiter_token,
         patient_id=waiter_patient_id,
         room_id=room_id,
-        start_time="2026-09-04T09:00:00+00:00",
-        end_time="2026-09-04T10:00:00+00:00",
+        start_time=RESCHEDULE_START,
+        end_time=RESCHEDULE_END,
     ).json()
     assert entry["conflicts"][0]["resource_type"] == "room"
 
@@ -651,8 +655,8 @@ def test_auto_promotion_skips_a_candidate_whose_room_was_deactivated_while_pendi
         occupier_token,
         patient_id=occupier_patient_id,
         attending_id=attending_id,
-        start_time="2026-09-05T09:00:00+00:00",
-        end_time="2026-09-05T10:00:00+00:00",
+        start_time=DEACTIVATION_START,
+        end_time=DEACTIVATION_END,
     ).json()
 
     waiter_token = register_and_login(client, "wl-s20b@example.com", role="student")
@@ -663,8 +667,8 @@ def test_auto_promotion_skips_a_candidate_whose_room_was_deactivated_while_pendi
         patient_id=waiter_patient_id,
         attending_id=attending_id,
         room_id=room_id,
-        start_time="2026-09-05T09:00:00+00:00",
-        end_time="2026-09-05T10:00:00+00:00",
+        start_time=DEACTIVATION_START,
+        end_time=DEACTIVATION_END,
     ).json()
     assert entry["conflicts"][0]["resource_type"] == "attending"
 

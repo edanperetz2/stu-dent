@@ -8,12 +8,11 @@ from tests.helpers import (
     create_default_room,
     create_patient,
     register_and_login,
+    relative_slot,
 )
 
-START = "2026-08-10T09:00:00+00:00"
-END = "2026-08-10T10:00:00+00:00"
-PAST_START = "2020-08-01T09:00:00+00:00"
-PAST_END = "2020-08-01T10:00:00+00:00"
+START, END = relative_slot()
+PAST_START, PAST_END = relative_slot(days=-30)
 
 
 def _user_id(client, token):
@@ -256,8 +255,7 @@ def test_update_time_notifies_attending_and_does_not_reset_approval_for_unrelate
 
     # A genuine time change DOES need re-approval, and the attending should
     # be told.
-    new_start = "2026-08-11T09:00:00+00:00"
-    new_end = "2026-08-11T10:00:00+00:00"
+    new_start, new_end = relative_slot(days=31)
     rescheduled = client.patch(
         f"/appointments/{appointment['id']}",
         json={"start_time": new_start, "end_time": new_end},

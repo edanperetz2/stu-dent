@@ -19,6 +19,7 @@ describe('useAuthToken', () => {
       clearSessionExpired: vi.fn(),
       handleSessionExpired: vi.fn(),
       login: vi.fn(),
+      completeOAuth: vi.fn(),
       registerUser: vi.fn(),
       logout: vi.fn(),
     })
@@ -35,6 +36,7 @@ describe('useAuthToken', () => {
       clearSessionExpired: vi.fn(),
       handleSessionExpired: vi.fn(),
       login: vi.fn(),
+      completeOAuth: vi.fn(),
       registerUser: vi.fn(),
       logout: vi.fn(),
     })

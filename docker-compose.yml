@@ -1,8 +1,16 @@
+x-env-files: &env-files
+  # Shared development defaults make a clean checkout runnable with plain
+  # `docker compose up --build`. A git-ignored .env, when present, is loaded
+  # second and overrides any value for local or production-like testing.
+  - path: .env.example
+  - path: .env
+    required: false
+
 services:
   db:
     image: postgres:16@sha256:95206741a5b214807675e14165369d05b93a9cf692223b616d07cca227e74b0b
     restart: unless-stopped
-    env_file: .env
+    env_file: *env-files
     volumes:
       - pgdata:/var/lib/postgresql/data
     # Not bound to 127.0.0.1 (unlike ollama below) -- tried it, but a
@@ -27,7 +35,7 @@ services:
     # twice under two different auto-generated tags.
     image: stu-dent-backend:local
     restart: unless-stopped
-    env_file: .env
+    env_file: *env-files
     depends_on:
       db:
         condition: service_healthy
@@ -54,7 +62,7 @@ services:
     build: ./backend
     image: stu-dent-backend:local
     restart: unless-stopped
-    env_file: .env
+    env_file: *env-files
     depends_on:
       db:
         condition: service_healthy
@@ -93,7 +101,7 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-    env_file: .env
+    env_file: *env-files
     environment:
       OLLAMA_HOST: ollama:11434
     # The ${OLLAMA_MODEL:-llama3.2} fallback mirrors config.py's Python
@@ -131,7 +139,7 @@ services:
       ollama-init:
         condition: service_completed_successfully
         required: false
-    env_file: .env
+    env_file: *env-files
     volumes:
       - ./backend:/app
     entrypoint: ["/bin/sh", "-c", "if [ \"$${SEED_DEMO_ON_START:-false}\" = \"true\" ]; then python -m app.seed_demo; else echo 'SEED_DEMO_ON_START is not true -- skipping demo seed'; fi"]
@@ -140,7 +148,7 @@ services:
   frontend:
     build: ./frontend
     restart: unless-stopped
-    env_file: .env
+    env_file: *env-files
     volumes:
       - ./frontend:/app
       - /app/node_modules

@@ -15,12 +15,13 @@ from tests.helpers import (
     create_patient,
     create_room,
     register_and_login,
+    relative_datetime,
+    relative_iso,
+    relative_slot,
 )
 
-START = "2026-10-01T09:00:00+00:00"
-END = "2026-10-01T10:00:00+00:00"
-OVERLAP_START = "2026-10-01T09:30:00+00:00"
-OVERLAP_END = "2026-10-01T10:30:00+00:00"
+START, END = relative_slot()
+OVERLAP_START, OVERLAP_END = relative_slot(minute=30)
 
 
 def _book(
@@ -248,7 +249,7 @@ def test_non_overlapping_bookings_do_not_conflict(client):
         student_token,
         patient_id=patient_id,
         start_time=END,
-        end_time="2026-10-01T11:00:00+00:00",
+        end_time=relative_iso(hour=11),
     )
     assert second.status_code == 201
 
@@ -430,8 +431,8 @@ def test_concurrent_overlapping_bookings_only_one_commits():
     finally:
         setup_session.close()
 
-    start = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
-    end = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    start = relative_datetime(days=31)
+    end = relative_datetime(days=31, hour=10)
 
     barrier = threading.Barrier(2)
     results: dict[str, str] = {}

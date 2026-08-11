@@ -58,6 +58,20 @@ class Settings(BaseSettings):
 
     frontend_origins: str = "http://localhost:5173"
 
+    # Social authentication is optional at runtime: the buttons remain
+    # visible, but /auth/oauth/{provider}/start sends users back with a
+    # friendly configuration error until that provider's credentials are
+    # supplied. The public backend URL must exactly match the redirect URI
+    # registered with Google/Apple.
+    oauth_backend_public_url: str = "http://localhost:8000"
+    oauth_frontend_url: str = "http://localhost:5173"
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    apple_oauth_client_id: str | None = None
+    apple_oauth_team_id: str | None = None
+    apple_oauth_key_id: str | None = None
+    apple_oauth_private_key: str | None = None
+
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "llama3.2"
     ollama_timeout_seconds: int = 30

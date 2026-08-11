@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { RouteFallback } from '../components/RouteFallback'
 import { AppLayout } from '../layouts/AppLayout'
 import { AuthLayout } from '../layouts/AuthLayout'
+import { OAuthCallbackPage } from '../pages/auth/OAuthCallbackPage'
 import { RequireAuth } from './RequireAuth'
 
 // Lazy-loaded so each route ships as its own chunk instead of all ~19 pages
@@ -72,6 +73,7 @@ export function AppRouter() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
           </Route>
 
           <Route element={<RequireAuth />}>
