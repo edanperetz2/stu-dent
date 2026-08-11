@@ -874,3 +874,34 @@ docker compose exec frontend npm run lint
   confirming a working stack came up on the freshly-created file (then the
   real `.env` was restored). Full regression green: 323 backend tests,
   lint clean.
+- **Google OAuth sign-in + report/calendar/nav polish (PR #2, external
+  contribution)**: **done**, merged 2026-08-11, authored by a teammate
+  (`yoshin98`) on `codex/social-auth-options`, not implemented in this
+  Claude session. Adds a real Google OAuth sign-in/registration flow:
+  `backend/app/api/routes/oauth.py` + `services/oauth.py`, a new
+  `oauth_identities` table (migration `b4f71d2e9a10`, one row per
+  provider+subject so a later email change can't orphan the link),
+  `GET /auth/oauth/{provider}/start` + provider callback routes, and a
+  frontend `SocialAuthButtons` + `OAuthCallbackPage` with a themed
+  same-tab handoff screen (avoids a flash of browser-default dark canvas
+  during the redirect). Apple Sign In is wired the same way but
+  deliberately left off the UI (`APPLE_OAUTH_*` env vars exist, unused)
+  until a stable production HTTPS callback exists. New env vars:
+  `OAUTH_BACKEND_PUBLIC_URL`, `OAUTH_FRONTEND_URL`,
+  `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` (README's "Google sign-in" section
+  documents the Google Cloud Console redirect-URI registration step).
+  Also: configurable weekly/monthly + AI-narrated/data-summary report
+  generation (`ReportsPage`, `report_assistant.py`), calendar
+  navigation/view-control polish, a real favicon, and — the one change
+  that touches this session's Docker simplification work directly —
+  `docker-compose.yml`'s every `env_file: .env` became
+  `env_file: *env-files`, a YAML anchor that loads `.env.example` first
+  (as defaults) and `.env` second (`required: false`, overriding only the
+  keys it sets). This means `docker compose up --build` now works with no
+  `.env` file at all, and — as a side effect — structurally prevents the
+  exact "stale `.env` missing a newly-added key" bug this session hit and
+  patched with per-key `${VAR:-default}` shell fallbacks in
+  `ollama-init`/`seed-init`'s entrypoints (still in place, now
+  belt-and-suspenders rather than load-bearing). `dev.sh up` dropped its
+  own `cp .env.example .env` bootstrap accordingly, since Compose now
+  supplies those defaults itself.
