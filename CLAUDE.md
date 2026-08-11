@@ -905,3 +905,26 @@ docker compose exec frontend npm run lint
   belt-and-suspenders rather than load-bearing). `dev.sh up` dropped its
   own `cp .env.example .env` bootstrap accordingly, since Compose now
   supplies those defaults itself.
+  **Follow-up (live local verification, same day)**: registered a real
+  Google Cloud OAuth 2.0 Web client (External user type — Internal
+  requires a Workspace org, which a personal Google account doesn't have;
+  redirect URI `http://localhost:8000/auth/oauth/google/callback`; the
+  app owner's own account can test without being added as a test user,
+  but anyone else, e.g. the lecturer, must be added explicitly under
+  Testing publishing status, capped at 100) and dropped the client
+  ID/secret into the local, git-ignored `.env`. First live attempt failed
+  with "The identity provider returned an invalid identity token" —
+  root-caused (via a temporary debug `print` in `_decode_id_token`'s
+  except clause, removed once done) to `MissingCryptographyError: RS256
+  requires 'cryptography' to be installed`. Not a bug in PR #2 itself:
+  `requirements.lock.txt` correctly pins `pyjwt[crypto]`/`cryptography`,
+  but the local `stu-dent-backend:local` image had been built a day
+  before that PR merged and was never rebuilt — `docker compose up -d`
+  (no `--build`) reuses the stale cached image silently. `docker compose
+  up --build -d` fixed it immediately. Confirmed via `pip show
+  cryptography` inside the container and a real end-to-end Google
+  sign-in. General lesson, not specific to OAuth: after pulling a branch
+  that changes backend dependencies, `up -d` alone isn't enough —
+  `dev.sh up`/`install.sh` already always pass `--build`, so this only
+  bites when running the raw `docker compose up -d` form directly, as
+  happened here mid-debugging.
