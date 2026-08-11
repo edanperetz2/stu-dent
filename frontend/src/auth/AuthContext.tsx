@@ -42,6 +42,7 @@ interface AuthContextValue {
   // close code) through the identical flow instead of reimplementing it.
   handleSessionExpired: () => void
   login: (email: string, password: string, role?: Role) => Promise<void>
+  completeOAuth: (token: string) => Promise<void>
   registerUser: (
     email: string,
     password: string,
@@ -130,6 +131,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [login],
   )
 
+  const completeOAuth = useCallback(async (token: string): Promise<void> => {
+    const user = await getCurrentUser(token)
+    persist(token)
+    setPrincipal(toPrincipal(token, user))
+    setSessionExpired(false)
+  }, [])
+
   const logout = useCallback((): void => {
     localStorage.removeItem(STORAGE_KEY)
     setPrincipal(null)
@@ -161,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearSessionExpired,
       handleSessionExpired,
       login,
+      completeOAuth,
       registerUser,
       logout,
     }),
@@ -171,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearSessionExpired,
       handleSessionExpired,
       login,
+      completeOAuth,
       registerUser,
       logout,
     ],

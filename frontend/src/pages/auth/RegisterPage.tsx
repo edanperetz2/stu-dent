@@ -8,6 +8,7 @@ import { apiErrorMessage } from '../../api/httpClient'
 import type { Role } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { ErrorText } from '../../components/StateText'
+import { SocialAuthButtons } from '../../components/SocialAuthButtons'
 
 interface RegisterFormValues {
   fullName: string
@@ -95,14 +96,6 @@ export function RegisterPage() {
     <form onSubmit={form.onSubmit(handleSubmit)}>
       <Stack>
         <TextInput label="Full name" autoComplete="name" {...form.getInputProps('fullName')} />
-        <TextInput
-          label="Email"
-          placeholder="you@example.com"
-          type="email"
-          autoComplete="email"
-          {...form.getInputProps('email')}
-        />
-        <PasswordInput label="Password" autoComplete="new-password" {...form.getInputProps('password')} />
         <Select
           label="Role"
           data={ROLE_OPTIONS}
@@ -133,6 +126,24 @@ export function RegisterPage() {
             )}
           </>
         )}
+        <SocialAuthButtons
+          flow="register"
+          role={form.values.role}
+          ownerStudentId={form.values.role === 'patient' ? form.values.ownerStudentId : undefined}
+          fullName={form.values.fullName}
+        />
+        <TextInput
+          label="Email"
+          placeholder="you@example.com"
+          type="email"
+          autoComplete="email"
+          {...form.getInputProps('email')}
+        />
+        <PasswordInput
+          label="Password"
+          autoComplete="new-password"
+          {...form.getInputProps('password')}
+        />
         {error && (
           <Alert color="red" role="alert">
             {error}

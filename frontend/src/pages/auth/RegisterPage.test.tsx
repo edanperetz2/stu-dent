@@ -152,4 +152,13 @@ describe('RegisterPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Email already registered')
   })
+
+  it('offers role-aware Google sign-up while Apple sign-up is shelved', () => {
+    renderWithProviders(<RegisterPage />, { route: '/register' })
+
+    const googleUrl = new URL(screen.getByRole('link', { name: 'Sign up with Google' }).getAttribute('href')!)
+    expect(googleUrl.searchParams.get('flow')).toBe('register')
+    expect(googleUrl.searchParams.get('role')).toBe('student')
+    expect(screen.queryByRole('link', { name: /Apple/i })).not.toBeInTheDocument()
+  })
 })

@@ -63,4 +63,14 @@ describe('LoginPage', () => {
       '/forgot-password',
     )
   })
+
+  it('offers Google sign-in while Apple sign-in is shelved', () => {
+    renderWithProviders(<LoginPage />, { route: '/login' })
+
+    expect(screen.getByRole('link', { name: 'Sign in with Google' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/auth/oauth/google/start'),
+    )
+    expect(screen.queryByRole('link', { name: /Apple/i })).not.toBeInTheDocument()
+  })
 })

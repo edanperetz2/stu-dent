@@ -18,6 +18,7 @@ from app.api.routes import (
     forum,
     messages,
     notifications,
+    oauth,
     patients,
     reports,
     resources,
@@ -57,6 +58,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(oauth.router)
 app.include_router(patients.router)
 app.include_router(attending.router)
 app.include_router(admin.router)

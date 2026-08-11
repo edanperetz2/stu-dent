@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-command local install/run. Equivalent to the manual steps in README.md's
 # "First run" section -- delegates the actual startup to dev.sh (the single
-# definition of "how to start the stack," incl. the .env bootstrap), then
+# definition of "how to start the stack" using the shared environment defaults), then
 # adds waiting for everything to actually be ready before printing the URLs.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -21,7 +21,7 @@ done
 echo "Waiting for the local AI model to finish pulling (one-time, cached after this)..."
 docker compose wait ollama-init >/dev/null 2>&1 || true
 
-echo "Waiting for demo data to finish seeding (skip by setting SEED_DEMO_ON_START=false in .env)..."
+echo "Waiting for demo data to finish seeding (override SEED_DEMO_ON_START=false in .env to skip)..."
 docker compose wait seed-init >/dev/null 2>&1 || true
 
 echo

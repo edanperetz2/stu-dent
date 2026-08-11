@@ -11,6 +11,81 @@ body {
   margin: 0;
 }
 
+.auth-page {
+  background-color: var(--mantine-color-body);
+  transition: background 180ms ease;
+}
+
+:root[data-mantine-color-scheme='light'] .auth-page {
+  background:
+    radial-gradient(circle at 50% 0%, rgb(15 125 140 / 12%), transparent 42%),
+    var(--mantine-color-gray-0);
+}
+
+:root[data-mantine-color-scheme='dark'] .auth-page {
+  background:
+    radial-gradient(circle at 50% 0%, rgb(24 154 170 / 14%), transparent 40%),
+    var(--mantine-color-dark-8);
+}
+
+.auth-card {
+  background-color: color-mix(in srgb, var(--mantine-color-body) 94%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+/* Google's prescribed custom-button palette and standard four-colour G.
+   The three-column content keeps the mark at the left while the label stays
+   visually centred, matching the familiar Google Identity button layout. */
+.google-auth-button {
+  height: 44px;
+  padding-inline: 12px;
+  border: 1px solid #747775;
+  background: #fff;
+  color: #1f1f1f;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.google-auth-button:hover {
+  border-color: #747775;
+  background: #f8faff;
+  box-shadow: 0 1px 2px rgb(60 64 67 / 30%);
+  color: #1f1f1f;
+}
+
+.google-auth-button__content {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 18px 1fr 18px;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.google-auth-button__logo {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+:root[data-mantine-color-scheme='dark'] .google-auth-button {
+  border-color: #8e918f;
+  background: #131314;
+  color: #e3e3e3;
+}
+
+:root[data-mantine-color-scheme='dark'] .google-auth-button:hover {
+  border-color: #8e918f;
+  background: #1f1f20;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+  color: #e3e3e3;
+}
+
 /* Table headers distinguished by more than weight -- smaller, dimmed, and
    letter-spaced, so the eye anchors on them as structure rather than
    competing with the data for attention. Targets the real <thead>/<th>

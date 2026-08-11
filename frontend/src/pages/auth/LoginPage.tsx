@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuth } from '../../auth/AuthContext'
+import { SocialAuthButtons } from '../../components/SocialAuthButtons'
 
 interface LoginFormValues {
   email: string
@@ -52,6 +53,10 @@ export function LoginPage() {
             Your session expired. Log in again to continue where you left off.
           </Alert>
         )}
+        <SocialAuthButtons
+          flow="login"
+          next={from ? `${from.pathname}${from.search}` : '/appointments'}
+        />
         <TextInput
           label="Email"
           placeholder="you@example.com"

@@ -1,34 +1,65 @@
-import { Center, Image, Paper, Stack, Title } from '@mantine/core'
+import {
+  ActionIcon,
+  Box,
+  Center,
+  Image,
+  Paper,
+  Stack,
+  Title,
+  useComputedColorScheme,
+  useMantineColorScheme,
+} from '@mantine/core'
+import { IconMoon, IconSun } from '@tabler/icons-react'
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { RouteFallback } from '../components/RouteFallback'
 
 export function AuthLayout() {
   const { principal, isLoading } = useAuth()
+  const { setColorScheme } = useMantineColorScheme()
+  const computedColorScheme = useComputedColorScheme('light')
 
   if (isLoading) return <RouteFallback />
   if (principal) return <Navigate to="/appointments" replace />
 
   return (
-    <Center mih="100vh" p="md" bg="var(--mantine-color-gray-0)">
-      {/* maw+w="100%" (not a fixed w) -- the very first screen every user
-          sees was forcing horizontal scroll/clipping below 380px
-          (iPhone SE and many Android phones). */}
-      <Paper withBorder shadow="md" p="md" radius="md" maw={380} w="100%">
-        <Stack align="stretch" gap="xs">
-          <Image
-            src="/stu-dent-logo.png"
-            alt="Stu-Dent logo"
-            w={300}
-            h={300}
-            mx="auto"
-          />
-          <Title order={2} ta="center">
-            Stu-Dent
-          </Title>
-          <Outlet />
-        </Stack>
-      </Paper>
-    </Center>
+    <Box component="main" mih="100dvh" className="auth-page">
+      <ActionIcon
+        pos="fixed"
+        top="md"
+        right="md"
+        size="lg"
+        variant="subtle"
+        color="gray"
+        aria-label={
+          computedColorScheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+        }
+        onClick={() => setColorScheme(computedColorScheme === 'dark' ? 'light' : 'dark')}
+      >
+        {computedColorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+      </ActionIcon>
+      <Center mih="100dvh" p={{ base: 'md', sm: 'xl' }}>
+        {/* Full-viewport shell, single centered surface: close to the
+            original composition, with a little more breathing room and
+            scheme-aware colors instead of a hardcoded light background. */}
+        <Paper
+          withBorder
+          shadow="xl"
+          p={{ base: 'lg', sm: 'xl' }}
+          radius="lg"
+          maw={440}
+          w="100%"
+          className="auth-card"
+        >
+          <Stack align="stretch" gap="lg">
+            <Stack align="center" gap={4}>
+              <Image src="/stu-dent-logo.png" alt="Stu-Dent logo" w={160} h={160} />
+              <Title order={2}>Stu-Dent</Title>
+            </Stack>
+            <Outlet />
+          </Stack>
+        </Paper>
+      </Center>
+    </Box>
   )
 }

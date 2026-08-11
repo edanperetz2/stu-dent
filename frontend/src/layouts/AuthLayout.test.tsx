@@ -36,6 +36,7 @@ describe('AuthLayout', () => {
       clearSessionExpired: vi.fn(),
       handleSessionExpired: vi.fn(),
       login: vi.fn(),
+      completeOAuth: vi.fn(),
       registerUser: vi.fn(),
       logout: vi.fn(),
     })
@@ -53,6 +54,7 @@ describe('AuthLayout', () => {
       clearSessionExpired: vi.fn(),
       handleSessionExpired: vi.fn(),
       login: vi.fn(),
+      completeOAuth: vi.fn(),
       registerUser: vi.fn(),
       logout: vi.fn(),
     })
@@ -70,12 +72,17 @@ describe('AuthLayout', () => {
       clearSessionExpired: vi.fn(),
       handleSessionExpired: vi.fn(),
       login: vi.fn(),
+      completeOAuth: vi.fn(),
       registerUser: vi.fn(),
       logout: vi.fn(),
     })
 
     renderAuthLayout()
-    expect(screen.getByText('Stu-Dent')).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveStyle({ minHeight: '100dvh' })
+    expect(
+      screen.getByRole('button', { name: /Switch to (light|dark) mode/ }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('Stu-Dent')).not.toHaveLength(0)
     expect(screen.getByText('login form content')).toBeInTheDocument()
   })
 })
