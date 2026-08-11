@@ -225,13 +225,297 @@ thead th {
   white-space: pre-wrap;
 }
 
+.appointments-page-header {
+  gap: var(--mantine-spacing-sm);
+}
+
+.appointments-page-controls {
+  justify-content: flex-end;
+}
+
+.appointments-segmented-control {
+  border: 1px solid var(--mantine-color-default-border);
+  background: color-mix(in srgb, var(--mantine-color-default) 84%, transparent);
+  padding: 3px;
+}
+
+.appointments-segmented-control .mantine-SegmentedControl-indicator {
+  border: 1px solid color-mix(in srgb, var(--mantine-primary-color-6) 18%, transparent);
+  background: var(--mantine-color-body);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+
+.appointments-segmented-control .mantine-SegmentedControl-label {
+  padding-inline: 0.75rem;
+  color: var(--mantine-color-dimmed);
+  font-weight: 550;
+  transition: color 160ms ease;
+}
+
+.appointments-segmented-control .mantine-SegmentedControl-label:hover {
+  color: var(--mantine-color-text);
+}
+
+.appointments-segmented-control .mantine-SegmentedControl-label[data-active],
+.appointments-segmented-control
+  [data-active]
+  > .mantine-SegmentedControl-label {
+  color: var(--mantine-primary-color-filled);
+}
+
+.appointments-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+@keyframes appointments-view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.appointments-view-surface {
+  min-width: 0;
+  animation: appointments-view-enter 180ms ease-out;
+}
+
+.appointments-calendar-shell {
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-lg);
+  background: color-mix(in srgb, var(--mantine-color-body) 96%, transparent);
+  padding: 0.75rem;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 4%);
+}
+
+.appointments-calendar-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(8rem, 1fr) auto;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+  margin-bottom: 0.75rem;
+}
+
+.appointments-calendar-toolbar__label {
+  overflow: hidden;
+  color: var(--mantine-color-text);
+  font-size: var(--mantine-font-size-md);
+  font-weight: 650;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appointments-calendar-view-toggle .mantine-SegmentedControl-label {
+  min-width: 3.25rem;
+  padding-block: 0.3rem;
+  padding-inline: 0.65rem;
+}
+
+.appointments-calendar-shell .rbc-month-view,
+.appointments-calendar-shell .rbc-time-view,
+.appointments-calendar-shell .rbc-agenda-view {
+  overflow: hidden;
+  border-color: var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-body);
+}
+
+.appointments-calendar-shell .rbc-header {
+  min-height: 46px;
+  border-bottom-color: var(--mantine-color-default-border);
+  background: color-mix(in srgb, var(--mantine-color-default) 62%, transparent);
+  color: var(--mantine-color-dimmed);
+}
+
+.appointments-calendar-shell .rbc-header + .rbc-header,
+.appointments-calendar-shell .rbc-day-bg + .rbc-day-bg,
+.appointments-calendar-shell .rbc-time-content > * + * > * {
+  border-left-color: var(--mantine-color-default-border);
+}
+
+.appointments-calendar-shell .rbc-month-row + .rbc-month-row,
+.appointments-calendar-shell .rbc-timeslot-group,
+.appointments-calendar-shell .rbc-time-header-content,
+.appointments-calendar-shell .rbc-time-content,
+.appointments-calendar-shell .rbc-day-slot .rbc-time-slot {
+  border-color: var(--mantine-color-default-border);
+}
+
+.appointments-calendar-day-header {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  font-weight: 500;
+}
+
+.appointments-calendar-day-header__weekday,
+.appointments-calendar-month-header {
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.appointments-calendar-day-header__date {
+  display: inline-grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--mantine-color-text);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.appointments-calendar-day-header[data-today] .appointments-calendar-day-header__date {
+  background: var(--mantine-primary-color-filled);
+  color: var(--mantine-color-white);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--mantine-primary-color-6) 24%, transparent);
+}
+
+.appointments-calendar-month-header {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+}
+
+.appointments-calendar-shell .rbc-date-cell {
+  padding: 0.35rem 0.5rem 0 0;
+  color: var(--mantine-color-dimmed);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.appointments-calendar-shell .rbc-date-cell.rbc-now {
+  color: var(--mantine-color-dimmed);
+  font-weight: 600;
+}
+
+.appointments-calendar-shell .rbc-today {
+  background: transparent;
+}
+
+.appointments-calendar-shell .rbc-off-range-bg {
+  background: color-mix(in srgb, var(--mantine-color-default) 72%, var(--mantine-color-body));
+}
+
+.appointments-calendar-shell .rbc-current-time-indicator {
+  display: none;
+}
+
+/* Stu-Dent only stores timed appointments. react-big-calendar reserves a
+   two-row all-day lane anyway, which looks like an unexplained empty box
+   below the weekday headers in Week/Day views. */
+.appointments-calendar-shell .rbc-allday-cell {
+  display: none;
+}
+
+@keyframes calendar-event-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.appointments-calendar-shell .rbc-event {
+  border: 0;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 14%);
+  transition:
+    filter 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+  animation: calendar-event-enter 160ms ease-out;
+}
+
+.appointments-calendar-shell .rbc-event:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 18%);
+  transform: translateY(-1px);
+}
+
+.appointments-calendar-shell .rbc-show-more {
+  color: var(--mantine-primary-color-filled);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+@media (max-width: 62em) {
+  .appointments-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .appointments-page-controls {
+    justify-content: flex-start;
+  }
+
+  .appointments-calendar-toolbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .appointments-calendar-toolbar__label {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .appointments-calendar-toolbar > :first-child,
+  .appointments-calendar-toolbar > :last-child {
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 40em) {
+  .appointments-page-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .appointments-calendar-shell {
+    padding: 0.5rem;
+  }
+
+  .appointments-calendar-toolbar {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .appointments-calendar-toolbar > :first-child {
+    justify-content: center;
+    order: 2;
+  }
+
+  .appointments-calendar-toolbar__label {
+    order: 1;
+  }
+
+  .appointments-calendar-view-toggle {
+    order: 3;
+  }
+}
+
 /* react-big-calendar ships its own stylesheet (AppointmentsCalendarView.tsx)
    with light-mode-only hardcoded colors -- unlike every other color in this
    app, it has no idea Mantine's dark mode exists. Confirmed live: off-range
    day cells rendered a literal #e6e6e6 background (a stark light rectangle
-   against the dark page), "today" rendered a pale #eaf6ff, and the
-   Today/Back/Next toolbar buttons rendered dark gray text (#373a3c) on a
-   transparent background over the dark page -- effectively unreadable.
+   against the dark page), while "today" rendered a pale #eaf6ff.
    Scoped to Mantine's own dark-scheme attribute and built from Mantine's
    theme tokens, not new hardcoded hex, so it can't drift out of sync with
    the rest of the dark theme. */
@@ -241,26 +525,6 @@ thead th {
 
 :root[data-mantine-color-scheme='dark'] .rbc-off-range {
   color: var(--mantine-color-dimmed);
-}
-
-:root[data-mantine-color-scheme='dark'] .rbc-today {
-  background: var(--mantine-primary-color-light);
-}
-
-:root[data-mantine-color-scheme='dark'] .rbc-toolbar button {
-  color: var(--mantine-color-text);
-  border-color: var(--mantine-color-dark-4);
-}
-
-:root[data-mantine-color-scheme='dark'] .rbc-toolbar button:hover {
-  background: var(--mantine-color-dark-5);
-}
-
-:root[data-mantine-color-scheme='dark'] .rbc-toolbar button.rbc-active,
-:root[data-mantine-color-scheme='dark'] .rbc-toolbar button.rbc-active:hover {
-  background: var(--mantine-primary-color-filled);
-  color: var(--mantine-color-white);
-  border-color: var(--mantine-primary-color-filled);
 }
 
 /* Agenda view (the narrow-screen fallback -- see AppointmentsCalendarView.tsx)
@@ -286,6 +550,10 @@ thead th {
   .header-logo-link,
   .header-logout-button,
   .app-nav-link,
+  .appointments-calendar-shell .rbc-event,
+  .appointments-segmented-control .mantine-SegmentedControl-label,
+  .appointments-view-surface,
+  .google-auth-button,
   .skip-link,
   .list-item-enter {
     transition: none;
@@ -294,7 +562,8 @@ thead th {
 
   .header-logo-link:hover,
   .header-logout-button:hover,
-  .app-nav-link:hover {
+  .app-nav-link:hover,
+  .appointments-calendar-shell .rbc-event:hover {
     transform: none;
   }
 }

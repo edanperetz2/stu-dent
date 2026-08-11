@@ -1,4 +1,4 @@
-import { useQuery, type QueryKey } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, type QueryKey } from '@tanstack/react-query'
 import { apiErrorMessage } from '../api/httpClient'
 
 export type ListQueryResult<TData> =
@@ -12,6 +12,10 @@ interface UseListQueryOptions<TQueryFnData> {
   queryFn: () => Promise<TQueryFnData>
   errorFallback: string
   enabled?: boolean
+  /** Keep the last successful list mounted while a changed query key loads.
+   * Useful for paged/date-window UIs where replacing the whole surface with
+   * a skeleton on every uncached navigation creates a distracting flash. */
+  preservePreviousData?: boolean
   /** Defaults to "an empty array" -- pass `() => false` for a page (like
    * AppointmentsListPage) whose content branches already render their own
    * empty state, or for a single-object query (PreferencesPage) where
@@ -35,9 +39,15 @@ export function useListQuery<TQueryFnData>({
   queryFn,
   errorFallback,
   enabled,
+  preservePreviousData = false,
   isEmpty = (data) => Array.isArray(data) && data.length === 0,
 }: UseListQueryOptions<TQueryFnData>): ListQueryResult<TQueryFnData> {
-  const { data, isError, error, refetch } = useQuery({ queryKey, queryFn, enabled })
+  const { data, isError, error, refetch } = useQuery({
+    queryKey,
+    queryFn,
+    enabled,
+    placeholderData: preservePreviousData ? keepPreviousData : undefined,
+  })
   const retry = () => {
     void refetch()
   }

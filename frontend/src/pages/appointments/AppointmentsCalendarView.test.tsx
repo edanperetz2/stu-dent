@@ -1,25 +1,30 @@
 import { MantineProvider } from '@mantine/core'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppointmentsCalendarView } from './AppointmentsCalendarView'
 
-function renderCalendar() {
-  return render(
+function renderCalendar(props: Partial<ComponentProps<typeof AppointmentsCalendarView>> = {}) {
+  const onNavigate = props.onNavigate ?? vi.fn()
+  const result = render(
     <MantineProvider>
       <AppointmentsCalendarView
         events={[]}
         view="week"
         onViewChange={vi.fn()}
         date={new Date('2026-09-01T00:00:00.000Z')}
-        onNavigate={vi.fn()}
+        onNavigate={onNavigate}
         selectable={false}
         onSelectSlot={vi.fn()}
         onSelectEvent={vi.fn()}
         isResourceLens={false}
         resourceColorNames={{}}
+        {...props}
       />
     </MantineProvider>,
   )
+  return { ...result, onNavigate }
 }
 
 /** window.matchMedia is globally stubbed to always return matches:false in
@@ -47,15 +52,57 @@ describe('AppointmentsCalendarView', () => {
     mockNarrowScreen(true)
     renderCalendar()
 
-    expect(await screen.findByRole('button', { name: /agenda/i })).toBeInTheDocument()
+    expect(await screen.findByRole('radio', { name: /agenda/i })).toBeInTheDocument()
   })
 
   it('does not offer Agenda at a normal screen width', async () => {
     mockNarrowScreen(false)
     renderCalendar()
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /week/i })).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: /agenda/i })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('radio', { name: /week/i })).toBeInTheDocument())
+    expect(screen.queryByRole('radio', { name: /agenda/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('radiogroup', { name: 'Calendar timescale' })).not.toHaveAttribute(
+      'data-with-items-borders',
+    )
+  })
+
+  it('uses icon-assisted previous, today, and next navigation controls', async () => {
+    const { onNavigate } = renderCalendar()
+    const previousButton = screen.getByRole('button', { name: 'Previous period' })
+    const todayButton = screen.getByRole('button', { name: 'Today' })
+    const nextButton = screen.getByRole('button', { name: 'Next period' })
+
+    expect(previousButton.querySelector('svg')).not.toBeNull()
+    expect(todayButton.querySelector('svg')).not.toBeNull()
+    expect(nextButton.querySelector('svg')).not.toBeNull()
+
+    await userEvent.click(previousButton)
+    await userEvent.click(todayButton)
+    await userEvent.click(nextButton)
+
+    expect(onNavigate).toHaveBeenNthCalledWith(1, expect.any(Date), 'week', 'PREV')
+    expect(onNavigate).toHaveBeenNthCalledWith(2, expect.any(Date), 'week', 'TODAY')
+    expect(onNavigate).toHaveBeenNthCalledWith(3, expect.any(Date), 'week', 'NEXT')
+  })
+
+  it('renders weekday and date as separate modern header elements', () => {
+    const { container } = renderCalendar()
+    const headers = container.querySelectorAll('.appointments-calendar-day-header')
+
+    expect(headers).toHaveLength(7)
+    for (const header of headers) {
+      expect(header.querySelector('.appointments-calendar-day-header__weekday')).not.toBeNull()
+      expect(header.querySelector('.appointments-calendar-day-header__date')).not.toBeNull()
+      expect(header.textContent).not.toContain('/')
+    }
+  })
+
+  it('marks today with a date-circle hook without selecting the whole column', () => {
+    const { container } = renderCalendar({ date: new Date() })
+
+    expect(container.querySelectorAll('.appointments-calendar-day-header[data-today]')).toHaveLength(
+      1,
+    )
   })
 
   it('derives the wrapper height from the viewport instead of a fixed 700px', () => {

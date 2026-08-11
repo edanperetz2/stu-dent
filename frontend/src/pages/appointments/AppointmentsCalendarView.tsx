@@ -1,9 +1,22 @@
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
-import { useMantineTheme } from '@mantine/core'
+import { ActionIcon, Button, Group, SegmentedControl, Text, Tooltip, useMantineTheme } from '@mantine/core'
 import { useMediaQuery, useViewportSize } from '@mantine/hooks'
+import {
+  IconCalendarEvent,
+  IconChevronLeft,
+  IconChevronRight,
+} from '@tabler/icons-react'
 import dayjs from 'dayjs'
-import { Calendar, dayjsLocalizer, type Formats, type SlotInfo, type View } from 'react-big-calendar'
+import {
+  Calendar,
+  dayjsLocalizer,
+  type Formats,
+  type HeaderProps,
+  type SlotInfo,
+  type ToolbarProps,
+  type View,
+} from 'react-big-calendar'
 import { APPOINTMENT_END_TIME_OPTIONS, APPOINTMENT_START_TIME_OPTIONS } from '../../utils/dates'
 import { STATUS_CALENDAR_COLOR } from './appointmentActions'
 import { AGENDA_LENGTH_DAYS, type CalendarEventItem, type RESOURCE_COLOR_NAMES } from './resourceColors'
@@ -30,18 +43,114 @@ const CALENDAR_MAX_TIME = timeOptionToDate(APPOINTMENT_END_TIME_OPTIONS[APPOINTM
 // having them ready costs nothing.
 const CALENDAR_FORMATS: Formats = {
   timeGutterFormat: 'HH:mm',
-  dayFormat: 'ddd DD/MM',
-  dayHeaderFormat: 'dddd DD/MM/YYYY',
+  dayFormat: 'ddd D MMM',
+  dayHeaderFormat: 'dddd, D MMMM YYYY',
   dayRangeHeaderFormat: ({ start, end }, culture, localizer) =>
-    `${localizer!.format(start, 'DD/MM', culture)} – ${localizer!.format(end, 'DD/MM', culture)}`,
+    `${localizer!.format(start, 'D MMM', culture)} – ${localizer!.format(end, 'D MMM YYYY', culture)}`,
   eventTimeRangeFormat: ({ start, end }, culture, localizer) =>
     `${localizer!.format(start, 'HH:mm', culture)} – ${localizer!.format(end, 'HH:mm', culture)}`,
   selectRangeFormat: ({ start, end }, culture, localizer) =>
     `${localizer!.format(start, 'HH:mm', culture)} – ${localizer!.format(end, 'HH:mm', culture)}`,
-  agendaDateFormat: 'ddd DD/MM',
+  agendaDateFormat: 'ddd, D MMM',
   agendaTimeFormat: 'HH:mm',
   agendaHeaderFormat: ({ start, end }, culture, localizer) =>
-    `${localizer!.format(start, 'DD/MM', culture)} – ${localizer!.format(end, 'DD/MM', culture)}`,
+    `${localizer!.format(start, 'D MMM', culture)} – ${localizer!.format(end, 'D MMM YYYY', culture)}`,
+}
+
+const VIEW_LABELS: Partial<Record<View, string>> = {
+  month: 'Month',
+  week: 'Week',
+  day: 'Day',
+  agenda: 'Agenda',
+}
+
+function availableCalendarViews(views: ToolbarProps['views']): View[] {
+  if (Array.isArray(views)) return views
+  return (Object.keys(views) as View[]).filter((candidate) => Boolean(views[candidate]))
+}
+
+function CalendarToolbar({ label, onNavigate, onView, view, views }: ToolbarProps<CalendarEventItem>) {
+  const viewOptions = availableCalendarViews(views).map((value) => ({
+    value,
+    label: VIEW_LABELS[value] ?? value,
+  }))
+
+  return (
+    <div className="appointments-calendar-toolbar">
+      <Group gap={4} wrap="nowrap">
+        <Tooltip label="Previous period" openDelay={400}>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="lg"
+            radius="xl"
+            aria-label="Previous period"
+            onClick={() => onNavigate('PREV')}
+          >
+            <IconChevronLeft size={18} stroke={1.7} />
+          </ActionIcon>
+        </Tooltip>
+        <Button
+          variant="subtle"
+          color="gray"
+          size="compact-sm"
+          radius="xl"
+          leftSection={<IconCalendarEvent size={15} stroke={1.7} />}
+          onClick={() => onNavigate('TODAY')}
+        >
+          Today
+        </Button>
+        <Tooltip label="Next period" openDelay={400}>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="lg"
+            radius="xl"
+            aria-label="Next period"
+            onClick={() => onNavigate('NEXT')}
+          >
+            <IconChevronRight size={18} stroke={1.7} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
+
+      <Text className="appointments-calendar-toolbar__label">{label}</Text>
+
+      <SegmentedControl
+        aria-label="Calendar timescale"
+        value={view}
+        onChange={(value) => onView(value as View)}
+        data={viewOptions}
+        size="xs"
+        radius="xl"
+        className="appointments-segmented-control appointments-calendar-view-toggle"
+        transitionDuration={180}
+        withItemsBorders={false}
+      />
+    </div>
+  )
+}
+
+function CalendarDayHeader({ date }: HeaderProps) {
+  const label = dayjs(date).format('dddd, D MMMM')
+  const isToday = dayjs(date).isSame(dayjs(), 'day')
+
+  return (
+    <span className="appointments-calendar-day-header" data-today={isToday || undefined}>
+      <span className="appointments-calendar-day-header__weekday">{dayjs(date).format('ddd')}</span>
+      <span className="appointments-calendar-day-header__date" aria-label={label}>
+        {dayjs(date).format('D')}
+      </span>
+    </span>
+  )
+}
+
+function CalendarMonthHeader({ date }: HeaderProps) {
+  return (
+    <span className="appointments-calendar-month-header">
+      {dayjs(date).format('ddd')}
+    </span>
+  )
 }
 
 // Below this width the month/week grid views are cramped enough to be
@@ -92,7 +201,7 @@ export function AppointmentsCalendarView({
   const views: View[] = isNarrow ? ['month', 'week', 'day', 'agenda'] : ['month', 'week', 'day']
 
   return (
-    <div style={{ height: calendarHeight }}>
+    <div className="appointments-calendar-shell" style={{ height: calendarHeight }}>
       <Calendar
         localizer={localizer}
         formats={CALENDAR_FORMATS}
@@ -113,6 +222,12 @@ export function AppointmentsCalendarView({
         selectable={selectable}
         onSelectSlot={onSelectSlot}
         onSelectEvent={onSelectEvent}
+        components={{
+          toolbar: CalendarToolbar,
+          day: { header: CalendarDayHeader },
+          week: { header: CalendarDayHeader },
+          month: { header: CalendarMonthHeader },
+        }}
         eventPropGetter={(event) => {
           const color =
             isResourceLens && event.resourceId

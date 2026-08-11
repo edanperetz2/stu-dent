@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { useListQuery } from './useListQuery'
@@ -110,5 +110,34 @@ describe('useListQuery', () => {
     )
 
     await waitFor(() => expect(result.current.status).toBe('ready'))
+  })
+
+  it('can preserve the previous list while a changed query key loads', async () => {
+    let resolveSecond: (value: number[]) => void = () => undefined
+    const secondResult = new Promise<number[]>((resolve) => {
+      resolveSecond = resolve
+    })
+
+    const { result, rerender } = renderHook(
+      ({ page }) =>
+        useListQuery({
+          queryKey: ['test-preserved-page', page],
+          queryFn: () => (page === 1 ? Promise.resolve([1]) : secondResult),
+          errorFallback: 'Failed to load.',
+          preservePreviousData: true,
+        }),
+      { wrapper, initialProps: { page: 1 } },
+    )
+
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    rerender({ page: 2 })
+
+    expect(result.current.status).toBe('ready')
+    expect(result.current.status === 'ready' && result.current.data).toEqual([1])
+
+    act(() => resolveSecond([2]))
+    await waitFor(() => {
+      expect(result.current.status === 'ready' && result.current.data).toEqual([2])
+    })
   })
 })
