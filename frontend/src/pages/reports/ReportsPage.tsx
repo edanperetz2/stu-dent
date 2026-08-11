@@ -1,10 +1,15 @@
-import { Badge, Button, Group, Paper, Stack, Text, Textarea, Title } from '@mantine/core'
+import { Badge, Button, Group, Paper, Select, Stack, Text, Textarea, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { askQuestion, generateReport, listReports } from '../../api/reports'
 import { apiErrorMessage } from '../../api/httpClient'
-import type { ReportContentSource, ReportPeriodType } from '../../api/types'
+import type {
+  GenerateReportInput,
+  ReportContentSource,
+  ReportOutputStyle,
+  ReportPeriodType,
+} from '../../api/types'
 import { useAuthToken } from '../../auth/useAuthToken'
 import { CardListSkeleton } from '../../components/Skeletons'
 import { EmptyText, ErrorText } from '../../components/StateText'
@@ -30,10 +35,16 @@ const CONTENT_SOURCE: Record<ReportContentSource, { label: string; color: string
   unresolved_date_range: { label: 'Date range not understood', color: 'yellow' },
 }
 
+const GENERATE_REPORT_MUTATION_KEY = ['reports', 'generate'] as const
+
 export function ReportsPage() {
   const token = useAuthToken()
   const queryClient = useQueryClient()
+  const isGeneratingReport =
+    useIsMutating({ mutationKey: GENERATE_REPORT_MUTATION_KEY }) > 0
   const [question, setQuestion] = useState('')
+  const [reportPeriod, setReportPeriod] = useState<'weekly' | 'monthly'>('weekly')
+  const [outputStyle, setOutputStyle] = useState<ReportOutputStyle>('ai_narrated')
 
   const {
     data: reports,
@@ -49,7 +60,8 @@ export function ReportsPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['reports'] })
 
   const generateMutation = useMutation({
-    mutationFn: () => generateReport(token),
+    mutationKey: GENERATE_REPORT_MUTATION_KEY,
+    mutationFn: (input: GenerateReportInput) => generateReport(token, input),
     onSuccess: () => {
       invalidate()
       notifications.show({ message: 'Report generated', color: 'green' })
@@ -85,10 +97,46 @@ export function ReportsPage() {
     <Stack>
       <Group justify="space-between">
         <Title order={2}>Reports</Title>
-        <Button onClick={() => generateMutation.mutate()} loading={generateMutation.isPending}>
-          Generate report now
-        </Button>
       </Group>
+
+      <Paper withBorder p="md">
+        <Stack gap="sm">
+          <Text fw={600}>Generate report</Text>
+          <Group align="end" grow>
+            <Select
+              label="Report period"
+              data={[
+                { value: 'weekly', label: 'Weekly' },
+                { value: 'monthly', label: 'Monthly' },
+              ]}
+              value={reportPeriod}
+              onChange={(value) => setReportPeriod(value as 'weekly' | 'monthly')}
+              allowDeselect={false}
+            />
+            <Select
+              label="Report format"
+              data={[
+                { value: 'ai_narrated', label: 'AI narrated' },
+                { value: 'data_summary', label: 'Data summary' },
+              ]}
+              value={outputStyle}
+              onChange={(value) => setOutputStyle(value as ReportOutputStyle)}
+              allowDeselect={false}
+            />
+            <Button
+              onClick={() =>
+                generateMutation.mutate({
+                  period_type: reportPeriod,
+                  output_style: outputStyle,
+                })
+              }
+              loading={isGeneratingReport}
+            >
+              Generate report
+            </Button>
+          </Group>
+        </Stack>
+      </Paper>
 
       <Stack gap="xs">
         <Textarea

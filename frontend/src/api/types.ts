@@ -42,6 +42,13 @@ export type ReportContentSource =
   | 'malformed_response'
   | 'unresolved_date_range'
 
+export type ReportOutputStyle = 'ai_narrated' | 'data_summary'
+
+export interface GenerateReportInput {
+  period_type: Exclude<ReportPeriodType, 'ad_hoc'>
+  output_style: ReportOutputStyle
+}
+
 export interface User {
   id: string
   email: string

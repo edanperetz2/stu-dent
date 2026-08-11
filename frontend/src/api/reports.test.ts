@@ -15,11 +15,12 @@ describe('reports api', () => {
   })
 
   it('generateReport requests POST /reports/generate', async () => {
-    const fetchMock = mockFetchOnce(200, [])
-    await generateReport('tok')
+    const fetchMock = mockFetchOnce(200, {})
+    await generateReport('tok', { period_type: 'monthly', output_style: 'data_summary' })
     const call = lastFetchCall(fetchMock)
     expect(call.url).toContain('/reports/generate')
     expect(call.method).toBe('POST')
+    expect(call.body).toEqual({ period_type: 'monthly', output_style: 'data_summary' })
   })
 
   it('askQuestion requests POST /reports/ask with the question in the body', async () => {

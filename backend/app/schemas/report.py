@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,3 +23,8 @@ class ReportOut(BaseModel):
 
 class AskQuestionIn(BaseModel):
     question: str = Field(min_length=1, max_length=1_000)
+
+
+class GenerateReportIn(BaseModel):
+    period_type: Literal["weekly", "monthly"]
+    output_style: Literal["ai_narrated", "data_summary"]

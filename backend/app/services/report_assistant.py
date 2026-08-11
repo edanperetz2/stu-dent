@@ -122,20 +122,19 @@ def _format_time_impact_plainly(items: list[dict]) -> str:
     return sentence
 
 
-def _plain_english_fallback(data: dict[str, Any]) -> str:
-    """Deterministic, human-readable stand-in for a model summary when
-    Ollama is unreachable or returns an unusable response -- reads like a
-    real narrated summary (built from the same already-computed
-    report_data.py numbers) instead of a raw dict/UUID dump or a flat
-    per-item bullet list.
-    """
+def _plain_english_summary(data: dict[str, Any]) -> str:
+    """Build a deterministic readable summary from precomputed facts."""
     sentences: list[str] = []
     if "resource_utilization" in data:
         sentences.append(_format_resource_utilization_plainly(data["resource_utilization"]))
     if "time_impact" in data:
         sentences.append(_format_time_impact_plainly(data["time_impact"]))
-    body = " ".join(sentences)
-    return f"AI narration unavailable -- plain summary of the data: {body}"
+    return " ".join(sentences)
+
+
+def _plain_english_fallback(data: dict[str, Any]) -> str:
+    """Deterministic stand-in when requested AI narration is unavailable."""
+    return f"AI narration unavailable -- plain summary of the data: {_plain_english_summary(data)}"
 
 
 def _narrate(data: dict[str, Any], *, audience: str) -> tuple[str, ReportContentSource]:
@@ -163,10 +162,12 @@ def generate_periodic_report(
     period_end: datetime,
     commit: bool = True,
     resource_utilization_data: list[dict] | None = None,
+    use_ai: bool = True,
 ) -> Report:
-    """Compute + narrate a weekly/monthly report for `recipient`. Ollama
-    only ever narrates already-computed facts here -- it never sees the DB
-    and never contributes a number of its own.
+    """Compute a weekly/monthly report for `recipient`. When `use_ai` is
+    true, Ollama only narrates already-computed facts -- it never sees the
+    DB or contributes a number of its own. When false, the same facts are
+    formatted deterministically without calling Ollama.
 
     `resource_utilization_data`, when given, is used as-is instead of being
     recomputed -- it's clinic-wide, not recipient-specific, so a caller
@@ -194,7 +195,11 @@ def generate_periodic_report(
         ),
         "time_impact": time_impact(db, scope_user=recipient, start=period_start, end=period_end),
     }
-    content, content_source = _narrate(data, audience=f"dental {recipient.role.value}")
+    if use_ai:
+        content, content_source = _narrate(data, audience=f"dental {recipient.role.value}")
+    else:
+        content = _plain_english_summary(data)
+        content_source = ReportContentSource.fallback_summary
 
     report = Report(
         recipient_id=recipient.id,
