@@ -54,8 +54,9 @@ describe('RequireAuth', () => {
     await userEvent.type(screen.getByLabelText('Password'), 'password123')
     await userEvent.click(screen.getByRole('button', { name: 'Log in' }))
 
-    // Lands back on /patients, not the generic /appointments default.
-    expect(await screen.findByText('Protected content')).toBeInTheDocument()
+    // Lands back on /patients, not the generic /appointments default, after
+    // the intentional one-second minimum sign-in transition.
+    expect(await screen.findByText('Protected content', {}, { timeout: 2500 })).toBeInTheDocument()
   })
 
   it('shows an explicit session-expired message after an authenticated request gets a 401', async () => {

@@ -31,12 +31,15 @@ import {
   IconUsers,
   type Icon,
 } from '@tabler/icons-react'
+import { Suspense } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { listPendingFeedback } from '../api/feedback'
 import { getUnreadCount } from '../api/messages'
 import { getUnreadNotificationCount } from '../api/notifications'
 import { useAuth, type Principal } from '../auth/AuthContext'
+import { RouteFallback } from '../components/RouteFallback'
 import { useRealtime } from '../realtime/RealtimeContext'
+import { preloadRoute } from '../router/preloadRoute'
 
 type NavSection = 'Clinic' | 'Admin' | 'Community' | 'You'
 
@@ -166,7 +169,7 @@ export function AppLayout() {
         navbar={{ width: 220, breakpoint: 'sm', collapsed: { mobile: !opened } }}
         padding="md"
       >
-        <AppShell.Header>
+        <AppShell.Header className="app-layout-header">
           <Group h="100%" px="md" justify="space-between">
             <Group gap="xs">
               <Burger
@@ -231,7 +234,7 @@ export function AppLayout() {
             </Group>
           </Group>
         </AppShell.Header>
-        <AppShell.Navbar p="md">
+        <AppShell.Navbar p="md" className="app-layout-navbar">
           {linkSections.map(({ section, items }, sectionIndex) => (
             <div key={section}>
               <Text
@@ -281,6 +284,9 @@ export function AppLayout() {
                     // needs to close the mobile drawer -- navigation itself
                     // is Link's job, not this handler's.
                     onClick={close}
+                    onMouseEnter={() => void preloadRoute(link.to)}
+                    onFocus={() => void preloadRoute(link.to)}
+                    onPointerDown={() => void preloadRoute(link.to)}
                     rightSection={
                       badgeError ? (
                         <Badge
@@ -303,8 +309,15 @@ export function AppLayout() {
             </div>
           ))}
         </AppShell.Navbar>
-        <AppShell.Main id="main-content">
-          <Outlet />
+        <AppShell.Main id="main-content" className="app-layout-main">
+          {/* Keep the header and navigation mounted while a first-visit route
+              chunk loads. Intent preloading above usually avoids this fallback
+              entirely; slower connections get a stable in-content loader. */}
+          <Suspense fallback={<RouteFallback delayed />}>
+            <div key={location.pathname} className="app-route-surface">
+              <Outlet />
+            </div>
+          </Suspense>
         </AppShell.Main>
       </AppShell>
     </>

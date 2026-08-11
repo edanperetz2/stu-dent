@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { RouteFallback } from '../components/RouteFallback'
 import { AppLayout } from '../layouts/AppLayout'
 import { AuthLayout } from '../layouts/AuthLayout'
+import { OAuthCallbackPage } from '../pages/auth/OAuthCallbackPage'
 import { RequireAuth } from './RequireAuth'
 
 // Lazy-loaded so each route ships as its own chunk instead of all ~19 pages
@@ -34,9 +35,6 @@ const ForgotPasswordPage = lazy(() =>
 )
 const ResetPasswordPage = lazy(() =>
   import('../pages/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })),
-)
-const OAuthCallbackPage = lazy(() =>
-  import('../pages/auth/OAuthCallbackPage').then((m) => ({ default: m.OAuthCallbackPage })),
 )
 const FeedbackPage = lazy(() =>
   import('../pages/feedback/FeedbackPage').then((m) => ({ default: m.FeedbackPage })),

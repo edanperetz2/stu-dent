@@ -1,4 +1,5 @@
-import { Button, Divider, Stack } from '@mantine/core'
+import { Button, Divider, Stack, useComputedColorScheme } from '@mantine/core'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { API_BASE_URL } from '../api/httpClient'
 import type { Role } from '../api/types'
 
@@ -17,10 +18,22 @@ export function SocialAuthButtons({
   fullName,
   next = '/appointments',
 }: SocialAuthButtonsProps) {
+  const colorScheme = useComputedColorScheme('light')
+  const [redirecting, setRedirecting] = useState(false)
+  const redirectTimer = useRef<number | null>(null)
+
+  useEffect(
+    () => () => {
+      if (redirectTimer.current !== null) window.clearTimeout(redirectTimer.current)
+    },
+    [],
+  )
+
   function googleHref(): string {
     const url = new URL(`${API_BASE_URL}/auth/oauth/google/start`)
     url.searchParams.set('flow', flow)
     url.searchParams.set('next', next)
+    url.searchParams.set('color_scheme', colorScheme)
     if (flow === 'register' && role) url.searchParams.set('role', role)
     if (flow === 'register' && ownerStudentId) {
       url.searchParams.set('owner_student_id', ownerStudentId)
@@ -32,20 +45,31 @@ export function SocialAuthButtons({
   }
 
   const label = flow === 'login' ? 'Sign in with Google' : 'Sign up with Google'
+  const href = googleHref()
+
+  function handleGoogleClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    if (redirecting) return
+    setRedirecting(true)
+    redirectTimer.current = window.setTimeout(() => window.location.assign(href), 100)
+  }
 
   return (
     <Stack gap="sm">
       <Button
         component="a"
-        href={googleHref()}
+        href={href}
         variant="default"
         className="google-auth-button"
-        aria-label={label}
+        aria-label={redirecting ? 'Opening Google sign-in' : label}
+        loading={redirecting}
+        onClick={handleGoogleClick}
         fullWidth
       >
         <span className="google-auth-button__content">
           <GoogleLogo />
-          <span>{label}</span>
+          <span>{redirecting ? 'Opening Google…' : label}</span>
           <span aria-hidden="true" />
         </span>
       </Button>

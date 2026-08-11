@@ -1,3 +1,5 @@
+import json
+import re
 from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy import select
@@ -6,7 +8,7 @@ from app.api.routes import oauth as oauth_routes
 from app.config import Settings, settings
 from app.models.oauth_identity import OAuthIdentity
 from app.models.user import RoleEnum, User
-from app.services.oauth import OAuthProfile, create_state
+from app.services.oauth import OAuthProfile, create_state, decode_state
 from tests.helpers import register
 
 
@@ -17,6 +19,12 @@ def _configure_google(monkeypatch) -> None:
 
 def _fragment(location: str) -> dict[str, list[str]]:
     return parse_qs(urlparse(location).fragment)
+
+
+def _handoff_destination(response) -> str:
+    match = re.search(r'window\.location\.replace\((".*?")\)', response.text)
+    assert match is not None, response.text
+    return json.loads(match.group(1))
 
 
 def test_google_settings_are_optional_without_environment(monkeypatch):
@@ -59,7 +67,12 @@ def test_google_start_builds_server_oidc_redirect(monkeypatch, client):
 
     response = client.get(
         "/auth/oauth/google/start",
-        params={"flow": "register", "role": "student", "full_name": "Ada Lovelace"},
+        params={
+            "flow": "register",
+            "role": "student",
+            "full_name": "Ada Lovelace",
+            "color_scheme": "dark",
+        },
         follow_redirects=False,
     )
 
@@ -73,6 +86,7 @@ def test_google_start_builds_server_oidc_redirect(monkeypatch, client):
     assert params["scope"] == ["openid email profile"]
     assert params["nonce"]
     assert params["state"]
+    assert decode_state(params["state"][0], "google")["color_scheme"] == "dark"
 
 
 def test_google_callback_links_verified_email_and_returns_app_token(
@@ -105,8 +119,10 @@ def test_google_callback_links_verified_email_and_returns_app_token(
         follow_redirects=False,
     )
 
-    assert response.status_code == 303
-    fragment = _fragment(response.headers["location"])
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "background:#ffffff" in response.text
+    fragment = _fragment(_handoff_destination(response))
     assert fragment.get("token"), response.headers["location"]
     assert fragment["next"] == ["/reports"]
     user = db_session.scalar(select(User).where(User.email == "linked@example.com"))
@@ -126,6 +142,7 @@ def test_google_register_creates_social_only_account(monkeypatch, client, db_ses
         owner_student_id=None,
         full_name="Social Attending",
         next_path="/appointments",
+        color_scheme="dark",
     )
     monkeypatch.setattr(
         oauth_routes,
@@ -144,8 +161,10 @@ def test_google_register_creates_social_only_account(monkeypatch, client, db_ses
         follow_redirects=False,
     )
 
-    assert response.status_code == 303
-    assert _fragment(response.headers["location"]).get("token"), response.headers["location"]
+    assert response.status_code == 200
+    assert "color-scheme:dark" in response.text
+    assert "background:#1a1b1e" in response.text
+    assert _fragment(_handoff_destination(response)).get("token"), response.text
     user = db_session.scalar(select(User).where(User.email == "social@example.com"))
     assert user is not None
     assert user.full_name == "Social Attending"
@@ -182,7 +201,7 @@ def test_apple_form_post_uses_first_authorization_name(monkeypatch, client, db_s
         follow_redirects=False,
     )
 
-    assert response.status_code == 303
+    assert response.status_code == 200
     user = db_session.scalar(select(User).where(User.email == "private@privaterelay.appleid.com"))
     assert user is not None
     assert user.full_name == "Grace Hopper"

@@ -33,12 +33,17 @@ describe('LoginPage', () => {
     await userEvent.type(screen.getByLabelText('Password'), 'password123')
     await userEvent.click(screen.getByRole('button', { name: 'Log in' }))
 
+    expect(screen.getByRole('status')).toHaveTextContent('Signing you in')
     await waitFor(() => {
       expect(authApi.login).toHaveBeenCalledWith('a@b.com', 'password123', undefined)
     })
-    expect(JSON.parse(localStorage.getItem('stu_dent_auth')!)).toEqual({
-      token: 'tok123',
-    })
+    await waitFor(
+      () =>
+        expect(JSON.parse(localStorage.getItem('stu_dent_auth')!)).toEqual({
+          token: 'tok123',
+        }),
+      { timeout: 2500 },
+    )
   })
 
   it('shows an error message on failed login', async () => {
@@ -73,4 +78,5 @@ describe('LoginPage', () => {
     )
     expect(screen.queryByRole('link', { name: /Apple/i })).not.toBeInTheDocument()
   })
+
 })

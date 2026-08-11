@@ -25,6 +25,22 @@
         document.documentElement.setAttribute('data-mantine-color-scheme', resolved)
       } catch (e) {}
     </script>
+    <!-- This tiny pre-bundle canvas style is intentionally duplicated by
+         index.css. It applies before Vite downloads any JavaScript/CSS, so a
+         light app never exposes the browser's dark OS-default canvas during
+         the full-page return from Google (and vice versa). -->
+    <style>
+      html[data-mantine-color-scheme='light'],
+      html[data-mantine-color-scheme='light'] body {
+        background: #fff;
+        color-scheme: light;
+      }
+      html[data-mantine-color-scheme='dark'],
+      html[data-mantine-color-scheme='dark'] body {
+        background: #1a1b1e;
+        color-scheme: dark;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

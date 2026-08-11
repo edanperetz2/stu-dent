@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
 import * as feedbackApi from '../api/feedback'
@@ -7,12 +7,14 @@ import * as notificationsApi from '../api/notifications'
 import { authContextMock, fakePrincipal } from '../test/authMocks'
 import { renderWithProviders } from '../test/renderWithProviders'
 import { resetAuthTestState } from '../test/resetAuthTestState'
+import * as routePreloader from '../router/preloadRoute'
 import { AppLayout } from './AppLayout'
 
 vi.mock('../api/notifications')
 vi.mock('../api/messages')
 vi.mock('../api/feedback')
 vi.mock('../auth/AuthContext', () => authContextMock(fakePrincipal('attending')))
+vi.mock('../router/preloadRoute', () => ({ preloadRoute: vi.fn() }))
 
 describe('AppLayout', () => {
   beforeEach(resetAuthTestState)
@@ -63,6 +65,24 @@ describe('AppLayout', () => {
 
     const reportsLink = screen.getByRole('link', { name: 'Reports' })
     expect(reportsLink).toHaveAttribute('href', '/reports')
+  })
+
+  it('preloads a code-split page when a sidebar link receives focus', async () => {
+    vi.mocked(notificationsApi.getUnreadNotificationCount).mockResolvedValue({ count: 0 })
+    vi.mocked(messagesApi.getUnreadCount).mockResolvedValue({ count: 0 })
+    vi.mocked(feedbackApi.listPendingFeedback).mockResolvedValue([])
+    renderWithProviders(
+      <Routes>
+        <Route path="/appointments" element={<AppLayout />}>
+          <Route index element={<div>Appointments content</div>} />
+        </Route>
+      </Routes>,
+      { route: '/appointments' },
+    )
+
+    fireEvent.focus(await screen.findByRole('link', { name: 'Messages' }))
+
+    expect(routePreloader.preloadRoute).toHaveBeenCalledWith('/messages')
   })
 
   it('renders a skip-to-main-content link as the first focusable element', async () => {

@@ -10,6 +10,7 @@ import {
 import { getCurrentUser, login as apiLogin, registerUser as apiRegisterUser } from '../api/auth'
 import { setUnauthorizedHandler } from '../api/httpClient'
 import type { Role } from '../api/types'
+import { waitForMinimumSignInTime } from './signInTransition'
 
 export interface Principal {
   token: string
@@ -41,8 +42,17 @@ interface AuthContextValue {
   // route its own distinct expiry signal (the WebSocket's auth-failure
   // close code) through the identical flow instead of reimplementing it.
   handleSessionExpired: () => void
-  login: (email: string, password: string, role?: Role) => Promise<void>
-  completeOAuth: (token: string) => Promise<void>
+  login: (
+    email: string,
+    password: string,
+    role?: Role,
+    transitionStartedAt?: number,
+  ) => Promise<void>
+  completeOAuth: (
+    token: string,
+    transitionStartedAt?: number,
+    minimumDurationMs?: number,
+  ) => Promise<void>
   registerUser: (
     email: string,
     password: string,
@@ -103,13 +113,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })()
   }, [])
 
-  const login = useCallback(async (email: string, password: string, role?: Role): Promise<void> => {
-    const { access_token: token } = await apiLogin(email, password, role)
-    const user = await getCurrentUser(token)
-    persist(token)
-    setPrincipal(toPrincipal(token, user))
-    setSessionExpired(false)
-  }, [])
+  const login = useCallback(
+    async (
+      email: string,
+      password: string,
+      role?: Role,
+      transitionStartedAt?: number,
+    ): Promise<void> => {
+      const { access_token: token } = await apiLogin(email, password, role)
+      const user = await getCurrentUser(token)
+      // Do not publish `principal` until the visual handoff has reached its
+      // minimum duration. AuthLayout reacts to principal immediately, so a
+      // page-level delay alone is too late and gets bypassed by its redirect.
+      if (transitionStartedAt !== undefined) {
+        await waitForMinimumSignInTime(transitionStartedAt)
+      }
+      persist(token)
+      setPrincipal(toPrincipal(token, user))
+      setSessionExpired(false)
+    },
+    [],
+  )
 
   const registerUser = useCallback(
     async (
@@ -131,12 +155,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [login],
   )
 
-  const completeOAuth = useCallback(async (token: string): Promise<void> => {
-    const user = await getCurrentUser(token)
-    persist(token)
-    setPrincipal(toPrincipal(token, user))
-    setSessionExpired(false)
-  }, [])
+  const completeOAuth = useCallback(
+    async (
+      token: string,
+      transitionStartedAt?: number,
+      minimumDurationMs?: number,
+    ): Promise<void> => {
+      const user = await getCurrentUser(token)
+      if (transitionStartedAt !== undefined) {
+        await waitForMinimumSignInTime(transitionStartedAt, minimumDurationMs)
+      }
+      persist(token)
+      setPrincipal(toPrincipal(token, user))
+      setSessionExpired(false)
+    },
+    [],
+  )
 
   const logout = useCallback((): void => {
     localStorage.removeItem(STORAGE_KEY)

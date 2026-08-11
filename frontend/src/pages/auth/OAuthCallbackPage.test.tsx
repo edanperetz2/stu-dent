@@ -1,11 +1,16 @@
 import { screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as authApi from '../../api/auth'
+import { preloadOAuthDestination } from '../../router/preloadOAuthDestination'
 import { renderWithProviders } from '../../test/renderWithProviders'
 import { resetAuthTestState } from '../../test/resetAuthTestState'
 import { OAuthCallbackPage } from './OAuthCallbackPage'
 
 vi.mock('../../api/auth')
+vi.mock('../../router/preloadOAuthDestination', () => ({
+  preloadOAuthDestination: vi.fn().mockResolvedValue(undefined),
+}))
 
 describe('OAuthCallbackPage', () => {
   beforeEach(resetAuthTestState)
@@ -25,10 +30,22 @@ describe('OAuthCallbackPage', () => {
     })
 
     window.history.pushState(null, '', '/oauth/callback#token=oauth-token&next=%2Fappointments')
-    renderWithProviders(<OAuthCallbackPage />, { route: '/oauth/callback' })
+    renderWithProviders(
+      <StrictMode>
+        <OAuthCallbackPage />
+      </StrictMode>,
+      { route: '/oauth/callback' },
+    )
 
+    expect(screen.getByRole('status')).toHaveTextContent('Signing you in')
     await waitFor(() => expect(authApi.getCurrentUser).toHaveBeenCalledWith('oauth-token'))
-    expect(JSON.parse(localStorage.getItem('stu_dent_auth')!)).toEqual({ token: 'oauth-token' })
+    expect(authApi.getCurrentUser).toHaveBeenCalledTimes(1)
+    expect(preloadOAuthDestination).toHaveBeenCalledWith('/appointments')
+    await waitFor(
+      () =>
+        expect(JSON.parse(localStorage.getItem('stu_dent_auth')!)).toEqual({ token: 'oauth-token' }),
+      { timeout: 2500 },
+    )
   })
 
   it('shows provider callback errors', () => {

@@ -57,6 +57,7 @@ def create_state(
     owner_student_id: uuid.UUID | None,
     full_name: str | None,
     next_path: str,
+    color_scheme: Literal["light", "dark"] = "light",
 ) -> tuple[str, str]:
     now = datetime.now(UTC)
     nonce = secrets.token_urlsafe(24)
@@ -69,6 +70,7 @@ def create_state(
         "owner_student_id": str(owner_student_id) if owner_student_id else None,
         "full_name": full_name,
         "next": next_path,
+        "color_scheme": color_scheme,
         "iat": now,
         "exp": now + timedelta(minutes=10),
     }

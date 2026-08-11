@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { apiErrorMessage } from '../../api/httpClient'
 import { useAuth } from '../../auth/AuthContext'
+import { SigningInPanel } from '../../components/SigningInPanel'
 import { SocialAuthButtons } from '../../components/SocialAuthButtons'
 
 interface LoginFormValues {
@@ -19,7 +20,6 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const from = (location.state as { from?: Location } | null)?.from
-
   const form = useForm<LoginFormValues>({
     initialValues: { email: '', password: '' },
     validate: {
@@ -31,12 +31,13 @@ export function LoginPage() {
   async function handleSubmit(values: LoginFormValues) {
     setError(null)
     setSubmitting(true)
+    const transitionStartedAt = window.performance.now()
     try {
       // No role picker -- the backend already validates the account's real
       // role server-side, so a frontend guess could only ever turn a valid
       // login into a spurious failure, never let someone log in under the
       // wrong role.
-      await login(values.email, values.password)
+      await login(values.email, values.password, undefined, transitionStartedAt)
       navigate(from ? `${from.pathname}${from.search}` : '/appointments', { replace: true })
     } catch (err) {
       setError(apiErrorMessage(err, 'Login failed'))
@@ -44,6 +45,8 @@ export function LoginPage() {
       setSubmitting(false)
     }
   }
+
+  if (submitting) return <SigningInPanel />
 
   return (
     <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -79,7 +82,7 @@ export function LoginPage() {
             {error}
           </Alert>
         )}
-        <Button type="submit" loading={submitting} fullWidth>
+        <Button type="submit" fullWidth>
           Log in
         </Button>
         <Text size="sm" ta="center">
