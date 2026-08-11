@@ -1,4 +1,28 @@
 import uuid
+from datetime import UTC, datetime, time, timedelta
+
+
+def relative_datetime(*, days: int = 30, hour: int = 9, minute: int = 0) -> datetime:
+    """Return a stable UTC wall-clock time relative to the test run.
+
+    Integration tests should describe whether a timestamp is in the past or
+    future, not silently expire when the calendar catches up with fixture
+    data. Normalizing to a whole minute keeps API assertions readable and
+    deterministic within one test run.
+    """
+    target_date = (datetime.now(UTC) + timedelta(days=days)).date()
+    return datetime.combine(target_date, time(hour=hour, minute=minute), tzinfo=UTC)
+
+
+def relative_iso(*, days: int = 30, hour: int = 9, minute: int = 0) -> str:
+    return relative_datetime(days=days, hour=hour, minute=minute).isoformat()
+
+
+def relative_slot(
+    *, days: int = 30, hour: int = 9, minute: int = 0, duration_minutes: int = 60
+) -> tuple[str, str]:
+    start = relative_datetime(days=days, hour=hour, minute=minute)
+    return start.isoformat(), (start + timedelta(minutes=duration_minutes)).isoformat()
 
 
 def register(

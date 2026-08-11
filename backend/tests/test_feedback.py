@@ -3,10 +3,10 @@ from tests.helpers import (
     create_and_login_patient,
     create_default_room,
     register_and_login,
+    relative_slot,
 )
 
-START = "2020-08-01T09:00:00+00:00"
-END = "2020-08-01T10:00:00+00:00"
+START, END = relative_slot(days=-30)
 
 
 def _book(client, token, *, patient_id=None, attending_id=None, room_id=None):

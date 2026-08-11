@@ -7,6 +7,7 @@ from tests.helpers import (
     register,
     register_and_login,
     register_patient,
+    relative_slot,
 )
 
 
@@ -81,14 +82,15 @@ def test_deleting_patient_cancels_active_appointments_and_notifies_attending_not
     patient_id = create_patient(client, student_token, email="patauth-p9@example.com")
     room_id = create_default_room(client)
 
+    start_time, end_time = relative_slot()
     appointment = client.post(
         "/appointments",
         json={
             "patient_id": patient_id,
             "attending_id": attending_id,
             "room_id": room_id,
-            "start_time": "2026-10-01T09:00:00+00:00",
-            "end_time": "2026-10-01T10:00:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(student_token),
     ).json()
@@ -126,13 +128,14 @@ def test_deleting_patient_promotes_a_waitlist_entry_for_the_freed_room(client):
     doomed_patient_id = create_patient(client, student_token, email="patauth-p10@example.com")
     room_id = create_default_room(client)
 
+    start_time, end_time = relative_slot(days=31)
     appointment = client.post(
         "/appointments",
         json={
             "patient_id": doomed_patient_id,
             "room_id": room_id,
-            "start_time": "2026-10-02T09:00:00+00:00",
-            "end_time": "2026-10-02T10:00:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(student_token),
     ).json()
@@ -147,8 +150,8 @@ def test_deleting_patient_promotes_a_waitlist_entry_for_the_freed_room(client):
         json={
             "patient_id": waiting_patient_id,
             "room_id": room_id,
-            "start_time": "2026-10-02T09:00:00+00:00",
-            "end_time": "2026-10-02T10:00:00+00:00",
+            "start_time": start_time,
+            "end_time": end_time,
         },
         headers=auth_header(other_student_token),
     ).json()
@@ -189,9 +192,10 @@ def test_patient_self_registration_is_pending_until_student_confirms(client):
     assert me["owner_student_id"] == student_id
     assert me["owner_student_name"] == "Test User"
 
+    start_time, end_time = relative_slot(days=60, hour=10)
     blocked_response = client.post(
         "/appointments",
-        json={"start_time": "2030-01-01T10:00:00Z", "end_time": "2030-01-01T11:00:00Z"},
+        json={"start_time": start_time, "end_time": end_time},
         headers=auth_header(patient_token),
     )
     assert blocked_response.status_code == 403
@@ -206,7 +210,7 @@ def test_patient_self_registration_is_pending_until_student_confirms(client):
 
     allowed_response = client.post(
         "/appointments",
-        json={"start_time": "2030-01-01T10:00:00Z", "end_time": "2030-01-01T11:00:00Z"},
+        json={"start_time": start_time, "end_time": end_time},
         headers=auth_header(patient_token),
     )
     assert allowed_response.status_code == 201
