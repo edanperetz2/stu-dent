@@ -277,12 +277,7 @@ docker compose exec frontend npm run lint
   comfort/DX/accessibility), explicitly never changing behavior or scope.
   Implemented in 4 batches, each tested and CI-verified green before the
   next started: **(1) infra/CI/docs** (`fe39079`) — Node 20→22, pip/npm/
-  Docker-layer CI caching, a couple of stale README/comment fixes, the
-  `docker-compose.prod.yml` frontend healthcheck (with the IPv4-vs-IPv6
-  `wget`/`localhost` gotcha fixed along the way) — `docker-compose.prod.yml`
-  itself was later deleted entirely by `a311dd0` once the VM deploy was
-  descoped, so this healthcheck fix no longer exists in the current repo;
-  left here as historical record of the batch, not something to go re-apply.
+  Docker-layer CI caching, a couple of stale README/comment fixes.
   **(2) backend efficiency
   + dedup** (`24f23a7`) — added indexes (`appointment.end_time`, a
   composite `audit_log` index), collapsed an N+1 existence-check loop in
@@ -650,8 +645,8 @@ docker compose exec frontend npm run lint
   into/out of `patient`; a malformed JWT subject now 401s instead of
   500ing. **(10)** `ollama`/`mailhog` images pinned by digest, `ollama`
   bound to localhost, `/health` actually checks the DB. **(11)**
-  `docs/final_report.md`/`docs/proposal.md` corrected to stop describing
-  the already-deleted VM-deploy path in the present tense. **(12-13)**
+  `docs/final_report.md`/`docs/proposal.md` corrected for accuracy against
+  current repo state. **(12-13)**
   ruff's `S` (flake8-bandit) ruleset and TypeScript `strict` both enabled
   clean. **(14-16)** ~90 new tests closing every zero-coverage file the
   audit found (pages, shared components, hooks/utils/API clients).
@@ -683,7 +678,7 @@ docker compose exec frontend npm run lint
   `config.py` field-for-field; `docs/final_report.md`/
   `docs/demo_video_script.md` are correctly, deliberately frozen
   snapshots with no live-fact errors) except one: `stu-dent-architecture.png`
-  depicted the deleted VM-deploy path and stale test counts matching
+  depicted stale infrastructure and stale test counts matching
   neither current reality nor even `final_report.md`'s own frozen
   snapshot, and was referenced nowhere. A Mermaid-diagram replacement was
   drafted but not approved — the user wants to keep an actual PNG,
@@ -691,8 +686,8 @@ docker compose exec frontend npm run lint
   Claude — so the original file was kept and given a real reference (a
   README embed, fixing the "referenced nowhere" half of the finding) while
   a precise edit-prompt describing exactly what to fix in the image
-  (remove the deleted VM-deploy box/legend/arrow, add the new
-  dependency-audit CI job, update the stale test counts) was handed to the
+  (remove the stale infrastructure elements no longer in the repo, add the
+  new dependency-audit CI job, update the stale test counts) was handed to the
   user to run through their generator themselves. The regenerated image
   came back correct (verified against the same checklist) and was pushed
   manually to GitHub, pulled, validated again, and swapped in as

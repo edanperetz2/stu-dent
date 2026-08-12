@@ -14,10 +14,8 @@ degrade-gracefully design decision, which is itself worth narrating).
 
 Updated after the original submission to reflect everything built in the
 post-submission arc: dark mode, forgot-password, the rebuilt booking
-modal, the appointments calendar, and the waitlist redesign. The VM
-deployment plan (section 10, previously) was dropped entirely once the
-course confirmed no VM would be provided — that segment is gone rather
-than left pointing at a deleted file.
+modal, the appointments calendar, the waitlist redesign, and Google
+OAuth sign-in.
 
 ---
 
@@ -36,7 +34,7 @@ narrate over an already-running stack to save time). Show
 `http://localhost:8000/health` and `http://localhost:5173` both up.
 Narrate: one documented command, no local Python/Node install needed.
 
-## 3. Login extras: dark mode + forgot password (~1 min)
+## 3. Login extras: dark mode, forgot password, Google sign-in (~1.5 min)
 
 1. On the login page, point out `autoComplete`/`type="email"` letting a
    password manager fill the form, and that there's no Role dropdown —
@@ -47,7 +45,15 @@ Narrate: one documented command, no local Python/Node install needed.
    the response is identical whether or not the email exists (enumeration
    resistance) and that it's rate-limited per-email and per-IP. Follow
    the link, set a new password, log in with it.
-3. Log in as `student1@stu-dent.demo`, then click the sun/moon toggle in
+3. Click "Sign in with Google" and complete a real Google sign-in (needs
+   real `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` in `.env` — see README's
+   "Google sign-in" section). Narrate: a verified-email OIDC flow
+   (RS256 ID token checked against Google's live JWKS, state/nonce-bound
+   against CSRF and replay), landing on a themed same-tab handoff screen
+   instead of a flash of browser-default canvas during the redirect. If
+   real credentials aren't set up for this recording, skip this beat and
+   say so rather than faking it.
+4. Log in as `student1@stu-dent.demo`, then click the sun/moon toggle in
    the header to show real dark mode — not just a CSS media query, a full
    Mantine theme with a brand color derived from the logo, scheme-aware
    hover states, and status badges that switch to a saturated/AA-verified

@@ -72,7 +72,7 @@ Stu-Dent is a containerized web platform that centralizes patient management, ap
 
 - GitHub repository containing source code, Docker configuration, tests, seed data, and CI/CD workflow.
 - README with first-run instructions, environment variables, usage examples, and exact test commands.
-- Working localhost application and public deployment on the supplied Azure environment.
+- Working localhost application, fully Dockerized and reproducible on any computer.
 - Demonstration video showing the main workflows and test execution.
 - Final report describing architecture, implemented features, tests, risks, limitations, and team contributions.
 

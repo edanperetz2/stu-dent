@@ -12,6 +12,7 @@ Usage: ./dev.sh <command>
   down             docker compose down
   logs [service]   docker compose logs -f [service]
   test             run the backend pytest suite
+  test-frontend    run the frontend vitest suite
   lint             ruff check, black --check, then npm run lint
   migrate <msg>    generate an Alembic revision from model changes, then apply it
   seed             seed idempotent demo data (safe to re-run)
@@ -55,6 +56,9 @@ case "$cmd" in
     ;;
   test)
     docker compose exec api pytest -v
+    ;;
+  test-frontend)
+    docker compose exec frontend npm run test
     ;;
   lint)
     docker compose exec api ruff check .
