@@ -87,7 +87,7 @@ the Postgres volume and start from a clean database).
 
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2, Pydantic v2, Alembic, pytest
 - DB: PostgreSQL 16
-- Frontend: React + Vite + TypeScript
+- Frontend: React + Vite + TypeScript, Vitest (unit) + Playwright (end-to-end)
 - Infra: Docker Compose (`api`, `db`, `frontend`, `mailhog`, `worker`, `ollama`)
 
 ## Everyday commands
@@ -103,6 +103,7 @@ use the Full command column directly.
 | Tail logs | `./dev.sh logs [service]` | `docker compose logs -f [service]` |
 | Run backend tests | `./dev.sh test` | `docker compose exec api pytest -v` |
 | Run frontend tests | `./dev.sh test-frontend` | `docker compose exec frontend npm run test` |
+| Run end-to-end tests | `./dev.sh test-e2e` | See `dev.sh`'s `test-e2e` case — a few steps, not a one-liner |
 | Lint everything | `./dev.sh lint` | `docker compose exec api ruff check .` then `docker compose exec api black --check .`, then `docker compose exec frontend npm run lint` |
 | Create + apply a migration | `./dev.sh migrate "<message>"` | `docker compose exec api alembic revision --autogenerate -m "<message>"` then `docker compose exec api alembic upgrade head` |
 | Seed demo data | `./dev.sh seed` | `docker compose exec api python -m app.seed_demo` |

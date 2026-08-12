@@ -36,6 +36,13 @@ services:
     image: stu-dent-backend:local
     restart: unless-stopped
     env_file: *env-files
+    # Overridable so the E2E suite's throwaway container -- whose browser
+    # loads the frontend from this compose network's internal hostname, not
+    # localhost -- can pass CORS. Normal dev use is untouched since this
+    # only changes when FRONTEND_ORIGINS is actually exported. See
+    # dev.sh's test-e2e command.
+    environment:
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173}
     depends_on:
       db:
         condition: service_healthy
@@ -149,6 +156,13 @@ services:
     build: ./frontend
     restart: unless-stopped
     env_file: *env-files
+    # Overridable so a browser reaching this dev server from somewhere other
+    # than the host (e.g. the E2E suite's throwaway container, on this same
+    # compose network) can still resolve the real api service -- normal dev
+    # use is untouched since this only changes when VITE_API_URL is actually
+    # exported before `docker compose up`. See dev.sh's test-e2e command.
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     volumes:
       - ./frontend:/app
       - /app/node_modules

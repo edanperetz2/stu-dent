@@ -345,6 +345,64 @@ def test_second_admin_sees_same_shared_inbox_thread(client):
     assert len(inbox_as_admin1) == len(inbox_as_admin2) == 1
 
 
+def test_student_marks_own_admin_thread_read_and_unread(client):
+    student_token = register_and_login(client, "msg-s15b@example.com", role="student")
+    client.post("/messages/admin", json={"body": "need help"}, headers=auth_header(student_token))
+
+    read = client.post("/messages/admin/read", headers=auth_header(student_token))
+    assert read.status_code == 200
+    assert read.json()["last_read_at"] is not None
+
+    unread = client.post("/messages/admin/unread", headers=auth_header(student_token))
+    assert unread.status_code == 200
+    assert unread.json()["last_read_at"] is None
+
+
+def test_admin_cannot_use_own_admin_thread_routes(client):
+    admin_token = register_and_login(client, "msg-admin1b@example.com", role="admin")
+
+    assert client.post("/messages/admin/read", headers=auth_header(admin_token)).status_code == 403
+    assert (
+        client.post("/messages/admin/unread", headers=auth_header(admin_token)).status_code == 403
+    )
+
+
+def test_admin_marks_admin_inbox_thread_read_and_unread(client):
+    admin_token = register_and_login(client, "msg-admin2b@example.com", role="admin")
+    student_token = register_and_login(client, "msg-s15c@example.com", role="student")
+    student_id = _student_id(client, student_token)
+
+    client.post("/messages/admin", json={"body": "need help"}, headers=auth_header(student_token))
+
+    read = client.post(f"/messages/admin-inbox/{student_id}/read", headers=auth_header(admin_token))
+    assert read.status_code == 200
+    assert read.json()["last_read_at"] is not None
+
+    unread = client.post(
+        f"/messages/admin-inbox/{student_id}/unread", headers=auth_header(admin_token)
+    )
+    assert unread.status_code == 200
+    assert unread.json()["last_read_at"] is None
+
+
+def test_non_admin_cannot_mark_admin_inbox_thread(client):
+    student_token = register_and_login(client, "msg-s15d@example.com", role="student")
+    other_id = _student_id(client, student_token)
+
+    assert (
+        client.post(
+            f"/messages/admin-inbox/{other_id}/read", headers=auth_header(student_token)
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/messages/admin-inbox/{other_id}/unread", headers=auth_header(student_token)
+        ).status_code
+        == 403
+    )
+
+
 def test_non_admin_cannot_use_admin_inbox_route(client):
     student_token = register_and_login(client, "msg-s17@example.com", role="student")
     other_id = _student_id(client, student_token)
@@ -393,6 +451,60 @@ def test_student_creates_group_and_sends_message(client):
     )
     assert sent.status_code == 201
     assert sent.json()["conversation_id"] == group["id"]
+
+
+def test_group_participant_marks_group_read_and_unread(client):
+    student1_token = register_and_login(client, "msg-s19c@example.com", role="student")
+    student2_token = register_and_login(client, "msg-s19d@example.com", role="student")
+    student2_id = _student_id(client, student2_token)
+
+    group = client.post(
+        "/messages/groups",
+        json={"title": "Study group", "participant_ids": [student2_id]},
+        headers=auth_header(student1_token),
+    ).json()
+    client.post(
+        f"/messages/groups/{group['id']}",
+        json={"body": "hello"},
+        headers=auth_header(student1_token),
+    )
+
+    read = client.post(f"/messages/groups/{group['id']}/read", headers=auth_header(student2_token))
+    assert read.status_code == 200
+    assert read.json()["last_read_at"] is not None
+
+    unread = client.post(
+        f"/messages/groups/{group['id']}/unread", headers=auth_header(student2_token)
+    )
+    assert unread.status_code == 200
+    assert unread.json()["last_read_at"] is None
+
+
+def test_non_participant_cannot_mark_group_read_or_unread(client):
+    student1_token = register_and_login(client, "msg-s19e@example.com", role="student")
+    student2_id = _student_id(
+        client, register_and_login(client, "msg-s19g@example.com", role="student")
+    )
+    outsider_token = register_and_login(client, "msg-s19f@example.com", role="student")
+
+    group = client.post(
+        "/messages/groups",
+        json={"title": "Private group", "participant_ids": [student2_id]},
+        headers=auth_header(student1_token),
+    ).json()
+
+    assert (
+        client.post(
+            f"/messages/groups/{group['id']}/read", headers=auth_header(outsider_token)
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/messages/groups/{group['id']}/unread", headers=auth_header(outsider_token)
+        ).status_code
+        == 404
+    )
 
 
 def test_attending_can_create_group(client):

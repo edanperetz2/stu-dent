@@ -177,6 +177,53 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Bring up the app stack
+        # Just db/ollama/api/frontend/mailhog -- worker and the one-shot
+        # ollama-init/seed-init containers aren't needed since these specs
+        # register every account/room/patient they use themselves (see
+        # frontend/e2e/helpers.ts). --wait blocks until every listed
+        # service's own healthcheck passes, so no separate polling loop is
+        # needed here.
+        run: docker compose up -d --build --wait --wait-timeout 180 db ollama api frontend mailhog
+        env:
+          JWT_SECRET_KEY: ci-test-secret
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: http://localhost:5173
+          CI: "true"
+
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   docker-build:
     runs-on: ubuntu-latest
     needs: [lint, backend-tests, frontend-tests]

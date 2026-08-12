@@ -122,23 +122,30 @@ supported types. It never sees the database or writes a query.
 ## 3. Features and the tests run for each
 
 All counts below were confirmed by actually running the suites (`./dev.sh
-test`, `./dev.sh test-frontend`), not estimated from file listings.
+test`, `./dev.sh test-frontend`, `./dev.sh test-e2e`), not estimated from
+file listings.
 
-**Backend: 335 pytest tests across 31 files. Frontend: 256 Vitest tests
-across 68 files.** The rubric grades backend only, so the breakdown below
-is backend-first; frontend coverage is noted per feature as supplementary.
+**Backend: 355 pytest tests across 32 files. Frontend: 256 Vitest tests
+across 68 files. End-to-end: 4 real-browser Playwright tests across 3
+spec files** (§3.11). The rubric grades backend only, so the breakdown
+below is backend-first; frontend and E2E coverage are noted as
+supplementary.
 
 ### 3.1 Authentication, roles, and account security
 
 *Files: `test_auth.py`, `test_rbac.py`, `test_patient_auth.py`,
 `test_rate_limit.py`, `test_password_reset.py`, `test_oauth.py`,
-`test_admin_users.py`, `test_cors.py` — 71 tests.*
+`test_oauth_token_verification.py`, `test_admin_users.py`,
+`test_cors.py` — 82 tests.*
 
 - **Unit/integration**: registration for every role, duplicate-email
   rejection, patient registration validation (owner-student required for
   patients, rejected for everyone else), login success/failure paths,
-  `GET/PATCH /users/me`, JWT rejection on missing/malformed/non-UUID/
-  non-string subject claims (asserts a clean 401, not a 500).
+  `GET/PATCH /users/me`, `PATCH /patients/{id}` (a student can update their
+  own patient's name/phone/preferred time with a real partial-update check;
+  another student and the patient themselves are both rejected), JWT
+  rejection on missing/malformed/non-UUID/non-string subject claims
+  (asserts a clean 401, not a 500).
 - **RBAC / security tests** (explicitly required by the rubric — "test you
   can use certain features only AFTER logging in"): every protected
   endpoint asserts the correct role can access it and every other role
@@ -159,11 +166,24 @@ is backend-first; frontend coverage is noted per feature as supplementary.
   rejection, enumeration resistance (an unknown email still returns 204
   with no email sent, so an attacker can't probe which emails are
   registered), per-email rate limiting on reset requests.
-- **Google OAuth** (`test_oauth.py`): the sign-in flow builds a correct
-  OIDC redirect, a friendly (not crashing) error when the provider isn't
-  configured, verified-email-linked account creation, and a tampered/
-  forged callback `state` parameter is rejected before any account is
-  looked up or a login token issued.
+- **Google OAuth** (`test_oauth.py`): `GET /auth/oauth/providers` correctly
+  reports configured/unconfigured for real; the sign-in flow builds a
+  correct OIDC redirect, a friendly (not crashing) error when the provider
+  isn't configured, verified-email-linked account creation, and a
+  tampered/forged callback `state` parameter is rejected before any account
+  is looked up or a login token issued.
+- **Real OAuth cryptographic verification** (`test_oauth_token_verification.
+  py`, 6 tests) — every other OAuth test mocks `exchange_code()` wholesale,
+  so none of them ever exercise `_decode_id_token`'s actual RS256 signature
+  check, audience/issuer validation, expiry check, or nonce-replay
+  protection. These tests sign real ID tokens with a real generated RSA
+  keypair and only stub the network JWKS *fetch* (not the verification
+  logic itself), so the real cryptographic path genuinely runs: a validly
+  signed token is accepted; a token signed by a *different* key than the
+  one the JWKS document vouches for is rejected (proves signature
+  verification isn't a no-op); expired tokens, wrong-audience tokens,
+  wrong-issuer tokens, and nonce mismatches are each independently
+  rejected.
 - **Concurrency/race regression**: `test_concurrent_registration_with_the_
   same_email_gets_a_clean_409_not_a_500` — two real threads register the
   same email simultaneously against real, separate database connections;
@@ -257,11 +277,14 @@ is backend-first; frontend coverage is noted per feature as supplementary.
 ### 3.5 Notifications, reminders & the background worker
 
 *Files: `test_notifications.py`, `test_jobs.py`, `test_worker.py`,
-`test_feedback.py`, `test_realtime.py` — 41 tests.*
+`test_feedback.py`, `test_realtime.py` — 44 tests.*
 
 - Notification CRUD/scoping (`test_notifications.py`): a user only ever
   sees their own notifications, ordering, read/unread toggling, no
-  cross-user leakage.
+  cross-user leakage. `GET /notifications/unread-count` — the endpoint
+  that actually drives the nav badge — is checked with a real count query
+  (not a page-size proxy that would silently undercount), independently
+  requires authentication, and is scoped per recipient.
 - **Background jobs** (`test_jobs.py`, 17 tests): reminders fire exactly
   once inside the correct time window and never twice; past-due
   unconfirmed appointments auto-expire and correctly trigger waitlist
@@ -285,7 +308,7 @@ is backend-first; frontend coverage is noted per feature as supplementary.
 
 ### 3.6 Forum & direct messaging
 
-*Files: `test_forum.py`, `test_messaging.py` — 57 tests.*
+*Files: `test_forum.py`, `test_messaging.py` — 63 tests.*
 
 - **Forum** (22 tests): student-only posting, admin moderation (can
   delete anyone's post/comment; a non-author non-admin cannot), voting
@@ -295,7 +318,7 @@ is backend-first; frontend coverage is noted per feature as supplementary.
   simultaneous first-time votes from the same user racing to insert are
   rescued via `db.begin_nested()`, not left to crash with an integrity
   error.
-- **Messaging** (35 tests): patient↔student, student↔attending, group
+- **Messaging** (41 tests): patient↔student, student↔attending, group
   chats, and a shared admin inbox where a second admin sees the same
   thread another admin already has; an unconfirmed patient can view but
   not send; a third party gets a `404` (not `403`, which would confirm
@@ -303,7 +326,13 @@ is backend-first; frontend coverage is noted per feature as supplementary.
   use a monotonic `sequence` column specifically *because* same-transaction
   `created_at` timestamps can tie under Postgres, verified by a dedicated
   test; a concurrent-duplicate-conversation-creation race is rescued the
-  same way the forum's vote race is.
+  same way the forum's vote race is. The admin-thread and group-chat
+  read/unread routes (`POST /messages/admin/unread`,
+  `POST /messages/admin-inbox/{id}/unread`,
+  `POST /messages/groups/{id}/read`/`unread`) each get a real round-trip
+  check (mark read → `last_read_at` set, mark unread → cleared again) plus
+  an authorization check (a non-admin can't touch the admin threads, a
+  non-participant can't touch a group's).
 
 ### 3.7 Local AI — scheduling interpreter & reports
 
@@ -340,6 +369,17 @@ is backend-first; frontend coverage is noted per feature as supplementary.
   gap found and fixed in this project's own review history — these two
   failure modes used to be indistinguishable to the user).
 
+**Known scope limit, stated plainly**: `time_impact()`'s "who's wasted the
+most time" question (proposal §5's second example) answers in aggregate,
+scoped to the asking user's own appointments — it does not currently
+support "how much time did person X specifically cost me," since the
+classifier only ever extracts a question type and a date range, never a
+person name. Extending it would mean trusting the model to extract and
+resolve a *name* into a real user ID, which is exactly the kind of
+free-form entity resolution this project's AI trust boundary deliberately
+avoids everywhere else (see §2) — better disclosed here than
+quietly stretched to look like it's supported.
+
 ### 3.8 Health, config & general system correctness
 
 *Files: `test_health.py`, `test_students.py`, `test_config.py` — 7 tests.*
@@ -351,22 +391,63 @@ is backend-first; frontend coverage is noted per feature as supplementary.
 - A misconfigured/placeholder JWT secret logs a visible warning rather
   than silently running insecurely.
 
-### 3.9 System / end-to-end and manual verification
+### 3.9 System / end-to-end testing
 
-Beyond the automated suite, every phase's completion included a live,
-manual walkthrough via browser automation of real cross-role flows — e.g.
-a student books an appointment with an attending assigned, the attending
-approves it, the student marks it complete, and the patient sees the
-correct final state — plus, specifically for the AI features, tests
-against a real pulled Ollama model rather than only mocked responses
-(this is what originally surfaced the blank-summary bug described above).
+*Files: `frontend/e2e/auth.spec.ts`, `frontend/e2e/appointments.spec.ts`,
+`frontend/e2e/conflict.spec.ts` — 4 Playwright tests, run with
+`./dev.sh test-e2e` or as their own CI job.* This is the one rubric test
+category (distinct from unit/integration) that earlier in this project's
+history only ever existed as manual, un-repeatable browser-automation
+sessions — these tests drive a real headless Chromium browser through the
+actual rendered UI against the real running stack (real Postgres, real
+FastAPI, no mocking anywhere in the stack), not just calling routes
+directly the way the pytest suite does:
+
+- **Auth** (`auth.spec.ts`, 2 tests): a brand-new account can genuinely
+  register through the real form, land in the app, log out, and log back
+  in with the same credentials; a wrong password shows a real on-screen
+  error instead of silently failing or navigating anywhere.
+- **Booking** (`appointments.spec.ts`): the full real-world path end to
+  end — a fresh admin account creates a room through the real Admin UI, a
+  fresh student creates a patient through the real Patients UI, then books
+  a real appointment through the actual "New Appointment" modal (patient
+  select, date picker, time select, room select), and the created
+  appointment is confirmed genuinely visible in the real appointments
+  table afterward.
+- **Conflict resolution** (`conflict.spec.ts`) — the proposal's headline
+  feature, verified through the UI, not just the API: booking the same
+  student into two overlapping slots surfaces the real
+  `ConflictResolutionModal` ("This request isn't available" plus a
+  working "Join waitlist" button), not a raw error or a silent failure.
+
+Two real bugs in the app itself (not the tests) were found and fixed
+while building this suite: Vite's dev server was rejecting any request
+whose `Host` header it didn't recognize, which would have blocked this
+suite from ever reaching the app at all (`vite.config.ts` now allow-lists
+the two additional hostnames the suite legitimately reaches it through);
+and the frontend's own Vitest unit-test runner was accidentally trying to
+execute these Playwright specs as if they were its own tests (Vitest's
+default file-matching glob overlaps with Playwright's `*.spec.ts`
+convention) — `vite.config.ts`'s test config now explicitly excludes
+`e2e/`.
+
+Beyond this automated suite, every phase's completion also included a
+live, manual walkthrough via browser automation of real cross-role flows
+— e.g. a student books an appointment with an attending assigned, the
+attending approves it, the student marks it complete, and the patient
+sees the correct final state — plus, specifically for the AI features,
+tests against a real pulled Ollama model rather than only mocked
+responses (this is what originally surfaced the blank-summary bug
+described above).
 CI (`.github/workflows/ci.yml`) runs the full backend suite against a real
 Postgres service container with real Alembic migrations applied first
 (not `Base.metadata.create_all()`, so a model change shipped without a
 matching migration fails CI, not just silently diverges locally), plus an
 Alembic upgrade→downgrade→upgrade round-trip check, a `pip-audit`/`npm
 audit` dependency-vulnerability job, frontend tests + `tsc` + `vite
-build`, and a build-only validation of both Dockerfiles.
+build`, the Playwright E2E suite above running against the real stack
+brought up inside the CI job itself, and a build-only validation of both
+Dockerfiles.
 
 ### 3.10 Stress / load testing
 

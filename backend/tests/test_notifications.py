@@ -124,3 +124,36 @@ def test_notifications_scoped_per_recipient(client, db_session):
     response = client.get("/notifications", headers=auth_header(student_b_token))
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_unread_count_matches_real_unread_rows_not_a_page_size(client, db_session):
+    student_token = register_and_login(client, "notif-s8@example.com", role="student")
+    user_id = client.get("/users/me", headers=auth_header(student_token)).json()["id"]
+
+    zero = client.get("/notifications/unread-count", headers=auth_header(student_token))
+    assert zero.status_code == 200
+    assert zero.json()["count"] == 0
+
+    first = _notify_user(db_session, uuid.UUID(user_id), message="first")
+    _notify_user(db_session, uuid.UUID(user_id), message="second")
+
+    two = client.get("/notifications/unread-count", headers=auth_header(student_token))
+    assert two.json()["count"] == 2
+
+    client.post(f"/notifications/{first.id}/read", headers=auth_header(student_token))
+    one = client.get("/notifications/unread-count", headers=auth_header(student_token))
+    assert one.json()["count"] == 1
+
+
+def test_unread_count_requires_authentication(client):
+    assert client.get("/notifications/unread-count").status_code == 401
+
+
+def test_unread_count_scoped_per_recipient(client, db_session):
+    student_a_token = register_and_login(client, "notif-s9a@example.com", role="student")
+    student_b_token = register_and_login(client, "notif-s9b@example.com", role="student")
+    user_a_id = client.get("/users/me", headers=auth_header(student_a_token)).json()["id"]
+    _notify_user(db_session, uuid.UUID(user_a_id))
+
+    response = client.get("/notifications/unread-count", headers=auth_header(student_b_token))
+    assert response.json()["count"] == 0

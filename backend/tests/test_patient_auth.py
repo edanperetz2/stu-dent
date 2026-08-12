@@ -31,6 +31,64 @@ def test_other_student_cannot_access_patient(client):
     assert response.status_code == 404
 
 
+def test_student_updates_own_patient(client):
+    token = register_and_login(client, "patauth-stud5@example.com", role="student")
+    patient_id = create_patient(client, token, email="patauth-p5@example.com")
+
+    response = client.patch(
+        f"/patients/{patient_id}",
+        json={
+            "full_name": "Updated Name",
+            "contact_phone": "555-0100",
+            "preferred_time_of_day": "evening",
+        },
+        headers=auth_header(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["full_name"] == "Updated Name"
+    assert body["contact_phone"] == "555-0100"
+    assert body["preferred_time_of_day"] == "evening"
+
+    # a partial update leaves the other fields untouched
+    partial = client.patch(
+        f"/patients/{patient_id}",
+        json={"contact_phone": "555-0200"},
+        headers=auth_header(token),
+    )
+    assert partial.json()["full_name"] == "Updated Name"
+    assert partial.json()["contact_phone"] == "555-0200"
+
+
+def test_other_student_cannot_update_patient(client):
+    token1 = register_and_login(client, "patauth-stud6@example.com", role="student")
+    token2 = register_and_login(client, "patauth-stud7@example.com", role="student")
+    patient_id = create_patient(client, token1, email="patauth-p6@example.com")
+
+    response = client.patch(
+        f"/patients/{patient_id}",
+        json={"full_name": "Hijacked"},
+        headers=auth_header(token2),
+    )
+    assert response.status_code == 404
+
+
+def test_patient_cannot_update_own_record(client):
+    token = register_and_login(client, "patauth-stud8@example.com", role="student")
+    patient_id = create_patient(
+        client, token, email="patauth-p8@example.com", password="pw12345678"
+    )
+    patient_login = login(client, "patauth-p8@example.com", password="pw12345678")
+    patient_token = patient_login.json()["access_token"]
+
+    response = client.patch(
+        f"/patients/{patient_id}",
+        json={"full_name": "Self Edit"},
+        headers=auth_header(patient_token),
+    )
+    assert response.status_code == 403
+
+
 def test_student_provisioned_patient_can_log_in(client):
     token = register_and_login(
         client, "patauth-stud4@example.com", role="student", full_name="Dr. Mentor"

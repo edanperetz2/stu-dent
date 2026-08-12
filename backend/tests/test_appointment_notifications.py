@@ -504,36 +504,69 @@ def test_approving_resolves_the_attendings_own_needs_approval_notification(clien
 
 
 def test_rejecting_resolves_appointment_created_regardless_of_recipient(client):
+    # Two DIFFERENT people each hold their own unread appointment_created
+    # copy for the same appointment: the student gets one when the patient
+    # first requests it, then the attending gets a second, separate one
+    # once the student adds them afterward. reject_appointment's own
+    # resolve_notifications call is deliberately NOT scoped by recipient_id
+    # (unlike accept/approve) -- this proves that's real, not just an
+    # accident of only ever having one recipient to resolve.
     student_token = register_and_login(client, "notif-s14@example.com", role="student")
     attending_token = register_and_login(client, "notif-a14@example.com", role="attending")
     attending_id = _user_id(client, attending_token)
-    patient_id = create_patient(client, student_token)
-    room_id = create_default_room(client)
+    patient_id, patient_token = create_and_login_patient(
+        client, student_token, email="notif-p14@example.com"
+    )
 
     appointment = client.post(
         "/appointments",
-        json={
-            "patient_id": patient_id,
-            "attending_id": attending_id,
-            "room_id": room_id,
-            "start_time": START,
-            "end_time": END,
-        },
-        headers=auth_header(student_token),
+        json={"start_time": START, "end_time": END},
+        headers=auth_header(patient_token),
     ).json()
+
+    student_pending = _find_notification(
+        client,
+        student_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert student_pending["read_at"] is None
+
+    room_id = create_default_room(client)
+    client.patch(
+        f"/appointments/{appointment['id']}",
+        json={"attending_id": attending_id, "room_id": room_id},
+        headers=auth_header(student_token),
+    )
+
+    attending_pending = _find_notification(
+        client,
+        attending_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
+    assert attending_pending["read_at"] is None
 
     reject = client.post(
         f"/appointments/{appointment['id']}/reject", headers=auth_header(attending_token)
     )
     assert reject.status_code == 200
 
-    # The rejecting attending's own copy is resolved (they just acted on it)...
+    # Both recipients' separate copies are resolved by the one reject call --
+    # not just the rejecting attending's own.
+    student_resolved = _find_notification(
+        client,
+        student_token,
+        notification_type="appointment_created",
+        appointment_id=appointment["id"],
+    )
     attending_resolved = _find_notification(
         client,
         attending_token,
         notification_type="appointment_created",
         appointment_id=appointment["id"],
     )
+    assert student_resolved["read_at"] is not None
     assert attending_resolved["read_at"] is not None
 
 

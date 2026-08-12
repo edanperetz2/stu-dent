@@ -499,8 +499,34 @@ def test_resources_schedule_excludes_cancelled_and_proposed(client):
     ).json()
     client.post(f"/appointments/{cancelled['id']}/cancel", headers=auth_header(student_token))
 
+    # A patient-initiated request stays "proposed" until the student
+    # accepts it -- assigning a room alone (allowed before accepting) does
+    # not change that. This must be excluded from the schedule just like
+    # the cancelled appointment above, on a *different* room so the two
+    # cases can't accidentally share one passing assertion.
+    _, patient_token = create_and_login_patient(
+        client, student_token, "rooms-patient11b@example.com"
+    )
+    proposed_start, proposed_end = relative_slot(days=34, duration_minutes=30)
+    proposed_room_id = client.post(
+        "/admin/rooms", json={"name": "Room 1112"}, headers=auth_header(admin_token)
+    ).json()["id"]
+    proposed = client.post(
+        "/appointments",
+        json={"start_time": proposed_start, "end_time": proposed_end},
+        headers=auth_header(patient_token),
+    ).json()
+    patched = client.patch(
+        f"/appointments/{proposed['id']}",
+        json={"room_id": proposed_room_id},
+        headers=auth_header(student_token),
+    )
+    assert patched.json()["status"] == "proposed"
+
     schedule = client.get("/resources/schedule", headers=auth_header(student_token))
-    assert all(row["resource_id"] != room_id for row in schedule.json())
+    resource_ids = {row["resource_id"] for row in schedule.json()}
+    assert room_id not in resource_ids
+    assert proposed_room_id not in resource_ids
 
 
 def test_reactivation_job_flips_expired_scheduled_deactivations(client, db_session):

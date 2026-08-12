@@ -27,6 +27,23 @@ def _handoff_destination(response) -> str:
     return json.loads(match.group(1))
 
 
+def test_providers_reports_google_configured_when_credentials_present(monkeypatch, client):
+    _configure_google(monkeypatch)
+
+    response = client.get("/auth/oauth/providers")
+    assert response.status_code == 200
+    assert response.json() == {"google": True, "apple": False}
+
+
+def test_providers_reports_google_unconfigured_without_credentials(monkeypatch, client):
+    monkeypatch.setattr(settings, "google_oauth_client_id", None)
+    monkeypatch.setattr(settings, "google_oauth_client_secret", None)
+
+    response = client.get("/auth/oauth/providers")
+    assert response.status_code == 200
+    assert response.json() == {"google": False, "apple": False}
+
+
 def test_google_settings_are_optional_without_environment(monkeypatch):
     monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_ID", raising=False)
     monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_SECRET", raising=False)

@@ -4,6 +4,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Must match frontend/package.json's @playwright/test version exactly --
+# Playwright refuses to run against a browser build for a different version,
+# so this and that version drift together, deliberately (see test-e2e below).
+PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v1.62.1-jammy"
+
 usage() {
   cat <<'EOF'
 Usage: ./dev.sh <command>
@@ -13,6 +18,7 @@ Usage: ./dev.sh <command>
   logs [service]   docker compose logs -f [service]
   test             run the backend pytest suite
   test-frontend    run the frontend vitest suite
+  test-e2e         run the Playwright end-to-end suite against the real stack
   lint             ruff check, black --check, then npm run lint
   migrate <msg>    generate an Alembic revision from model changes, then apply it
   seed             seed idempotent demo data (safe to re-run)
@@ -59,6 +65,25 @@ case "$cmd" in
     ;;
   test-frontend)
     docker compose exec frontend npm run test
+    ;;
+  test-e2e)
+    # api/frontend need a moment: the E2E browser runs inside a throwaway
+    # container on this compose network, not on the host, so it can't reach
+    # either service via localhost the way a real browser on your machine
+    # can -- FRONTEND_ORIGINS/VITE_API_URL are overridden here to the
+    # internal service hostnames just for this run (see the comments on
+    # both in docker-compose.yml). Restored to normal afterward either way.
+    FRONTEND_ORIGINS=http://frontend:5173 VITE_API_URL=http://api:8000 \
+      docker compose up -d --build api frontend
+    trap 'docker compose up -d api frontend' EXIT
+    # Resolved from the running container rather than guessed from the
+    # folder name -- Compose lowercases the project name for the network
+    # too, so a folder like "FinalProject" would otherwise produce the
+    # wrong network name here.
+    network="$(docker inspect "$(docker compose ps -q api)" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}')"
+    MSYS_NO_PATHCONV=1 docker run --rm --network "$network" \
+      -v "$PWD/frontend:/work" -w /work -e E2E_BASE_URL=http://frontend:5173 \
+      "$PLAYWRIGHT_IMAGE" bash -c "npm ci && npx playwright test"
     ;;
   lint)
     docker compose exec api ruff check .
