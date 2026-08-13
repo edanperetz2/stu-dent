@@ -26,60 +26,10 @@ from app.services.audit import record_audit_log
 router = APIRouter(tags=["forum"])
 
 
-def _post_likes_subquery():
-    return (
-        select(func.count(ForumPostVote.id))
-        .where(ForumPostVote.post_id == ForumPost.id, ForumPostVote.value == 1)
-        .scalar_subquery()
-    )
-
-
-def _post_dislikes_subquery():
-    return (
-        select(func.count(ForumPostVote.id))
-        .where(ForumPostVote.post_id == ForumPost.id, ForumPostVote.value == -1)
-        .scalar_subquery()
-    )
-
-
-def _comment_likes_subquery():
-    return (
-        select(func.count(ForumCommentVote.id))
-        .where(ForumCommentVote.comment_id == ForumComment.id, ForumCommentVote.value == 1)
-        .scalar_subquery()
-    )
-
-
-def _comment_dislikes_subquery():
-    return (
-        select(func.count(ForumCommentVote.id))
-        .where(ForumCommentVote.comment_id == ForumComment.id, ForumCommentVote.value == -1)
-        .scalar_subquery()
-    )
-
-
 def _post_comment_count_subquery():
     return (
         select(func.count(ForumComment.id))
         .where(ForumComment.post_id == ForumPost.id, ForumComment.deleted_at.is_(None))
-        .scalar_subquery()
-    )
-
-
-def _post_my_vote_subquery(user_id: uuid.UUID):
-    return (
-        select(ForumPostVote.value)
-        .where(ForumPostVote.post_id == ForumPost.id, ForumPostVote.student_id == user_id)
-        .scalar_subquery()
-    )
-
-
-def _comment_my_vote_subquery(user_id: uuid.UUID):
-    return (
-        select(ForumCommentVote.value)
-        .where(
-            ForumCommentVote.comment_id == ForumComment.id, ForumCommentVote.student_id == user_id
-        )
         .scalar_subquery()
     )
 
@@ -95,48 +45,103 @@ def _post_comment_count(db: Session, post_id: uuid.UUID) -> int:
     )
 
 
-def _post_my_vote(db: Session, post_id: uuid.UUID, user_id: uuid.UUID) -> int | None:
-    return db.scalar(
-        select(ForumPostVote.value).where(
-            ForumPostVote.post_id == post_id, ForumPostVote.student_id == user_id
-        )
+# Post votes (ForumPostVote, keyed by post_id) and comment votes
+# (ForumCommentVote, keyed by comment_id) are the same shape end to end --
+# these generic builders are shared by both the point-lookup routes below
+# and list_posts/list_comments' correlated subqueries (via .scalar_subquery()
+# on the same statement).
+def _vote_count_stmt(vote_model, fk_column, entity_id, value: int):
+    return select(func.count(vote_model.id)).where(
+        fk_column == entity_id, vote_model.value == value
     )
 
 
-def _comment_my_vote(db: Session, comment_id: uuid.UUID, user_id: uuid.UUID) -> int | None:
-    return db.scalar(
-        select(ForumCommentVote.value).where(
-            ForumCommentVote.comment_id == comment_id, ForumCommentVote.student_id == user_id
-        )
-    )
+def _my_vote_stmt(vote_model, fk_column, entity_id, user_id: uuid.UUID):
+    return select(vote_model.value).where(fk_column == entity_id, vote_model.student_id == user_id)
 
 
-def _post_vote_counts(db: Session, post_id: uuid.UUID) -> tuple[int, int]:
-    likes = db.scalar(
-        select(func.count(ForumPostVote.id)).where(
-            ForumPostVote.post_id == post_id, ForumPostVote.value == 1
-        )
-    )
-    dislikes = db.scalar(
-        select(func.count(ForumPostVote.id)).where(
-            ForumPostVote.post_id == post_id, ForumPostVote.value == -1
-        )
-    )
+def _vote_counts(db: Session, vote_model, fk_column, entity_id) -> tuple[int, int]:
+    likes = db.scalar(_vote_count_stmt(vote_model, fk_column, entity_id, 1)) or 0
+    dislikes = db.scalar(_vote_count_stmt(vote_model, fk_column, entity_id, -1)) or 0
     return likes, dislikes
 
 
-def _comment_vote_counts(db: Session, comment_id: uuid.UUID) -> tuple[int, int]:
-    likes = db.scalar(
-        select(func.count(ForumCommentVote.id)).where(
-            ForumCommentVote.comment_id == comment_id, ForumCommentVote.value == 1
-        )
+def _my_vote(db: Session, vote_model, fk_column, entity_id, user_id: uuid.UUID) -> int | None:
+    return db.scalar(_my_vote_stmt(vote_model, fk_column, entity_id, user_id))
+
+
+def _upsert_vote(
+    db: Session,
+    vote_model,
+    fk_column,
+    fk_field: str,
+    entity_id,
+    student_id: uuid.UUID,
+    value: int,
+    *,
+    action: str,
+    target_type: str,
+    target_id,
+) -> None:
+    """Look up this student's existing vote and set `value`, inserting a new
+    row if none exists. The insert is SAVEPOINT-guarded, not a bare insert:
+    two concurrent requests from the same student (a real double-click, or
+    two open tabs) can both reach here having seen no existing row -- the
+    UniqueConstraint on (entity_id, student_id) would otherwise surface as a
+    bare 500 instead of the second request just updating the winner's row,
+    same shape as services/messaging.py::get_or_create_conversation."""
+    vote = db.scalar(
+        select(vote_model).where(fk_column == entity_id, vote_model.student_id == student_id)
     )
-    dislikes = db.scalar(
-        select(func.count(ForumCommentVote.id)).where(
-            ForumCommentVote.comment_id == comment_id, ForumCommentVote.value == -1
-        )
+    if vote is None:
+        try:
+            with db.begin_nested():
+                vote = vote_model(**{fk_field: entity_id, "student_id": student_id, "value": value})
+                db.add(vote)
+                db.flush()
+        except IntegrityError:
+            vote = db.scalar(
+                select(vote_model).where(
+                    fk_column == entity_id, vote_model.student_id == student_id
+                )
+            )
+            if vote is None:
+                raise
+            vote.value = value
+    else:
+        vote.value = value
+
+    record_audit_log(
+        db,
+        action=action,
+        actor_id=student_id,
+        target_type=target_type,
+        target_id=target_id,
+        extra_data={"value": value},
     )
-    return likes, dislikes
+    db.commit()
+
+
+def _delete_vote(
+    db: Session,
+    vote_model,
+    fk_column,
+    entity_id,
+    student_id: uuid.UUID,
+    *,
+    action: str,
+    target_type: str,
+    target_id,
+) -> None:
+    vote = db.scalar(
+        select(vote_model).where(fk_column == entity_id, vote_model.student_id == student_id)
+    )
+    if vote is not None:
+        db.delete(vote)
+        record_audit_log(
+            db, action=action, actor_id=student_id, target_type=target_type, target_id=target_id
+        )
+        db.commit()
 
 
 def _post_out(
@@ -220,10 +225,16 @@ def list_posts(
     stmt = (
         select(
             ForumPost,
-            _post_likes_subquery().label("likes"),
-            _post_dislikes_subquery().label("dislikes"),
+            _vote_count_stmt(ForumPostVote, ForumPostVote.post_id, ForumPost.id, 1)
+            .scalar_subquery()
+            .label("likes"),
+            _vote_count_stmt(ForumPostVote, ForumPostVote.post_id, ForumPost.id, -1)
+            .scalar_subquery()
+            .label("dislikes"),
             _post_comment_count_subquery().label("comment_count"),
-            _post_my_vote_subquery(current_user.id).label("my_vote"),
+            _my_vote_stmt(ForumPostVote, ForumPostVote.post_id, ForumPost.id, current_user.id)
+            .scalar_subquery()
+            .label("my_vote"),
         )
         .where(ForumPost.deleted_at.is_(None))
         .order_by(ForumPost.created_at.desc())
@@ -244,9 +255,9 @@ def get_post(
     db: Session = Depends(get_db),
 ) -> ForumPostOut:
     post = _get_active_post(db, post_id)
-    likes, dislikes = _post_vote_counts(db, post.id)
+    likes, dislikes = _vote_counts(db, ForumPostVote, ForumPostVote.post_id, post.id)
     comment_count = _post_comment_count(db, post.id)
-    my_vote = _post_my_vote(db, post.id, current_user.id)
+    my_vote = _my_vote(db, ForumPostVote, ForumPostVote.post_id, post.id, current_user.id)
     return _post_out(post, likes, dislikes, comment_count, my_vote)
 
 
@@ -275,9 +286,9 @@ def update_post(
     )
     db.commit()
     db.refresh(post)
-    likes, dislikes = _post_vote_counts(db, post.id)
+    likes, dislikes = _vote_counts(db, ForumPostVote, ForumPostVote.post_id, post.id)
     comment_count = _post_comment_count(db, post.id)
-    my_vote = _post_my_vote(db, post.id, current_user.id)
+    my_vote = _my_vote(db, ForumPostVote, ForumPostVote.post_id, post.id, current_user.id)
     return _post_out(post, likes, dislikes, comment_count, my_vote)
 
 
@@ -348,9 +359,17 @@ def list_comments(
     stmt = (
         select(
             ForumComment,
-            _comment_likes_subquery().label("likes"),
-            _comment_dislikes_subquery().label("dislikes"),
-            _comment_my_vote_subquery(current_user.id).label("my_vote"),
+            _vote_count_stmt(ForumCommentVote, ForumCommentVote.comment_id, ForumComment.id, 1)
+            .scalar_subquery()
+            .label("likes"),
+            _vote_count_stmt(ForumCommentVote, ForumCommentVote.comment_id, ForumComment.id, -1)
+            .scalar_subquery()
+            .label("dislikes"),
+            _my_vote_stmt(
+                ForumCommentVote, ForumCommentVote.comment_id, ForumComment.id, current_user.id
+            )
+            .scalar_subquery()
+            .label("my_vote"),
         )
         .where(ForumComment.post_id == post_id, ForumComment.deleted_at.is_(None))
         .order_by(ForumComment.created_at.asc())
@@ -397,48 +416,20 @@ def vote_on_post(
 ) -> ForumPostOut:
     post = _get_active_post(db, post_id)
 
-    vote = db.scalar(
-        select(ForumPostVote).where(
-            ForumPostVote.post_id == post_id, ForumPostVote.student_id == current_user.id
-        )
-    )
-    if vote is None:
-        # A SAVEPOINT, not a bare insert: two concurrent requests from the
-        # same student (a real double-click, or two open tabs) can both
-        # reach here having seen no existing row -- the UniqueConstraint on
-        # (post_id, student_id) would otherwise surface as a bare 500
-        # instead of the second request just updating the winner's row,
-        # same shape as services/messaging.py::get_or_create_conversation.
-        try:
-            with db.begin_nested():
-                vote = ForumPostVote(
-                    post_id=post_id, student_id=current_user.id, value=payload.value
-                )
-                db.add(vote)
-                db.flush()
-        except IntegrityError:
-            vote = db.scalar(
-                select(ForumPostVote).where(
-                    ForumPostVote.post_id == post_id, ForumPostVote.student_id == current_user.id
-                )
-            )
-            if vote is None:
-                raise
-            vote.value = payload.value
-    else:
-        vote.value = payload.value
-
-    record_audit_log(
+    _upsert_vote(
         db,
+        ForumPostVote,
+        ForumPostVote.post_id,
+        "post_id",
+        post_id,
+        current_user.id,
+        payload.value,
         action="forum_post_vote",
-        actor_id=current_user.id,
         target_type="forum_post",
         target_id=post.id,
-        extra_data={"value": payload.value},
     )
-    db.commit()
 
-    likes, dislikes = _post_vote_counts(db, post_id)
+    likes, dislikes = _vote_counts(db, ForumPostVote, ForumPostVote.post_id, post_id)
     comment_count = _post_comment_count(db, post_id)
     return _post_out(post, likes, dislikes, comment_count, payload.value)
 
@@ -451,23 +442,18 @@ def remove_post_vote(
 ) -> ForumPostOut:
     post = _get_active_post(db, post_id)
 
-    vote = db.scalar(
-        select(ForumPostVote).where(
-            ForumPostVote.post_id == post_id, ForumPostVote.student_id == current_user.id
-        )
+    _delete_vote(
+        db,
+        ForumPostVote,
+        ForumPostVote.post_id,
+        post_id,
+        current_user.id,
+        action="forum_post_unvote",
+        target_type="forum_post",
+        target_id=post.id,
     )
-    if vote is not None:
-        db.delete(vote)
-        record_audit_log(
-            db,
-            action="forum_post_unvote",
-            actor_id=current_user.id,
-            target_type="forum_post",
-            target_id=post.id,
-        )
-        db.commit()
 
-    likes, dislikes = _post_vote_counts(db, post_id)
+    likes, dislikes = _vote_counts(db, ForumPostVote, ForumPostVote.post_id, post_id)
     comment_count = _post_comment_count(db, post_id)
     return _post_out(post, likes, dislikes, comment_count, None)
 
@@ -481,45 +467,20 @@ def vote_on_comment(
 ) -> ForumCommentOut:
     comment = _get_active_comment(db, comment_id)
 
-    vote = db.scalar(
-        select(ForumCommentVote).where(
-            ForumCommentVote.comment_id == comment_id,
-            ForumCommentVote.student_id == current_user.id,
-        )
-    )
-    if vote is None:
-        # Same concurrent-duplicate-insert race as vote_on_post above.
-        try:
-            with db.begin_nested():
-                vote = ForumCommentVote(
-                    comment_id=comment_id, student_id=current_user.id, value=payload.value
-                )
-                db.add(vote)
-                db.flush()
-        except IntegrityError:
-            vote = db.scalar(
-                select(ForumCommentVote).where(
-                    ForumCommentVote.comment_id == comment_id,
-                    ForumCommentVote.student_id == current_user.id,
-                )
-            )
-            if vote is None:
-                raise
-            vote.value = payload.value
-    else:
-        vote.value = payload.value
-
-    record_audit_log(
+    _upsert_vote(
         db,
+        ForumCommentVote,
+        ForumCommentVote.comment_id,
+        "comment_id",
+        comment_id,
+        current_user.id,
+        payload.value,
         action="forum_comment_vote",
-        actor_id=current_user.id,
         target_type="forum_comment",
         target_id=comment.id,
-        extra_data={"value": payload.value},
     )
-    db.commit()
 
-    likes, dislikes = _comment_vote_counts(db, comment_id)
+    likes, dislikes = _vote_counts(db, ForumCommentVote, ForumCommentVote.comment_id, comment_id)
     return _comment_out(comment, likes, dislikes, payload.value)
 
 
@@ -531,22 +492,16 @@ def remove_comment_vote(
 ) -> ForumCommentOut:
     comment = _get_active_comment(db, comment_id)
 
-    vote = db.scalar(
-        select(ForumCommentVote).where(
-            ForumCommentVote.comment_id == comment_id,
-            ForumCommentVote.student_id == current_user.id,
-        )
+    _delete_vote(
+        db,
+        ForumCommentVote,
+        ForumCommentVote.comment_id,
+        comment_id,
+        current_user.id,
+        action="forum_comment_unvote",
+        target_type="forum_comment",
+        target_id=comment.id,
     )
-    if vote is not None:
-        db.delete(vote)
-        record_audit_log(
-            db,
-            action="forum_comment_unvote",
-            actor_id=current_user.id,
-            target_type="forum_comment",
-            target_id=comment.id,
-        )
-        db.commit()
 
-    likes, dislikes = _comment_vote_counts(db, comment_id)
+    likes, dislikes = _vote_counts(db, ForumCommentVote, ForumCommentVote.comment_id, comment_id)
     return _comment_out(comment, likes, dislikes, None)

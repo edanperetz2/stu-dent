@@ -156,6 +156,12 @@ export function AppLayout() {
   })
   const pendingFeedbackCount = pendingFeedback?.length ?? 0
 
+  const badgesByPath: Record<string, { count: number; error: boolean }> = {
+    '/notifications': { count: unreadCount, error: notificationsError },
+    '/messages': { count: unreadMessageCount, error: messagesError },
+    '/feedback': { count: pendingFeedbackCount, error: feedbackError },
+  }
+
   return (
     <>
       {/* Invisible until focused (first Tab stop on the page) -- lets a
@@ -250,26 +256,11 @@ export function AppLayout() {
               </Text>
               {items.map((link) => {
                 const isActive = location.pathname === link.to
-                const badgeCount =
-                  link.to === '/notifications'
-                    ? unreadCount
-                    : link.to === '/messages'
-                      ? unreadMessageCount
-                      : link.to === '/feedback'
-                        ? pendingFeedbackCount
-                        : 0
                 // A failed badge fetch used to silently render as "no
                 // badge", indistinguishable from genuinely zero unread --
                 // shown instead as a distinct "count unavailable" marker
                 // rather than a numeric one.
-                const badgeError =
-                  link.to === '/notifications'
-                    ? notificationsError
-                    : link.to === '/messages'
-                      ? messagesError
-                      : link.to === '/feedback'
-                        ? feedbackError
-                        : false
+                const badge = badgesByPath[link.to] ?? { count: 0, error: false }
                 return (
                   <NavLink
                     key={link.to}
@@ -288,7 +279,7 @@ export function AppLayout() {
                     onFocus={() => void preloadRoute(link.to)}
                     onPointerDown={() => void preloadRoute(link.to)}
                     rightSection={
-                      badgeError ? (
+                      badge.error ? (
                         <Badge
                           size="sm"
                           circle
@@ -297,9 +288,9 @@ export function AppLayout() {
                         >
                           !
                         </Badge>
-                      ) : badgeCount > 0 ? (
+                      ) : badge.count > 0 ? (
                         <Badge size="sm" circle color="red">
-                          {badgeCount}
+                          {badge.count}
                         </Badge>
                       ) : undefined
                     }

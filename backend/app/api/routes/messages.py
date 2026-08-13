@@ -56,6 +56,18 @@ def _get_active_user_or_404(db: Session, user_id: uuid.UUID) -> User:
     return user
 
 
+def _mark_read_state(db: Session, key: str, user_id: uuid.UUID, *, read: bool) -> ReadReceiptOut:
+    """Shared tail for the direct/admin-inbox read+unread routes: a
+    conversation that was never created yet (no message sent either way)
+    just reports the default read state, nothing to touch."""
+    existing = db.scalar(select(Conversation).where(Conversation.direct_key == key))
+    if existing is None:
+        return ReadReceiptOut(last_read_at=datetime.now(UTC) if read else None)
+    participant = touch_read(db, existing, user_id) if read else touch_unread(db, existing, user_id)
+    db.commit()
+    return ReadReceiptOut.model_validate(participant)
+
+
 @router.get("/contacts", response_model=list[ContactOut])
 def get_contacts(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -144,14 +156,7 @@ def mark_direct_read(
     db: Session = Depends(get_db),
 ) -> ReadReceiptOut:
     other = _authorized_peer(db, other_user_id, current_user)
-    existing = db.scalar(
-        select(Conversation).where(Conversation.direct_key == direct_key(current_user.id, other.id))
-    )
-    if existing is None:
-        return ReadReceiptOut(last_read_at=datetime.now(UTC))
-    participant = touch_read(db, existing, current_user.id)
-    db.commit()
-    return ReadReceiptOut.model_validate(participant)
+    return _mark_read_state(db, direct_key(current_user.id, other.id), current_user.id, read=True)
 
 
 @router.post("/direct/{other_user_id}/unread", response_model=ReadReceiptOut)
@@ -161,14 +166,7 @@ def mark_direct_unread(
     db: Session = Depends(get_db),
 ) -> ReadReceiptOut:
     other = _authorized_peer(db, other_user_id, current_user)
-    existing = db.scalar(
-        select(Conversation).where(Conversation.direct_key == direct_key(current_user.id, other.id))
-    )
-    if existing is None:
-        return ReadReceiptOut(last_read_at=None)
-    participant = touch_unread(db, existing, current_user.id)
-    db.commit()
-    return ReadReceiptOut.model_validate(participant)
+    return _mark_read_state(db, direct_key(current_user.id, other.id), current_user.id, read=False)
 
 
 # ---- Admin shared inbox -----------------------------------------------------
@@ -232,14 +230,7 @@ def mark_own_admin_read(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not applicable to admins"
         )
-    existing = db.scalar(
-        select(Conversation).where(Conversation.direct_key == admin_key(current_user.id))
-    )
-    if existing is None:
-        return ReadReceiptOut(last_read_at=datetime.now(UTC))
-    participant = touch_read(db, existing, current_user.id)
-    db.commit()
-    return ReadReceiptOut.model_validate(participant)
+    return _mark_read_state(db, admin_key(current_user.id), current_user.id, read=True)
 
 
 @router.post("/admin/unread", response_model=ReadReceiptOut)
@@ -250,14 +241,7 @@ def mark_own_admin_unread(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not applicable to admins"
         )
-    existing = db.scalar(
-        select(Conversation).where(Conversation.direct_key == admin_key(current_user.id))
-    )
-    if existing is None:
-        return ReadReceiptOut(last_read_at=None)
-    participant = touch_unread(db, existing, current_user.id)
-    db.commit()
-    return ReadReceiptOut.model_validate(participant)
+    return _mark_read_state(db, admin_key(current_user.id), current_user.id, read=False)
 
 
 @router.get("/admin-inbox/{owner_id}", response_model=list[MessageOut])
@@ -312,12 +296,7 @@ def mark_admin_inbox_read(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only")
     _get_active_user_or_404(db, owner_id)
-    existing = db.scalar(select(Conversation).where(Conversation.direct_key == admin_key(owner_id)))
-    if existing is None:
-        return ReadReceiptOut(last_read_at=datetime.now(UTC))
-    participant = touch_read(db, existing, current_user.id)
-    db.commit()
-    return ReadReceiptOut.model_validate(participant)
+    return _mark_read_state(db, admin_key(owner_id), current_user.id, read=True)
 
 
 @router.post("/admin-inbox/{owner_id}/unread", response_model=ReadReceiptOut)
@@ -329,12 +308,7 @@ def mark_admin_inbox_unread(
     if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only")
     _get_active_user_or_404(db, owner_id)
-    existing = db.scalar(select(Conversation).where(Conversation.direct_key == admin_key(owner_id)))
-    if existing is None:
-        return ReadReceiptOut(last_read_at=None)
-    participant = touch_unread(db, existing, current_user.id)
-    db.commit()
-    return ReadReceiptOut.model_validate(participant)
+    return _mark_read_state(db, admin_key(owner_id), current_user.id, read=False)
 
 
 # ---- Group chats (students/attendings only) --------------------------------
