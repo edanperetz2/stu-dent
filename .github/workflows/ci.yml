@@ -183,6 +183,27 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Installed on the bare runner before the Docker stack ever starts:
+      # the frontend service bind-mounts this same directory
+      # (docker-compose.yml's `./frontend:/app`), and its container process
+      # runs as root -- npm ci running here afterward would hit EACCES
+      # trying to write into a frontend/node_modules the container already
+      # touched as a different user. Order, not permissions, is the fix.
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
       - name: Bring up the app stack
         # Just db/ollama/api/frontend/mailhog -- worker and the one-shot
         # ollama-init/seed-init containers aren't needed since these specs
@@ -193,21 +214,6 @@ jobs:
         run: docker compose up -d --build --wait --wait-timeout 180 db ollama api frontend mailhog
         env:
           JWT_SECRET_KEY: ci-test-secret
-
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install frontend deps
-        working-directory: frontend
-        run: npm ci
-
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests
         working-directory: frontend
