@@ -5,7 +5,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.models.report import Report, ReportContentSource, ReportPeriodType
-from app.models.user import User
+from app.models.user import RoleEnum, User
 from app.services import ollama_client
 from app.services.nl_dates import resolve_date_range
 from app.services.report_data import resource_utilization, time_impact
@@ -187,14 +187,23 @@ def generate_periodic_report(
     everything as fully seeded, permanently skipping whatever hadn't
     actually been generated yet.
     """
-    data = {
+    data: dict[str, Any] = {
         "resource_utilization": (
             resource_utilization_data
             if resource_utilization_data is not None
             else resource_utilization(db, start=period_start, end=period_end)
         ),
-        "time_impact": time_impact(db, scope_user=recipient, start=period_start, end=period_end),
     }
+    # time_impact is inherently personal (student/attending's own lost
+    # time) -- an admin has no personal appointments, so it would always
+    # come back empty. Omitting the key entirely (rather than including an
+    # always-empty list) keeps it out of the narration prompt for admin
+    # recipients; _plain_english_summary/_narrate already handle a data
+    # dict with only resource_utilization present.
+    if recipient.role != RoleEnum.admin:
+        data["time_impact"] = time_impact(
+            db, scope_user=recipient, start=period_start, end=period_end
+        )
     if use_ai:
         content, content_source = _narrate(data, audience=f"dental {recipient.role.value}")
     else:

@@ -136,6 +136,39 @@ def test_login_rate_limit_is_scoped_per_ip_not_just_identifier(db_session):
     )
 
 
+def test_login_rate_limit_per_ip_ceiling_catches_credential_stuffing(db_session):
+    """Even though failing against many *different* emails doesn't trip the
+    per-(email, IP) check on any single one of them, one IP credential-
+    stuffing its way across many accounts must still eventually hit the
+    higher per-IP-only ceiling.
+    """
+    for i in range(settings.login_rate_limit_max_attempts_per_ip):
+        record_audit_log(
+            db_session,
+            action="user_login_failure",
+            attempted_identifier=f"stuffed-{i}@example.com",
+            ip_address="10.0.0.20",
+        )
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        enforce_login_rate_limit(
+            db_session,
+            identifier="one-more@example.com",
+            ip_address="10.0.0.20",
+            failure_action="user_login_failure",
+        )
+    assert exc_info.value.status_code == 429
+
+    # A different IP entirely is unaffected by this IP's flood.
+    enforce_login_rate_limit(
+        db_session,
+        identifier="one-more@example.com",
+        ip_address="10.0.0.21",
+        failure_action="user_login_failure",
+    )
+
+
 def test_registration_rate_limit_per_email_does_not_block_other_emails_same_ip(db_session):
     """A shared classroom/clinic IP with many *different* real registrants
     must not get bunched into one tight counter -- only repeated attempts

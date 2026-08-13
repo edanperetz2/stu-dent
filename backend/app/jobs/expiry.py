@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -8,6 +9,8 @@ from app.models.notification import NotificationType
 from app.services.formatting import format_dt
 from app.services.notifications import notify
 from app.services.waitlist import recheck_waitlist_after_cancellation
+
+logger = logging.getLogger(__name__)
 
 _EXPIRABLE_STATUSES = (
     AppointmentStatus.proposed,
@@ -37,37 +40,45 @@ def expire_stale_appointments(db: Session) -> int:
 
     expired = 0
     for appointment in candidates:
-        appointment.status = AppointmentStatus.cancelled
-        recheck_waitlist_after_cancellation(db, appointment)
+        try:
+            appointment.status = AppointmentStatus.cancelled
+            recheck_waitlist_after_cancellation(db, appointment)
 
-        message = (
-            f"Your appointment request for {format_dt(appointment.start_time)} "
-            "expired because it was never confirmed in time."
-        )
-        notify(
-            db,
-            notification_type=NotificationType.appointment_expired,
-            message=message,
-            recipient_id=appointment.student_id,
-            related_appointment_id=appointment.id,
-        )
-        notify(
-            db,
-            notification_type=NotificationType.appointment_expired,
-            message=message,
-            recipient_id=appointment.patient_id,
-            related_appointment_id=appointment.id,
-        )
-        if appointment.attending_id is not None:
+            message = (
+                f"Your appointment request for {format_dt(appointment.start_time)} "
+                "expired because it was never confirmed in time."
+            )
             notify(
                 db,
                 notification_type=NotificationType.appointment_expired,
                 message=message,
-                recipient_id=appointment.attending_id,
+                recipient_id=appointment.student_id,
                 related_appointment_id=appointment.id,
             )
+            notify(
+                db,
+                notification_type=NotificationType.appointment_expired,
+                message=message,
+                recipient_id=appointment.patient_id,
+                related_appointment_id=appointment.id,
+            )
+            if appointment.attending_id is not None:
+                notify(
+                    db,
+                    notification_type=NotificationType.appointment_expired,
+                    message=message,
+                    recipient_id=appointment.attending_id,
+                    related_appointment_id=appointment.id,
+                )
 
-        db.commit()
+            db.commit()
+        except Exception:
+            # One appointment failing to expire must not block the rest of
+            # the batch -- its status is only committed on success, so a
+            # failed row is simply retried next time this job runs.
+            logger.warning("Failed to expire appointment %s", appointment.id, exc_info=True)
+            db.rollback()
+            continue
         expired += 1
 
     return expired

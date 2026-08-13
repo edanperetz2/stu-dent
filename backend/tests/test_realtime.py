@@ -170,7 +170,11 @@ def test_websocket_receives_direct_message_live():
 
                 event = websocket.receive_json()
                 assert event["event"] == "message"
-                assert event["body"] == "live hello"
+                # No "body" on the event itself -- it's a thin signal, the
+                # client refetches the real message over REST. Keeping the
+                # full body out of the NOTIFY payload avoids Postgres's
+                # 8000-byte pg_notify limit for a message up to 5000 chars.
+                assert "body" not in event
                 assert event["recipient_id"] == str(patient_id)
     finally:
         app.dependency_overrides.pop(get_db, None)
@@ -273,7 +277,7 @@ def test_websocket_broadcasts_group_message_to_every_other_participant():
                 event2 = ws2.receive_json()
                 for event, recipient_id in zip([event1, event2], student_ids[1:], strict=True):
                     assert event["event"] == "message"
-                    assert event["body"] == "hello group"
+                    assert "body" not in event
                     assert event["recipient_id"] == str(recipient_id)
     finally:
         app.dependency_overrides.pop(get_db, None)

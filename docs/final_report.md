@@ -38,6 +38,8 @@ services anywhere in the stack.
 
 ## 2. Architecture
 
+![Stu-Dent system architecture](../architecture.png)
+
 ### Stack
 
 - **Backend**: Python 3.12, FastAPI, SQLAlchemy 2 (sync `Session`, `psycopg`
@@ -127,9 +129,8 @@ file listings.
 
 **Backend: 355 pytest tests across 32 files. Frontend: 256 Vitest tests
 across 68 files. End-to-end: 4 real-browser Playwright tests across 3
-spec files** (§3.11). The rubric grades backend only, so the breakdown
-below is backend-first; frontend and E2E coverage are noted as
-supplementary.
+spec files** (§3.9). The breakdown below is organized backend-first, by
+feature area, with frontend and E2E coverage for each noted alongside it.
 
 ### 3.1 Authentication, roles, and account security
 
@@ -643,10 +644,53 @@ crashes"):**
   diagnosis/treatment recommendation — all intentional non-goals from the
   original proposal, not gaps.
 
-## 7. Team Contributions
+## 7. Curriculum Topic Coverage
+
+How this project maps onto the course's own named units, for a reader
+checking against the syllabus rather than the proposal:
+
+- **Git**: full real commit history on `github.com/edanperetz2/stu-dent`,
+  feature branches, and a merged pull request.
+- **Containers**: the whole stack runs as seven Docker Compose services
+  plus two one-shot init containers (§2, "Backend container topology").
+- **Unit tests**: 355 backend + 256 frontend tests (§3).
+- **Sockets + IPC**: the real-time layer is a WebSocket endpoint
+  (`/ws`) backed by a Postgres LISTEN/NOTIFY bridge
+  (`app/realtime/listener.py`, §2, §3.9) — a dedicated async task relays
+  DB-side events to connected sockets, including events raised by the
+  `worker` container, not just the `api` process handling the request.
+- **Client-server + Python packaging/organization**: a FastAPI backend
+  (`models/`/`schemas/`/`core/`/`services/`/`api/routes/`, one concern per
+  module) serving a fully decoupled React/TypeScript client over HTTP and
+  WebSocket (§2).
+- **Parallel programming**: real concurrency handling throughout, not just
+  claimed — Postgres `ExcludeConstraint`s prevent double-booking under
+  concurrent requests (§2), several services use SAVEPOINT-guarded
+  insert-or-update to rescue concurrent duplicate inserts, and
+  `test_stress.py` (§3.10) drives genuinely concurrent load with real
+  threads, not mocks.
+- **CI/CD**: a 6-job GitHub Actions pipeline — lint, dependency audit,
+  backend tests, frontend tests, end-to-end tests, and a Docker build
+  check — runs on every push (§3.9).
+
+## 8. Team Contributions
 
 *(Placeholder — to be filled in by the authors: Idan Peretz, Yoni Oshin,
 Sharbel Makhoul. Note for whoever fills this in: keep it specific per
 person/phase rather than a generic "everyone did everything" — the
 course's GitHub-commits requirement means this should be easy to ground
 in real commit history via `git log --author=...`.)*
+
+## 9. Summary
+
+Stu-Dent covers the full scope of the original proposal: unified
+role-based auth, a database-enforced conflict-free scheduling engine
+across five resource dimensions, a self-healing waitlist, notifications
+and reminders, a student forum, direct messaging, admin resource
+management, and a local AI layer for both natural-language scheduling
+entry and usage reporting — all Dockerized behind one command, with no
+paid third-party services anywhere in the stack. It's backed by 355
+backend tests, 256 frontend tests, and a real end-to-end browser suite,
+all enforced on every push by CI. What remains outside this document is
+the recorded demo video and the Team Contributions section above, both
+left for the authors to complete directly.

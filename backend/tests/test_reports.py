@@ -1,6 +1,6 @@
 from app.jobs.reports import generate_scheduled_reports
 from app.services import ollama_client
-from tests.helpers import auth_header, register_and_login
+from tests.helpers import auth_header, create_and_login_patient, register_and_login
 
 
 def _mock_ollama_router(monkeypatch, *, classify=None, narrate=None):
@@ -12,10 +12,31 @@ def _mock_ollama_router(monkeypatch, *, classify=None, narrate=None):
     monkeypatch.setattr(ollama_client, "generate_json", fake)
 
 
-def test_list_reports_requires_student_or_attending_role(client):
-    admin_token = register_and_login(client, "rep-admin1@example.com", role="admin")
-    response = client.get("/reports", headers=auth_header(admin_token))
+def test_list_reports_rejects_patient_role(client):
+    student_token = register_and_login(client, "rep-patient-owner@example.com", role="student")
+    _, patient_token = create_and_login_patient(client, student_token, "rep-patient1@example.com")
+    response = client.get("/reports", headers=auth_header(patient_token))
     assert response.status_code == 403
+
+
+def test_admin_can_list_generate_and_ask_reports(client, monkeypatch):
+    """Admin has no personal appointments, so it only ever gets
+    resource_utilization -- verifying admin access works end to end, not
+    just that the role gate lets it through.
+    """
+    _mock_ollama_router(monkeypatch, narrate={"summary": "Clinic-wide usage looks fine."})
+    admin_token = register_and_login(client, "rep-admin2@example.com", role="admin")
+
+    generate_response = client.post(
+        "/reports/generate",
+        json={"period_type": "weekly", "output_style": "ai_narrated"},
+        headers=auth_header(admin_token),
+    )
+    assert generate_response.status_code == 201
+    assert generate_response.json()["content"] == "Clinic-wide usage looks fine."
+
+    list_response = client.get("/reports", headers=auth_header(admin_token))
+    assert len(list_response.json()) == 1
 
 
 def test_generate_report_now_creates_selected_ai_report(client, monkeypatch):

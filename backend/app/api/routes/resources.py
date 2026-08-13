@@ -25,9 +25,19 @@ def get_resources_schedule(
     patient's care, the same leak `redact_conflicts_for_patient` exists to
     prevent for the waitlist/conflict responses.
     """
-    stmt = select(Appointment).where(
-        or_(Appointment.room_id.is_not(None), Appointment.equipment_id.is_not(None)),
-        Appointment.status.in_(ACTIVE_STATUSES),
+    stmt = (
+        select(Appointment)
+        .where(
+            or_(Appointment.room_id.is_not(None), Appointment.equipment_id.is_not(None)),
+            Appointment.status.in_(ACTIVE_STATUSES),
+        )
+        .order_by(Appointment.start_time.desc())
+        # Defensive cap, not full pagination -- this feed has no inherent
+        # time window and would otherwise grow forever. Ordering by
+        # start_time desc keeps future + most-recent bookings and drops the
+        # oldest history first, the right priority for a live coordination
+        # view.
+        .limit(1000)
     )
     if current_user.role == RoleEnum.patient:
         stmt = stmt.where(Appointment.patient_id == current_user.id)

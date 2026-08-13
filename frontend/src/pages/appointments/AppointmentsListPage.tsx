@@ -777,7 +777,13 @@ export function AppointmentsListPage() {
                 </Collapse>
               </>
             ) : (
-              <Textarea label="Notes" {...form.getInputProps('notes')} />
+              <>
+                <Text size="sm" c="dimmed">
+                  This sends a request to your student. They'll accept it and assign a room before
+                  it's confirmed.
+                </Text>
+                <Textarea label="Notes" {...form.getInputProps('notes')} />
+              </>
             )}
           </Stack>
 

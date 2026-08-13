@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Alert,
   AppShell,
   Badge,
   Burger,
@@ -301,6 +302,15 @@ export function AppLayout() {
           ))}
         </AppShell.Navbar>
         <AppShell.Main id="main-content" className="app-layout-main">
+          {/* Shown on every page, not just at registration or on Preferences
+              -- otherwise the only warning a pending patient gets is a 403
+              toast after they've already filled out a whole booking form. */}
+          {principal?.role === 'patient' && !principal.ownerConfirmedAt && (
+            <Alert color="yellow" role="alert" mb="md">
+              Your account is pending confirmation from your student. You can browse but
+              can&apos;t book appointments or join the waitlist until they confirm you.
+            </Alert>
+          )}
           {/* Keep the header and navigation mounted while a first-visit route
               chunk loads. Intent preloading above usually avoids this fallback
               entirely; slower connections get a stable in-content loader. */}

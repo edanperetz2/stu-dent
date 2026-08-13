@@ -43,13 +43,17 @@ def _period_bounds(period_type: ReportPeriodType, *, now: datetime) -> tuple[dat
 
 def generate_scheduled_reports(db: Session) -> int:
     """Generate this calendar week's/month's report for every active
-    student/attending, once each. The existence check below is what
+    student/attending/admin, once each. The existence check below is what
     throttles Ollama calls to once per user per period regardless of how
     often the worker polls -- no separate scheduling logic needed.
     """
     now = datetime.now(UTC)
     recipients = list(
-        db.scalars(select(User).where(*active_user_filters(RoleEnum.student, RoleEnum.attending)))
+        db.scalars(
+            select(User).where(
+                *active_user_filters(RoleEnum.student, RoleEnum.attending, RoleEnum.admin)
+            )
+        )
     )
 
     generated = 0

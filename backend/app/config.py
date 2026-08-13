@@ -28,6 +28,11 @@ class Settings(BaseSettings):
 
     login_rate_limit_max_attempts: int = 5
     login_rate_limit_window_minutes: int = 15
+    # Same two-layer shape as registration/password-reset below: a tight
+    # per-(email, IP) check plus a much higher per-IP-only ceiling, so one IP
+    # can't credential-stuff its way across many different emails by simply
+    # staying under the per-email threshold for each one.
+    login_rate_limit_max_attempts_per_ip: int = 50
 
     registration_rate_limit_max_attempts: int = 10
     registration_rate_limit_window_minutes: int = 15

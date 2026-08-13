@@ -49,22 +49,37 @@ def _raise_too_many() -> None:
 def enforce_login_rate_limit(
     db: Session, *, identifier: str, ip_address: str | None, failure_action: str
 ) -> None:
-    """Raise 429 if (identifier, ip_address) has too many recent failures.
+    """Raise 429 if (identifier, ip_address) has too many recent failures, or
+    if this IP has too many recent failures across *any* identifier.
 
     Keying on the IP *in addition to* the identifier (not identifier alone)
     matters: otherwise anyone who merely knows a victim's email could lock
     their real account out from anywhere, since the block previously
     applied to the identifier globally regardless of who was making the
     requests.
+
+    The second, per-IP-only check (same two-layer shape as registration/
+    password-reset) matters too: without it, one IP could credential-stuff
+    its way across many different emails, since each (email, IP) pair on
+    its own would individually stay under the first check's threshold.
     """
-    count = _count_recent(
+    per_identifier_count = _count_recent(
         db,
         ip_address=ip_address,
         action=failure_action,
         window_minutes=settings.login_rate_limit_window_minutes,
         identifier=identifier,
     )
-    if count >= settings.login_rate_limit_max_attempts:
+    if per_identifier_count >= settings.login_rate_limit_max_attempts:
+        _raise_too_many()
+
+    per_ip_count = _count_recent(
+        db,
+        ip_address=ip_address,
+        action=failure_action,
+        window_minutes=settings.login_rate_limit_window_minutes,
+    )
+    if per_ip_count >= settings.login_rate_limit_max_attempts_per_ip:
         _raise_too_many()
 
 

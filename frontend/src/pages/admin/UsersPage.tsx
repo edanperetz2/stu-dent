@@ -20,6 +20,15 @@ const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'patient', label: 'Patient' },
 ]
 
+// The backend unconditionally rejects a role change into or out of
+// `patient` (a patient's onboarding/ownership columns make that transition
+// unsafe) -- filtering the options here keeps the UI from ever offering an
+// action that's guaranteed to 403.
+export function roleOptionsFor(role: Role) {
+  if (role === 'patient') return ROLE_OPTIONS.filter((option) => option.value === 'patient')
+  return ROLE_OPTIONS.filter((option) => option.value !== 'patient')
+}
+
 /** Adds/removes one id from a Set-valued state setter -- used to track
  * per-row pending state independently of `useMutation`'s own `isPending`/
  * `variables`, which reflect only the single most-recently-fired call. One
@@ -117,10 +126,10 @@ export function UsersPage() {
                     <Select
                       size="xs"
                       w={130}
-                      data={ROLE_OPTIONS}
+                      data={roleOptionsFor(user.role)}
                       value={user.role}
                       allowDeselect={false}
-                      disabled={isSelf}
+                      disabled={isSelf || user.role === 'patient'}
                       onChange={(value) => {
                         if (value && value !== user.role) {
                           setPendingRoleChange({

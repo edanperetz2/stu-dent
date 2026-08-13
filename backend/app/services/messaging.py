@@ -409,6 +409,11 @@ def send_message(
     for recipient_id in recipient_ids:
         if recipient_id == sender.id:
             continue
+        # No "body" here on purpose: a message can be up to 5,000 chars, and
+        # Postgres caps a pg_notify payload at 8,000 bytes -- a long or
+        # non-ASCII body could blow that limit and abort this whole
+        # transaction. The frontend already just invalidates its messages
+        # query on this event and refetches the real body over REST.
         publish(
             db,
             recipient_id=recipient_id,
@@ -416,7 +421,6 @@ def send_message(
                 "event": "message",
                 "conversation_id": str(conversation.id),
                 "id": str(message.id),
-                "body": message.body,
                 "sender_id": str(sender.id),
             },
         )

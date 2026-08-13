@@ -16,7 +16,9 @@ router = APIRouter(tags=["reports"])
 
 @router.get("/reports", response_model=list[ReportOut])
 def list_reports(
-    current_user: User = Depends(require_role(RoleEnum.student, RoleEnum.attending)),
+    current_user: User = Depends(
+        require_role(RoleEnum.student, RoleEnum.attending, RoleEnum.admin)
+    ),
     db: Session = Depends(get_db),
 ) -> list[Report]:
     stmt = (
@@ -30,7 +32,9 @@ def list_reports(
 @router.post("/reports/generate", response_model=ReportOut, status_code=201)
 def generate_report_now(
     payload: GenerateReportIn,
-    current_user: User = Depends(require_role(RoleEnum.student, RoleEnum.attending)),
+    current_user: User = Depends(
+        require_role(RoleEnum.student, RoleEnum.attending, RoleEnum.admin)
+    ),
     db: Session = Depends(get_db),
 ) -> Report:
     """Generate one user-selected rolling report immediately rather than
@@ -52,7 +56,9 @@ def generate_report_now(
 @router.post("/reports/ask", response_model=ReportOut, status_code=201)
 def ask_question(
     payload: AskQuestionIn,
-    current_user: User = Depends(require_role(RoleEnum.student, RoleEnum.attending)),
+    current_user: User = Depends(
+        require_role(RoleEnum.student, RoleEnum.attending, RoleEnum.admin)
+    ),
     db: Session = Depends(get_db),
 ) -> Report:
     return answer_ad_hoc_question(db, current_user, payload.question)

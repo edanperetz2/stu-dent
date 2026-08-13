@@ -126,6 +126,54 @@ def test_reminder_includes_assigned_attending(client, db_session):
     assert any(n["notification_type"] == "appointment_reminder" for n in notifications)
 
 
+def test_reminder_failure_for_one_appointment_does_not_block_the_rest(
+    client, db_session, monkeypatch
+):
+    """The job's own docstring claims one bad row doesn't block the rest --
+    verify that's actually true (it wasn't, before this fix: no try/except
+    meant an exception on one appointment's notify() call would propagate
+    and skip every appointment after it in the batch).
+    """
+    student_token = register_and_login(client, "job-reminder-fail@example.com", role="student")
+    bad_patient_id = create_patient(client, student_token)
+    good_patient_id = create_patient(client, student_token)
+
+    now = datetime.now(UTC)
+    bad_appointment = _book(
+        client,
+        student_token,
+        patient_id=bad_patient_id,
+        start_time=_iso(now + timedelta(hours=1)),
+        end_time=_iso(now + timedelta(hours=2)),
+    ).json()
+    good_appointment = _book(
+        client,
+        student_token,
+        patient_id=good_patient_id,
+        start_time=_iso(now + timedelta(hours=3)),
+        end_time=_iso(now + timedelta(hours=4)),
+    ).json()
+
+    import app.jobs.reminders as reminders_module
+
+    original_notify = reminders_module.notify
+
+    def flaky_notify(db, **kwargs):
+        if str(kwargs.get("related_appointment_id")) == bad_appointment["id"]:
+            raise RuntimeError("boom")
+        return original_notify(db, **kwargs)
+
+    monkeypatch.setattr(reminders_module, "notify", flaky_notify)
+
+    sent = send_appointment_reminders(db_session)
+    assert sent == 1
+
+    bad_row = db_session.get(Appointment, bad_appointment["id"])
+    assert bad_row.reminder_sent_at is None  # not marked -- retried next tick
+    good_row = db_session.get(Appointment, good_appointment["id"])
+    assert good_row.reminder_sent_at is not None
+
+
 def test_expire_cancels_past_due_unconfirmed_appointment(client, db_session):
     student_token = register_and_login(client, "job-s6@example.com", role="student")
     patient_id = create_patient(client, student_token)
@@ -153,6 +201,58 @@ def test_expire_cancels_past_due_unconfirmed_appointment(client, db_session):
 
     notifications = client.get("/notifications", headers=auth_header(student_token)).json()
     assert any(n["notification_type"] == "appointment_expired" for n in notifications)
+
+
+def test_expire_failure_for_one_appointment_does_not_block_the_rest(
+    client, db_session, monkeypatch
+):
+    """Same regression check as the reminders job: one bad row failing to
+    notify must not skip every stale appointment after it in the batch.
+    """
+    student_token = register_and_login(client, "job-expire-fail@example.com", role="student")
+    bad_patient_id = create_patient(client, student_token)
+    good_patient_id = create_patient(client, student_token)
+
+    now = datetime.now(UTC)
+    bad_appointment = _book(
+        client,
+        student_token,
+        patient_id=bad_patient_id,
+        start_time=_iso(now - timedelta(hours=2)),
+        end_time=_iso(now - timedelta(hours=1)),
+    ).json()
+    good_appointment = _book(
+        client,
+        student_token,
+        patient_id=good_patient_id,
+        start_time=_iso(now - timedelta(hours=4)),
+        end_time=_iso(now - timedelta(hours=3)),
+    ).json()
+
+    for appointment_id in (bad_appointment["id"], good_appointment["id"]):
+        row = db_session.get(Appointment, appointment_id)
+        row.status = AppointmentStatus.proposed
+        row.student_confirmed_at = None
+    db_session.commit()
+
+    import app.jobs.expiry as expiry_module
+
+    original_notify = expiry_module.notify
+
+    def flaky_notify(db, **kwargs):
+        if str(kwargs.get("related_appointment_id")) == bad_appointment["id"]:
+            raise RuntimeError("boom")
+        return original_notify(db, **kwargs)
+
+    monkeypatch.setattr(expiry_module, "notify", flaky_notify)
+
+    expired = expire_stale_appointments(db_session)
+    assert expired == 1
+
+    bad_row = db_session.get(Appointment, bad_appointment["id"])
+    assert bad_row.status == AppointmentStatus.proposed  # unchanged -- retried next tick
+    good_row = db_session.get(Appointment, good_appointment["id"])
+    assert good_row.status == AppointmentStatus.cancelled
 
 
 def test_expire_triggers_waitlist_promotion(client, db_session):
