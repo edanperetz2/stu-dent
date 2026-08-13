@@ -604,6 +604,9 @@ thead th {
     grid-row: 2;
   }
 }
+:root[data-mantine-color-scheme='dark'] .appointments-calendar-shell .rbc-timeslot-group .rbc-time-slot:not(:first-child) {
+  border-top: none;
+}
 
 @media (max-width: 40em) {
   .appointments-page-controls {
