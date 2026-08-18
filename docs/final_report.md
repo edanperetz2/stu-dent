@@ -127,8 +127,8 @@ All counts below were confirmed by actually running the suites (`./dev.sh
 test`, `./dev.sh test-frontend`, `./dev.sh test-e2e`), not estimated from
 file listings.
 
-**Backend: 355 pytest tests across 32 files. Frontend: 256 Vitest tests
-across 68 files. End-to-end: 4 real-browser Playwright tests across 3
+**Backend: 359 pytest tests across 32 files. Frontend: 259 Vitest tests
+across 69 files. End-to-end: 4 real-browser Playwright tests across 3
 spec files** (§3.9). The breakdown below is organized backend-first, by
 feature area, with frontend and E2E coverage for each noted alongside it.
 
@@ -137,7 +137,7 @@ feature area, with frontend and E2E coverage for each noted alongside it.
 *Files: `test_auth.py`, `test_rbac.py`, `test_patient_auth.py`,
 `test_rate_limit.py`, `test_password_reset.py`, `test_oauth.py`,
 `test_oauth_token_verification.py`, `test_admin_users.py`,
-`test_cors.py` — 82 tests.*
+`test_cors.py` — 83 tests.*
 
 - **Unit/integration**: registration for every role, duplicate-email
   rejection, patient registration validation (owner-student required for
@@ -278,7 +278,7 @@ feature area, with frontend and E2E coverage for each noted alongside it.
 ### 3.5 Notifications, reminders & the background worker
 
 *Files: `test_notifications.py`, `test_jobs.py`, `test_worker.py`,
-`test_feedback.py`, `test_realtime.py` — 44 tests.*
+`test_feedback.py`, `test_realtime.py` — 46 tests.*
 
 - Notification CRUD/scoping (`test_notifications.py`): a user only ever
   sees their own notifications, ordering, read/unread toggling, no
@@ -286,7 +286,7 @@ feature area, with frontend and E2E coverage for each noted alongside it.
   that actually drives the nav badge — is checked with a real count query
   (not a page-size proxy that would silently undercount), independently
   requires authentication, and is scoped per recipient.
-- **Background jobs** (`test_jobs.py`, 17 tests): reminders fire exactly
+- **Background jobs** (`test_jobs.py`, 19 tests): reminders fire exactly
   once inside the correct time window and never twice; past-due
   unconfirmed appointments auto-expire and correctly trigger waitlist
   promotion; unresolved-appointment and pending-feedback nags fire after
@@ -339,7 +339,7 @@ feature area, with frontend and E2E coverage for each noted alongside it.
 
 *Files: `test_scheduling_assistant.py`, `test_nl_dates.py`,
 `test_ollama_client.py`, `test_reports.py`,
-`test_report_assistant_fallback.py`, `test_report_data.py` — 52 tests.*
+`test_report_assistant_fallback.py`, `test_report_data.py` — 53 tests.*
 
 - **`ollama_client.py`** (7 tests) — the single trust boundary every AI
   feature calls through: returns `None` (never raises) on a non-dict
@@ -357,7 +357,7 @@ feature area, with frontend and E2E coverage for each noted alongside it.
   phrases ("tomorrow", "next Tuesday") against the correct Israel calendar
   day, not a naive UTC day boundary that could be off by one around
   midnight.
-- **Reports & ad-hoc Q&A** (15 + 8 + 8 = 31 tests): role-gating on report
+- **Reports & ad-hoc Q&A** (16 + 8 + 8 = 32 tests): role-gating on report
   access; AI-narrated vs. plain-data-summary generation; rejecting an
   invalid period/style combination; a blank-summary model response
   triggers the raw-data fallback instead of shipping an empty-looking
@@ -572,16 +572,22 @@ crashes"):**
   (`argon2-cffi`) for local accounts; social-only accounts created via
   Google OAuth get a random unusable local password rather than no
   password field at all, so the schema stays uniform.
-- **Only the `api` container is reachable by clients** — verified live this
-  session, not just asserted: `docker inspect` on the `db` container after
-  removing its `ports:` mapping shows `"5432/tcp":null` (no host binding
-  at all), and the full stack was brought back up and `/health` re-checked
-  successfully afterward, confirming `api`/`worker` still reach Postgres
-  correctly over the internal Docker network with zero host exposure.
-  `ollama` is bound to `127.0.0.1:11434` only (not the container's public
-  network interface) specifically because it has no authentication of its
-  own — an unbound port would let anyone reachable on the LAN use or
-  resource-exhaust the local LLM.
+- **The database and the AI model are never reachable by a client, only
+  `api`/`frontend` are.** This is a dev-mode two-service split (the
+  Vite dev server on `5173` and the FastAPI backend on `8000`, called
+  directly via `VITE_API_URL`), not the single-gateway topology the
+  guideline diagram shows — worth stating plainly rather than glossing
+  over. What the guideline actually cares about (a client never touches
+  the DB or the model directly) is still true: verified live this
+  session, not just asserted — `docker inspect` on the `db` container
+  after removing its `ports:` mapping shows `"5432/tcp":null` (no host
+  binding at all), and the full stack was brought back up and `/health`
+  re-checked successfully afterward, confirming `api`/`worker` still
+  reach Postgres correctly over the internal Docker network with zero
+  host exposure. `ollama` is bound to `127.0.0.1:11434` only (not the
+  container's public network interface) specifically because it has no
+  authentication of its own — an unbound port would let anyone reachable
+  on the LAN use or resource-exhaust the local LLM.
 - **RBAC is enforced and tested per-role, per-endpoint** (§3.1) — not just
   "logged in vs. not," but the *correct* role for each specific action
   (e.g. a student cannot access an attending's dashboard; a patient
@@ -653,7 +659,7 @@ checking against the syllabus rather than the proposal:
   feature branches, and a merged pull request.
 - **Containers**: the whole stack runs as seven Docker Compose services
   plus two one-shot init containers (§2, "Backend container topology").
-- **Unit tests**: 355 backend + 256 frontend tests (§3).
+- **Unit tests**: 359 backend + 259 frontend tests (§3).
 - **Sockets + IPC**: the real-time layer is a WebSocket endpoint
   (`/ws`) backed by a Postgres LISTEN/NOTIFY bridge
   (`app/realtime/listener.py`, §2, §3.9) — a dedicated async task relays
@@ -689,8 +695,8 @@ across five resource dimensions, a self-healing waitlist, notifications
 and reminders, a student forum, direct messaging, admin resource
 management, and a local AI layer for both natural-language scheduling
 entry and usage reporting — all Dockerized behind one command, with no
-paid third-party services anywhere in the stack. It's backed by 355
-backend tests, 256 frontend tests, and a real end-to-end browser suite,
+paid third-party services anywhere in the stack. It's backed by 359
+backend tests, 259 frontend tests, and a real end-to-end browser suite,
 all enforced on every push by CI. What remains outside this document is
 the recorded demo video and the Team Contributions section above, both
 left for the authors to complete directly.

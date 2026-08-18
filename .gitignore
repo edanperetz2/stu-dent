@@ -41,3 +41,8 @@ Thumbs.db
 # Scratch material from producing the course gallery submission zip
 # (poster PDF export source, etc.) -- kept locally, not part of the repo.
 /gallery/
+
+# Lecturer-provided submission-logistics files (PDFs, checker script) --
+# reference material for submitting the project, not project source.
+# Kept locally, not part of the repo.
+/submission instructions/
