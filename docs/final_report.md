@@ -681,11 +681,41 @@ checking against the syllabus rather than the proposal:
 
 ## 8. Team Contributions
 
-*(Placeholder — to be filled in by the authors: Idan Peretz, Yoni Oshin,
-Sharbel Makhoul. Note for whoever fills this in: keep it specific per
-person/phase rather than a generic "everyone did everything" — the
-course's GitHub-commits requirement means this should be easy to ground
-in real commit history via `git log --author=...`.)*
+All three members are real committers on `github.com/edanperetz2/stu-dent`
+(105 commits in total); the split below is grounded in that history
+(`git log --author=...`), not a generic "everyone did everything."
+
+- **Idan Peretz** (97 commits) — implemented, across every phase: the
+  repo scaffold and Docker Compose topology; the
+  Phase 1 auth/RBAC layer (argon2, JWT, audit-log-based rate limiting);
+  the scheduling engine with Postgres exclusion constraints and the
+  appointment state machine; waitlists, the background worker, email
+  reminders and notifications; the forum, messaging redesign, and the
+  WebSocket + LISTEN/NOTIFY real-time bridge; the local-AI features
+  (scheduling interpreter, report assistant) and their deterministic
+  trust-boundary design; part of the React frontend (appointments
+  calendar, conflict-resolution/waitlist flow, dark mode,
+  forgot-password, accessibility pass); the CI/CD pipeline, dependency
+  audit, and seed data; the full backend and frontend test suites; and
+  this report and the demo videos; also the two post-submission arcs —
+  the review-driven UX/accessibility remediation and the full-repo
+  audit/fix pass.
+
+- **Yoni Oshin** (7 commits) — originated the project idea and led the
+  frontend planning (page structure, role-aware navigation, and the look
+  the UI was built toward). Implemented, via a merged pull request: the
+  Google OAuth sign-in/registration flow (backend `oauth` routes and
+  service, `oauth_identities` table, frontend `SocialAuthButtons` and
+  callback handoff screen), configurable weekly/monthly report generation,
+  appointment-calendar interaction polish, the logo, favicon, and assorted
+  UI enhancements, plus making the backend test timestamps relative so
+  they don't go stale.
+
+- **Sharbel Makhoul** (1 commit) — reformulated the project proposal
+  (`docs/proposal.md`), the document every phase was scoped and verified
+  against; helped plan and design the project architecture (§2); planned
+  part of the test strategy (§3); and contributed to the visual design
+  and theming of the UI.
 
 ## 9. Summary
 
