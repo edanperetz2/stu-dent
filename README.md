@@ -175,6 +175,16 @@ Provider configuration:
   `http://localhost:8000/auth/oauth/google/callback` as an authorized redirect
   URI. Set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in `.env`.
 
+The authors' own Google OAuth app is published (any Google account can sign
+in) but deliberately **not brand-verified** -- Google requires a self-owned
+domain for that, which a locally-run course project has no use for. So the
+first Google sign-in shows Google's standard "this app isn't verified"
+screen; click **Continue** (sometimes under "Advanced") once and it does not
+reappear. The consent screen links to the project's
+[privacy policy](https://gist.github.com/edanperetz2/89cbaf58a6737001feb6bd2b949ce04c)
+and [terms of service](https://gist.github.com/edanperetz2/00eed51685c08abc32c3ae246d68d5b1),
+kept as public gists since the repository itself is private.
+
 Apple sign-in is shelved until the app has a permanent HTTPS deployment URL.
 Its backend integration remains dormant so it can be enabled later without
 redoing the OAuth implementation; no Apple option is shown in the current UI.

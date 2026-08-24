@@ -27,7 +27,7 @@ import {
   IconUser,
 } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { SlotInfo, View } from 'react-big-calendar'
 import { useSearchParams } from 'react-router-dom'
 import { listAppointments, type AppointmentCreateInput } from '../../api/appointments'
@@ -114,6 +114,17 @@ export function AppointmentsListPage() {
   const [opened, { open, close }] = useDisclosure(false)
   const [durationMode, setDurationMode] = useState<DurationMode>('30')
   const [moreOptionsOpened, { toggle: toggleMoreOptions, close: closeMoreOptions }] = useDisclosure(false)
+  // The form body is a capped-height scroll box; the optional fields live at
+  // its bottom, so once they expand, bring them into view -- otherwise
+  // toggling "More options" appears to do nothing when the box is already
+  // full (e.g. the calendar-slot path, whose Custom end-time input makes
+  // the "When" section taller).
+  const moreOptionsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (moreOptionsOpened) {
+      moreOptionsRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [moreOptionsOpened])
   const [describeMode, { toggle: toggleDescribeMode, close: closeDescribeMode }] = useDisclosure(false)
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [calendarView, setCalendarView] = useState<View>('week')
@@ -747,18 +758,8 @@ export function AppointmentsListPage() {
             )}
 
             {isStudent ? (
-              <>
-                <Button
-                  type="button"
-                  variant="subtle"
-                  size="xs"
-                  onClick={toggleMoreOptions}
-                  // No Mantine shorthand for align-self.
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  {moreOptionsOpened ? 'Fewer options' : 'More options (attending, equipment, notes)'}
-                </Button>
-                <Collapse expanded={moreOptionsOpened}>
+              <Collapse expanded={moreOptionsOpened}>
+                <div ref={moreOptionsRef}>
                   <Stack gap="sm">
                     <Select
                       label="Attending"
@@ -774,8 +775,8 @@ export function AppointmentsListPage() {
                     />
                     <Textarea label="Notes" {...form.getInputProps('notes')} />
                   </Stack>
-                </Collapse>
-              </>
+                </div>
+              </Collapse>
             ) : (
               <>
                 <Text size="sm" c="dimmed">
@@ -789,10 +790,19 @@ export function AppointmentsListPage() {
 
           {/* No Mantine shorthand for a single border side (`bd` sets all four). */}
           <Group
-            justify="flex-end"
+            justify="space-between"
             pt="sm"
             style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
           >
+            {/* Lives in the pinned footer, not the scroll box above, so it is
+                reachable no matter how tall the form body has grown. */}
+            {isStudent ? (
+              <Button type="button" variant="subtle" size="xs" onClick={toggleMoreOptions}>
+                {moreOptionsOpened ? 'Fewer options' : 'More options (attending, equipment, notes)'}
+              </Button>
+            ) : (
+              <span />
+            )}
             <Button type="submit" loading={createMutation.isPending}>
               Request
             </Button>
