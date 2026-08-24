@@ -7,9 +7,7 @@
 
 *(This report was drafted with AI assistance grounded in the actual commit
 history, code, and live test runs — every test claim below was verified by
-actually running the suite, not inferred from filenames. The Team
-Contributions section at the end is a placeholder for the authors to fill
-in with real per-person detail.)*
+actually running the suite, not inferred from filenames.)*
 
 ---
 
@@ -727,6 +725,5 @@ management, and a local AI layer for both natural-language scheduling
 entry and usage reporting — all Dockerized behind one command, with no
 paid third-party services anywhere in the stack. It's backed by 359
 backend tests, 259 frontend tests, and a real end-to-end browser suite,
-all enforced on every push by CI. What remains outside this document is
-the recorded demo video and the Team Contributions section above, both
-left for the authors to complete directly.
+all enforced on every push by CI. The recorded demo video, submitted
+alongside this report, walks through every workflow described above.
