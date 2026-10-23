@@ -1,4 +1,4 @@
 -r requirements.txt
 pytest>=9.0,<10.0
 ruff>=0.7,<1.0
-black>=26.3,<27.0
+black>=26.10.1,<27.0
